@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
+import torch.nn.functional as F
 
 ###############################################################################
 # Helper Functions
@@ -34,7 +35,6 @@ def get_scheduler(optimizer, opt):
     else:
         return NotImplementedError('learning rate policy [%s] is not implemented', opt.lr_policy)
     return scheduler
-
 
 def init_weights(net, init_type='normal', gain=0.02):
     def init_func(m):
@@ -68,22 +68,78 @@ def init_net(net, init_type='normal', gpu_ids=[]):
     init_weights(net, init_type)
     return net
 
-def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropout=False, init_type='normal', gpu_ids=[]):
+class ResidualNetWrapper(nn.Module):
+    def __init__(self, net, no_last_tanh, output_nc=1):
+        super(ResidualNetWrapper, self).__init__()
+        self.no_last_tanh = no_last_tanh
+        self.net = net
+        self.take_first_channel = output_nc == 1
+
+    def forward(self, x, z=None):
+        # kspace has two channels input (real and imag.)
+        if z is not None:
+            residual = self.net(x, z)
+        else:
+            residual = self.net(x)
+            
+        y = residual + (x[:,:1,:,:] if self.take_first_channel else x)
+
+        if self.no_last_tanh:
+            return y, residual
+        else:
+            return F.tanh(y), residual
+
+class JointDistribution(nn.Module):
+    def __init__(self, base_net, n_in, n_out):
+        self.fuse_model = nn.Sequential(
+            nn.Conv2d(n_in, n_in, 1),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(n_in, n_in//2, 1),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(n_in//2, n_out, 1),
+            nn.LeakyReLU(inplace=True),
+        )
+    def forward(self, x, z):
+        h = self.base_net(x)
+        z_fm = z.view(z.size(0), z.size(1), 1, 1).expand(
+                z.size(0), z.size(1), h.size(2), h.size(3))
+        out = self.fuse_model(torch.cat([h, z_fm],1))
+        return out
+        
+
+def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropout=False, init_type='normal', gpu_ids=[], no_last_tanh=False):
     netG = None
     norm_layer = get_norm_layer(norm_type=norm)
-
+    
     if which_model_netG == 'resnet_9blocks':
         netG = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
     elif which_model_netG == 'resnet_9blocks_zz':
-        netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
+        netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh)
     elif which_model_netG == 'resnet_6blocks':
         netG = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6)
     elif which_model_netG == 'unet_128':
-        netG = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+        netG = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout, no_last_tanh=no_last_tanh)
     elif which_model_netG == 'unet_256':
         netG = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif which_model_netG == 'unet_128_residual':
+        _netG = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout, no_last_tanh=True)
+        netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
+    elif which_model_netG == 'resnet_9blocks_residual':
+        _netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=True, n_downsampling=3)
+        netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
+    elif which_model_netG == 'jure_unet':
+        netG = nn.Sequential(*unet_layers(input_nc, output_nc))
+    elif which_model_netG == 'jure_unet_residual':
+        _netG = nn.Sequential(*unet_layers(input_nc, output_nc))
+        netG = ResidualNetWrapper(_netG, no_last_tanh=True, output_nc=output_nc)
+    elif which_model_netG == 'jure_unet_vae_residual':
+        nz = 8
+        _netG = nn.Sequential(*unet_layers(input_nc, output_nc))
+        _netG_fuse = JointDistribution(_netG, input_nc+nz, output_nc)
+        netG = ResidualNetWrapper(_netG_fuse, no_last_tanh=True, output_nc=output_nc)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % which_model_netG)
+
     return init_net(netG, init_type, gpu_ids)
 
 
@@ -103,10 +159,92 @@ def define_D(input_nc, ndf, which_model_netD,
                                   which_model_netD)
     return init_net(netD, init_type, gpu_ids)
 
+def get_non_linearity(layer_type='relu'):
+    if layer_type == 'relu':
+        nl_layer = functools.partial(nn.ReLU, inplace=True)
+    elif layer_type == 'lrelu':
+        nl_layer = functools.partial(
+            nn.LeakyReLU, negative_slope=0.2, inplace=True)
+    elif layer_type == 'elu':
+        nl_layer = functools.partial(nn.ELU, inplace=True)
+    else:
+        raise NotImplementedError(
+            'nonlinearity activitation [%s] is not found' % layer_type)
+    return nl_layer
+
+def define_E(input_nc, output_nc, ndf, which_model_netE,
+             norm='batch', nl='lrelu',
+             init_type='xavier', gpu_ids=[], vaeLike=True):
+    netE = None
+    norm_layer = get_norm_layer(norm)
+    nl = 'lrelu'  # use leaky relu for E
+    nl_layer = get_non_linearity(layer_type=nl)
+    # if which_model_netE == 'resnet_128':
+    #     netE = E_ResNet(input_nc, output_nc, ndf, n_blocks=4, norm_layer=norm_layer,
+    #                     nl_layer=nl_layer, gpu_ids=gpu_ids, vaeLike=vaeLike)
+    # elif which_model_netE == 'resnet_256':
+    #     netE = E_ResNet(input_nc, output_nc, ndf, n_blocks=5, norm_layer=norm_layer,
+    #                     nl_layer=nl_layer, gpu_ids=gpu_ids, vaeLike=vaeLike)
+    if which_model_netE == 'conv_128':
+        netE = E_NLayers(input_nc, output_nc, ndf, n_layers=4, norm_layer=norm_layer,
+                         nl_layer=nl_layer, gpu_ids=gpu_ids, vaeLike=vaeLike)
+    elif which_model_netE == 'conv_256':
+        netE = E_NLayers(input_nc, output_nc, ndf, n_layers=5, norm_layer=norm_layer,
+                         nl_layer=nl_layer, gpu_ids=gpu_ids, vaeLike=vaeLike)
+    else:
+        raise NotImplementedError(
+            'Encoder model name [%s] is not recognized' % which_model_netE)
+
+    return init_net(netE, init_type, gpu_ids)
 
 ##############################################################################
 # Classes
 ##############################################################################
+class Push(nn.Module):
+    vars = {}
+    def __init__(self, name):
+        super(Push, self).__init__()
+        self.name = name
+
+    def forward(self, x):
+        Push.vars[self.name] = x
+        return x
+
+    def __repr__(self):
+        return 'Push({})'.format(self.name)
+
+class Pop(nn.Module):
+    def __init__(self, name):
+        super(Pop, self).__init__()
+        self.name = name
+
+    def forward(self, x):
+        y = Push.vars.pop(self.name)
+        return torch.cat((x, y), 1)
+
+    def __repr__(self):
+        return 'Pop({})'.format(self.name)
+
+def unet_layers(fm_in, out_dim, to_output=True):
+    fm = 64
+    conv = lambda fm_in, fm_out, stride=2: nn.Conv2d(fm_in, fm_out, 4, stride, 1)
+    convT = lambda fm_in, fm_out: nn.ConvTranspose2d(fm_in, fm_out, 4, 2, 1)
+    return [
+        conv(fm_in, fm),                           Push(1),
+        nn.LeakyReLU(0.2, True), conv(fm*1, fm*2), Push(2),
+        nn.LeakyReLU(0.2, True), conv(fm*2, fm*4), Push(3),
+        nn.LeakyReLU(0.2, True), conv(fm*4, fm*8), Push(4),
+        nn.LeakyReLU(0.2, True), conv(fm*8, fm*8), Push(5),
+        nn.LeakyReLU(0.2, True), conv(fm*8, fm*8), Push(6),
+        nn.LeakyReLU(0.2, True), conv(fm*8, fm*8),
+        nn.ReLU(True), convT(fm*8*1, fm*8), Pop(6),
+        nn.ReLU(True), convT(fm*8*2, fm*8), Pop(5),
+        nn.ReLU(True), convT(fm*8*2, fm*8), Pop(4),
+        nn.ReLU(True), convT(fm*8*2, fm*4), Pop(3),
+        nn.ReLU(True), convT(fm*4*2, fm*2), Pop(2),
+        nn.ReLU(True), convT(fm*2*2, fm*1), Pop(1),
+        nn.ReLU(True)] + ([convT(fm*2*1, out_dim)] if to_output else [])
+
 
 
 # Defines the GAN loss which uses either LSGAN or the regular GAN.
@@ -133,7 +271,6 @@ class GANLoss(nn.Module):
     def __call__(self, input, target_is_real):
         target_tensor = self.get_target_tensor(input, target_is_real)
         return self.loss(input, target_tensor)
-
 
 # Defines the generator that consists of Resnet blocks between a few
 # downsampling/upsampling operations.
@@ -189,12 +326,13 @@ class ResnetGenerator(nn.Module):
 # use Upsample rather than TransposeConv
 # Remove zero padding 
 class ResnetGenerator2(nn.Module):
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect'):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=2):
         assert(n_blocks >= 0)
         super(ResnetGenerator2, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
         self.ngf = ngf
+        self.no_last_tanh = no_last_tanh
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
@@ -206,7 +344,6 @@ class ResnetGenerator2(nn.Module):
                  norm_layer(ngf),
                  nn.ReLU(True)]
 
-        n_downsampling = 2
         for i in range(n_downsampling):
             mult = 2**i
             model += [nn.ReflectionPad2d(1),
@@ -232,7 +369,8 @@ class ResnetGenerator2(nn.Module):
 
         model += [nn.ReflectionPad2d(3)]
         model += [nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
-        model += [nn.Tanh()]
+        if not self.no_last_tanh:
+            model += [nn.Tanh()]
 
         self.model = nn.Sequential(*model)
 
@@ -288,7 +426,7 @@ class ResnetBlock(nn.Module):
 # at the bottleneck
 class UnetGenerator(nn.Module):
     def __init__(self, input_nc, output_nc, num_downs, ngf=64,
-                 norm_layer=nn.BatchNorm2d, use_dropout=False):
+                 norm_layer=nn.BatchNorm2d, use_dropout=False, no_last_tanh=False):
         super(UnetGenerator, self).__init__()
 
         # construct unet structure
@@ -298,7 +436,7 @@ class UnetGenerator(nn.Module):
         unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
-        unet_block = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer)
+        unet_block = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer, no_last_tanh=no_last_tanh)
 
         self.model = unet_block
 
@@ -310,7 +448,7 @@ class UnetGenerator(nn.Module):
 #   |-- downsampling -- |submodule| -- upsampling --|
 class UnetSkipConnectionBlock(nn.Module):
     def __init__(self, outer_nc, inner_nc, input_nc=None,
-                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False, nearest_upsample=True):
+                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False, nearest_upsample=True, no_last_tanh=False):
         super(UnetSkipConnectionBlock, self).__init__()
         self.outermost = outermost
         if type(norm_layer) == functools.partial:
@@ -339,7 +477,10 @@ class UnetSkipConnectionBlock(nn.Module):
                                             kernel_size=4, stride=2,
                                             padding=1)
             down = [downconv]
-            up = [uprelu, upconv, nn.Tanh()]
+            if no_last_tanh:
+                up = [uprelu, upconv]
+            else:
+                up = [uprelu, upconv, nn.Tanh()]
             model = down + [submodule] + up
         elif innermost:
             if nearest_upsample:
@@ -511,3 +652,41 @@ class Vgg19(torch.nn.Module):
         h_relu5 = self.slice5(h_relu4)                
         out = [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
         return out
+
+class E_NLayers(nn.Module):
+    def __init__(self, input_nc, output_nc=1, ndf=64, n_layers=3,
+                 norm_layer=None, nl_layer=None, gpu_ids=[], vaeLike=False):
+        super(E_NLayers, self).__init__()
+        self.gpu_ids = gpu_ids
+        self.vaeLike = vaeLike
+
+        kw, padw = 4, 1
+        sequence = [nn.Conv2d(input_nc, ndf, kernel_size=kw,
+                              stride=2, padding=padw), nl_layer()]
+
+        nf_mult = 1
+        nf_mult_prev = 1
+        for n in range(1, n_layers):
+            nf_mult_prev = nf_mult
+            nf_mult = min(2**n, 4)
+            sequence += [
+                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
+                          kernel_size=kw, stride=2, padding=padw)]
+            if norm_layer is not None:
+                sequence += [norm_layer(ndf * nf_mult)]
+            sequence += [nl_layer()]
+        sequence += [nn.AvgPool2d(8)]
+        self.conv = nn.Sequential(*sequence)
+        self.fc = nn.Sequential(*[nn.Linear(ndf * nf_mult, output_nc)])
+        if vaeLike:
+            self.fcVar = nn.Sequential(*[nn.Linear(ndf * nf_mult, output_nc)])
+
+    def forward(self, x):
+        x_conv = self.conv(x)
+        conv_flat = x_conv.view(x.size(0), -1)
+        output = self.fc(conv_flat)
+        if self.vaeLike:
+            outputVar = self.fcVar(conv_flat)
+            return output, outputVar
+        return output
+

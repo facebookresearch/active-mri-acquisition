@@ -12,22 +12,20 @@ from .networks import init_net
 from .fft_utils import *
 
 
-class FTCNNModel(BaseModel):
+class FTVAENNModel(BaseModel):
     def name(self):
-        return 'FTCNNModel'
+        return 'FTVAENNModel'
 
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
 
-        # changing the default values to match the pix2pix paper
-        # (https://phillipi.github.io/pix2pix/)
-        parser.set_defaults(pool_size=0)
-        parser.set_defaults(no_lsgan=True)
-        parser.set_defaults(norm='batch')
-        parser.set_defaults(dataset_mode='aligned')
-        parser.set_defaults(which_model_netG='unet_256')
+        parser.set_defaults(nz=8)
+        parser.set_defaults(which_model_netG='jure_unet_vae_residual')
+        parser.set_defaults(output_nc=1) # currently, use 2
+
         if is_train:
-            parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
+            parser.add_argument('--lambda_kl', type=float, default=0.01, help='weight for KL loss')
+            parser.add_argument('--kl_min_clip', type=float, default=0.25, help='clip value for KL loss')
 
         return parser
 
@@ -46,6 +44,12 @@ class FTCNNModel(BaseModel):
         # load/define networks
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
                                     opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
+        
+        self.netE_prior = networks.define_E(opt.input_nc, opt.nz, opt.ngf, 'conv_128', 
+                                    opt.norm, 'lrelu', opt.init_type, self.gpu_ids, vaeLike=True)
+                                    
+        self.netE_posterior = networks.define_E(opt.output_nc, opt.nz, opt.ngf, 'conv_128', 
+                                    opt.norm, 'lrelu', opt.init_type, self.gpu_ids, vaeLike=True)  
 
         self.RFFT = RFFT().to(self.device)
         self.mask = create_mask(opt.fineSize).to(self.device)
@@ -112,6 +116,61 @@ class FTCNNModel(BaseModel):
         self.loss_FFTInvisiable = F.mse_loss(_k_fakeB * (1-self.mask), _k_realB*(1-self.mask), reduce=False).sum().div(invmask_deno)
         
         return float(self.loss_FFTVisiable), float(self.loss_FFTInvisiable)
+
+    def reparam(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        eps = torch.randn(mu.size(0), mu.size(1))
+        q_z = eps.mul(std).add_(mu)
+
+        return q_z
+
+    def encode(self, input_image):
+        q_mu, q_logvar = self.netE_posterior.forward(self.real_B)
+        self.q_z = self.reparam(q_mu, q_logvar)
+
+        p_mu, p_logvar = self.netE_prior.forward(self.real_B)
+        self.p_z = self.reparam(p_mu, p_logvar)
+        
+        self.loss_KL = self.kld(p_mu, p_logvar, q_mu, q_logvar)
+
+    def kld(self, mu1, logvar1, mu2, logvar2):
+        def sum_axes(input, axes=[], keepdim=False):
+            # probably some check for uniqueness of axes
+            if axes == -1:
+                axes = [i for i in range(1, len(input.shape))]
+
+            if keepdim:
+                for ax in axes:
+                    input = input.sum(ax, keepdim=True)
+            else:
+                for ax in sorted(axes, reverse=True):
+                    input = input.sum(ax)
+            return input
+
+        # mu1, logvar1 are prior
+        sigma1 = logvar1.mul(0.5).exp_() 
+        sigma2 = logvar2.mul(0.5).exp_() 
+        kl_cost = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
+        
+        if self.opt.kl_min_clip > 0:
+            # way 2: clip min value [0, 1, 2, 3] -> [0, 1] -> [1] / (b * k)
+            # we use sum_axes insetad of torch.sum to be able to pass axes
+            if len(kl_cost.shape) == 4:
+                kl_ave = torch.mean(sum_axes(kl_cost, axes=[2, 3]), 0, keepdim=True)
+            else:
+                kl_ave = torch.mean(kl_cost, 0, keepdim=True)
+            kl_ave = torch.clamp(kl_ave, min=self.kl_min_clip)
+            kl_ave = kl_ave.repeat([mu1.shape[0], 1])
+            kl_obj = torch.sum(kl_ave, 1)
+
+            ## way 1 use abs - kl_min
+            # kl_obj = torch.abs(sum_axes(kl_cost, axes=[1, 2, 3]) - self.kl_min_clip)
+        else:
+            kl_obj = torch.sum(kl_cost, [1, 2, 3])
+
+        kl_cost = sum_axes(kl_cost, -1) * self.opt.lambda_kl
+
+        return kl_obj
 
     def forward(self):
         if 'residual' in self.opt.which_model_netG:

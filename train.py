@@ -12,6 +12,9 @@ if __name__ == '__main__':
     # data_loader = CreateDataLoader(opt)
     # dataset = data_loader.load_data()
     train_data_loader, val_data_loader = CreateFtTLoader(opt, valid_size=0.9)
+    if opt.eval_full_valid:
+        # use validation data
+        val_data_loader = CreateFtTLoader(opt, is_test=True)
 
     dataset_size = len(train_data_loader)
 
@@ -51,8 +54,12 @@ if __name__ == '__main__':
 
         ''' perform epoch evaluation '''
         print('-> evaluating model {} ... '.format(opt.name))
-        # TODO should we use evaluation mode?
-        visuals, losses = model.validation(val_data_loader)
+        # TODO should we use evaluation mode? Not necessary
+        if opt.eval_full_valid:
+            visuals, losses = model.validation(val_data_loader, how_many_to_valid=float('inf'))
+        else:
+            visuals, losses = model.validation(val_data_loader)
+            
         visualizer.display_current_results(visuals, epoch, mode='eval')
         visualizer.plot_current_losses('eval', epoch, **losses)
 

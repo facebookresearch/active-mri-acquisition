@@ -4,7 +4,7 @@ path='/private/home/zizhao/work/checkpoint_fmri'
 CUDA_VISIBLE_DEVICES=$device python test.py --dataroot 'ImageNet' \
                 --name $name \
                 --model pix2pix \
-                --which_model_netG resnet_9blocks \
+                --which_model_netG resnet_9blocks_zz \
                 --fineSize 128 \
                 --norm instance \
                 --checkpoints_dir $path \
@@ -12,7 +12,6 @@ CUDA_VISIBLE_DEVICES=$device python test.py --dataroot 'ImageNet' \
                 --output_nc 1 \
                 --batchSize 64 \
                 --how_many 10 \
-                --which_direction BtoA \
                 | tee -a $path/$name/'val_log.txt' \
 
 # use BtoA direction to test whether the model is consistent

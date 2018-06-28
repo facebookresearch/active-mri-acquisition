@@ -51,8 +51,9 @@ class Visualizer():
 
         self.ncols = 4
         # remove existing 
-        for filename in glob.glob(self.checkpoints_dir+"/events*"):
-            os.remove(filename)
+        if not opt.continue_train:
+            for filename in glob.glob(self.checkpoints_dir+"/events*"):
+                os.remove(filename)
         self.writer = SummaryWriter(self.checkpoints_dir)
 
     def reset(self):

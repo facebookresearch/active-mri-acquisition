@@ -14,24 +14,24 @@ class IFFT(nn.Module):
     def __repr__(self):
         return 'IFFT()'
 
-
-# class FFT(nn.Module):
-#     def forward(self, x):
-#         x = x.permute(0, 2, 3, 1)
-#         y = torch.fft(x, 2)
-#         return y.permute(0, 3, 1, 2)
-
-#     def __repr__(self):
-#         return 'FFT()'
-
 class RFFT(nn.Module):
     def forward(self, x):
+        # x is in gray scale and has 1-d in the 1st dimension
         x = x.squeeze(1)
         y = torch.rfft(x, 2, onesided=False)
         return y.permute(0, 3, 1, 2)
 
     def __repr__(self):
         return 'RFFT()'
+
+class FFT(nn.Module):
+    def forward(self, x):
+        x = x.permute(0, 2, 3, 1)
+        y = torch.fft(x, 2)
+        return y.permute(0, 3, 1, 2)
+
+    def __repr__(self):
+        return 'FFT()'
 
 def create_mask(n = 128, mask_fraction = 0.25, mask_low_freqs = 5):
     

@@ -27,6 +27,9 @@ class TrainOptions(BaseOptions):
 
         parser.add_argument('--lambda_vgg', type=float, default=0, help='perceptual loss weight')
         parser.add_argument('--no_cond_gan', action='store_true', help='do not use condition gan')
+        parser.add_argument('--consistency_loss', action='store_true', help='do not use condition gan')
+        parser.add_argument('--residual_loss', action='store_true', help='supervise the residual loss')
+        parser.add_argument('--l2_weight', action='store_true', help='network l2 regularization')
 
 
         self.isTrain = True

@@ -46,20 +46,34 @@ def CreateDataLoader(opt):
     return data_loader
 
 # Create Kspace Data
-def CreateFtTLoader(opt, valid_size):
-    trainloader, validloader = ft_data_loader.get_train_valid_loader(
-                                                    batch_size=opt.batchSize,
+def CreateFtTLoader(opt, valid_size=0.1, is_test=False):
+    
+    if not is_test:
+        trainloader, validloader = ft_data_loader.get_train_valid_loader(
+                                                        batch_size=opt.batchSize,
+                                                        load_size=opt.loadSize,
+                                                        fine_size=opt.fineSize,
+                                                        keep_ratio=opt.kspace_keep_ratio,
+                                                        augment=True,
+                                                        valid_size=valid_size, # a larger value to acculerate training
+                                                        shuffle=True,
+                                                        num_workers=2,
+                                                        pin_memory=False,
+                                                        normalize=opt.normalize_type,
+                                                        which_dataset=opt.dataroot)
+                                                    
+        return trainloader, validloader
+    else:
+        testloader = ft_data_loader.get_test_loader(batch_size=opt.batchSize,
                                                     load_size=opt.loadSize,
                                                     fine_size=opt.fineSize,
                                                     keep_ratio=opt.kspace_keep_ratio,
-                                                    augment=True,
-                                                    valid_size=valid_size, # a larger value to acculerate training
-                                                    shuffle=True,
+                                                    shuffle=False,
                                                     num_workers=2,
                                                     pin_memory=False,
+                                                    normalize=opt.normalize_type,
                                                     which_dataset=opt.dataroot)
-                                                
-    return trainloader, validloader
+        return testloader
 
 ## Wrapper class of Dataset class that performs
 ## multi-threaded data loading

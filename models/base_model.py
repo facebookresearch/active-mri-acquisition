@@ -159,9 +159,13 @@ class BaseModel():
     def validation(self, val_data_loader, how_many_to_display=64, how_many_to_valid=4096*4):
         val_data = []
         val_count = 0
-        reconst_loss = []
+        losses = {
+            'reconst_loss': [],
+            'FFTVisiable_loss': [],
+            'FFTInvisiable_loss': []
+        }
+
         netG = getattr(self, 'netG')
-        netG.eval()
 
         # visualization
         if not hasattr(self, 'display_data'):
@@ -175,8 +179,8 @@ class BaseModel():
             self.set_input(data)
             self.test() # Weird. using forward will cause a mem leak
             c = min(self.fake_B.shape[0], how_many_to_display)
-            real_A, fake_B, real_B, = self.real_A[:c,...].cpu(), self.fake_B[:c,...].cpu(), self.real_B[:c,...].cpu()
-            val_data.append([real_A[:c,:1,...], fake_B[:c,...], real_B[:c,...]])            
+            real_A, fake_B, real_B, = self.real_A[:c,...].cpu(), self.fake_B[:c,...].cpu(), self.real_B[:c,...].cpu() # save mem
+            val_data.append([real_A[:c,:1,...], fake_B[:c,:1,...], real_B[:c,:1,...]])            
             
         visuals = {}
         visuals['inputs'] = util.tensor2im(tvutil.make_grid(torch.cat([a[0] for a in val_data], dim=0)))
@@ -188,16 +192,18 @@ class BaseModel():
         for it, data in enumerate(val_data_loader):
             self.set_input(data)
             self.test() # Weird. using forward will cause a mem leak
-            reconst_loss.append(float(F.mse_loss(self.fake_B, self.real_B, size_average=True)))
+            # only evaluate the real part if has two channels
+            losses['reconst_loss'].append(float(F.mse_loss(self.fake_B[:,:1,...], self.real_B[:,:1,...], size_average=True)))
+
+            fft_vis, fft_inv = self.compute_special_losses()
+            losses['FFTVisiable_loss'].append(fft_vis)
+            losses['FFTInvisiable_loss'].append(fft_inv)
+
             val_count += self.fake_B.shape[0]
             if val_count >= how_many_to_valid: break
-
-        reconst_loss = np.mean(reconst_loss)
-
         
+        for k, v in losses.items():
+            losses[k] = np.mean(v)
+            print('\t {} (avg): {} '.format(k, losses[k]))
 
-        print('\t Reconstruction loss: ', reconst_loss)
-
-        netG.train()
-
-        return visuals, {'reconst_loss': reconst_loss}
+        return visuals, losses

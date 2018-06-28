@@ -33,5 +33,3 @@ CUDA_VISIBLE_DEVICES=$device python train.py --dataroot 'ImageNet' \
                 --batchSize 32 \
                 --niter_decay 50 \
                 --lambda_vgg 50 \
-                --continue_train \
-                --epoch_count 50 \

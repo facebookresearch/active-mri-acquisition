@@ -29,7 +29,7 @@ def get_train_valid_loader(batch_size,
                            show_sample=False,
                            num_workers=4,
                            pin_memory=False,
-                           normalize=True,
+                           normalize='gan',
                            which_dataset='MNIST',
                            data_dir='/private/home/zizhao/work/data/'
                          ):
@@ -38,17 +38,20 @@ def get_train_valid_loader(batch_size,
     error_msg = "[!] valid_size should be in the range [0, 1]."
     assert ((valid_size >= 0) and (valid_size <= 1)), error_msg
 
-    
-    if normalize:
-        # we do [-1, 1] normalization
+    if normalize == 'gan':
         normalize_tf = transforms.Normalize(
             mean=[0.5, 0.5, 0.5],
             std=[0.5, 0.5, 0.5],
         )
-    else:  # channel = (channel - mean)/std
+    elif normalize == 'zero_one':  # channel = (channel - mean)/std
         normalize_tf = transforms.Normalize(
             mean=[0, 0, 0],
             std=[1, 1, 1],
+        )
+    elif normalize == 'imagenet':  # channel = (channel - mean)/std
+        normalize_tf = transforms.Normalize(
+            mean=[0.43, 0.43, 0.43],
+            std=[0.23, 0.23, 0.23],
         )
     # define transforms
     valid_transform = transforms.Compose([
@@ -121,21 +124,27 @@ def get_test_loader(batch_size,
                     shuffle=True,
                     num_workers=2,
                     pin_memory=False,
-                    normalize=True,
+                    normalize='gan',
                     which_dataset='MNIST',
                     data_dir='/private/home/zizhao/work/data/'
                     ):
 
-    if normalize:
+    if normalize == 'gan':
         normalize_tf = transforms.Normalize(
             mean=[0.5, 0.5, 0.5],
             std=[0.5, 0.5, 0.5],
         )
-    else:  # channel = (channel - mean)/std
+    elif normalize == 'zero_one':  # channel = (channel - mean)/std
         normalize_tf = transforms.Normalize(
             mean=[0, 0, 0],
             std=[1, 1, 1],
         )
+    elif normalize == 'imagenet':  # channel = (channel - mean)/std
+        normalize_tf = transforms.Normalize(
+            mean=[0.43, 0.43, 0.43],
+            std=[0.23, 0.23, 0.23],
+        )
+
     # define transform
     transform = transforms.Compose([
             transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
