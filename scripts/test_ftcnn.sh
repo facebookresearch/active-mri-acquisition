@@ -15,7 +15,7 @@
 #                 | tee -a $path/$name/'val_log.txt' 
 
 # set -ex
-name=imagenet_resnet_9blocks_residual
+name=imagenet_resnet_9blocks_residual_1c_3down
 python test.py --dataroot 'ImageNet' \
                 --name $name \
                 --model ft_cnn \

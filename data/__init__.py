@@ -57,8 +57,8 @@ def CreateFtTLoader(opt, valid_size=0.1, is_test=False):
                                                         augment=True,
                                                         valid_size=valid_size, # a larger value to acculerate training
                                                         shuffle=True,
-                                                        num_workers=2,
-                                                        pin_memory=False,
+                                                        num_workers=4,
+                                                        pin_memory=True,
                                                         normalize=opt.normalize_type,
                                                         which_dataset=opt.dataroot)
                                                     
@@ -69,8 +69,8 @@ def CreateFtTLoader(opt, valid_size=0.1, is_test=False):
                                                     fine_size=opt.fineSize,
                                                     keep_ratio=opt.kspace_keep_ratio,
                                                     shuffle=False,
-                                                    num_workers=2,
-                                                    pin_memory=False,
+                                                    num_workers=4,
+                                                    pin_memory=True,
                                                     normalize=opt.normalize_type,
                                                     which_dataset=opt.dataroot)
         return testloader

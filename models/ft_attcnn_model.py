@@ -9,7 +9,7 @@ from torch import nn
 import numpy as np
 import torch.nn.functional as F
 from .fft_utils import *
-
+from torch.autograd import Variable
 
 class FTATTCNNModel(BaseModel):
     def name(self):
@@ -85,9 +85,6 @@ class FTATTCNNModel(BaseModel):
         if AtoB:
             self.real_A = self.IFFT(fft_kspace * self.mask)
             self.real_B = img
-            if self.isTrain and self.opt.consistency_loss:
-                # without any mask
-                self.real_A2 = self.IFFT(fft_kspace)
         else:
             self.real_A = self.IFFT(fft_kspace)
             self.real_B = img
@@ -113,15 +110,10 @@ class FTATTCNNModel(BaseModel):
 
     def forward(self):
         # conditioned on mask
-        import pdb ; pdb.set_trace()
-        h = self.mask.shape[2]
-        b = self.real_A.shape[0]
-        mask = Variable(mask.view(1,h,1,1).expand(b,h,1,1))
+        h, b = self.mask.shape[2], self.real_A.shape[0]
+        mask = Variable(self.mask.view(1,h,1,1).expand(b,h,1,1))
         self.fake_B, self.fake_B_res = self.netG(self.real_A, mask)
 
-        if self.isTrain and self.opt.consistency_loss:
-            # we expect the self consistency in model
-            self.fake_B2 = self.netG(self.real_A2)
 
     def backward_G(self):
         # First, G(A) should fake the discriminator
@@ -137,6 +129,7 @@ class FTATTCNNModel(BaseModel):
                 self._residual_gt = torch.zeros_like(_k_fake_B_res)
             loss_residual = self.criterion(_k_fake_B_res * self.mask, self._residual_gt)
             self.loss_G += loss_residual * 0.01 # around 100 smaller
+            
         # l2 regularization 
         if self.opt.l2_weight:
             l2_loss = 0

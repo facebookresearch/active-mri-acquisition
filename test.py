@@ -28,8 +28,6 @@ if __name__ == '__main__':
 
     model = create_model(opt)
     model.setup(opt)
-    model.eval() # eval mode can be used or not for instancenorm. The difference is small
-    # model.netG.train()
     reconst_loss = []
     val_count = 0
 
@@ -46,8 +44,8 @@ if __name__ == '__main__':
         visuals = model.get_current_visuals()
 
         ## scale the value to the imagenet normalization
-        # model.fake_B.add_(1).div_(2).add_(-0.43).div_(0.23)
-        # model.real_B.add_(1).div_(2).add_(-0.43).div_(0.23)
+        model.fake_B.add_(1).div_(2).add_(-0.43).div_(0.23)
+        model.real_B.add_(1).div_(2).add_(-0.43).div_(0.23)
 
         reconst_loss.append(float(F.mse_loss(model.fake_B, model.real_B, size_average=True)))
         val_count += model.fake_B.shape[0]

@@ -88,6 +88,7 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
     elif which_model_netG == 'resnet_9blocks_residual':
         # _netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=True, n_downsampling=3)
+        ## v3 performs better
         _netG = ResnetGenerator3(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=True, n_downsampling=3)
         netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
@@ -109,7 +110,6 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         netG = FuseModel(_netG, ngf+nz, output_nc, no_last_tanh=True)
 
     elif which_model_netG == 'resnet_9blocks_attention_residual':
-        # _netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=True, n_downsampling=3)
         netG = ResnetGeneratorAttResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128)
     else:
@@ -454,7 +454,8 @@ class ResnetGenerator3(nn.Module):
 from .fft_utils import *
 class ResnetGeneratorAttResidual(nn.Module):
     
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, to_output=True, imgSize=128):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 
+                n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128):
         assert(n_blocks >= 0)
         super(ResnetGeneratorAttResidual, self).__init__()
         self.input_nc = input_nc
@@ -468,10 +469,10 @@ class ResnetGeneratorAttResidual(nn.Module):
             use_bias = norm_layer == nn.InstanceNorm2d
 
         model = [nn.ReflectionPad2d(1),
-                     nn.Conv2d(input_nc, ngf*2, kernel_size=3,
-                                stride=2, padding=0, bias=use_bias),
-                      norm_layer(ngf*2),
-                      nn.ReLU(True)]
+                    nn.Conv2d(input_nc, ngf*2, kernel_size=3,
+                            stride=2, padding=0, bias=use_bias),
+                    norm_layer(ngf*2),
+                    nn.ReLU(True)]
 
         for i in range(1, n_downsampling):
             mult = 2**i
@@ -486,7 +487,7 @@ class ResnetGeneratorAttResidual(nn.Module):
             model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
 
         self.model = nn.Sequential(*model)
-        attention_ngf = ngf * mult + imgSize # mask size
+        attention_ngf = ngf * mult + imgSize # conditioned on mask. imgSize is the mask row dimension
 
         model = []
         for i in range(n_downsampling):
@@ -500,8 +501,7 @@ class ResnetGeneratorAttResidual(nn.Module):
                       norm_layer(int(ngf * mult / 2)),
                       nn.ReLU(True)]
 
-        if self.to_output:
-            model += [nn.Conv2d(ngf, output_nc, kernel_size=1, padding=0)]
+        model += [nn.Conv2d(ngf, output_nc, kernel_size=1, padding=0)]
 
         if not self.no_last_tanh:
             model += [nn.Tanh()]
@@ -512,9 +512,7 @@ class ResnetGeneratorAttResidual(nn.Module):
         self.model_att = nn.Sequential(
             nn.Conv2d(attention_ngf, attention_ngf//2, 1, bias=use_bias),
             nn.ReLU(True),
-            nn.Conv2d(attention_ngf//2, attention_ngf//4, 1, bias=use_bias),
-            nn.ReLU(True),
-            nn.Conv2d(attention_ngf//4, imgSize, 1, bias=use_bias),
+            nn.Conv2d(attention_ngf//2, imgSize, 1, bias=use_bias),
             nn.Sigmoid(),
         )
         self.IFFT = IFFT()
@@ -522,7 +520,6 @@ class ResnetGeneratorAttResidual(nn.Module):
 
     def forward(self, input, mask):
         # mask_vector [B, imSize, 1, 1]
-        import pdb; pdb.set_trace()
         hidden = self.model(input)
         res = self.model_decode(hidden)
 
