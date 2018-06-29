@@ -4,6 +4,21 @@ import numpy as np
 from PIL import Image
 import os
 
+def sum_axes(input, axes=[], keepdim=False):
+    # mu2, logvar2 are prior
+    # probably some check for uniqueness of axes
+    if axes == -1:
+        axes = [i for i in range(1, len(input.shape))]
+
+    if keepdim:
+        for ax in axes:
+            input = input.sum(ax, keepdim=True)
+    else:
+        for ax in sorted(axes, reverse=True):
+            input = input.sum(ax)
+    return input
+
+        
 
 # Converts a Tensor into an image array (numpy)
 # |imtype|: the desired type of the converted numpy array

@@ -11,15 +11,14 @@ import torch.nn.functional as F
 from .fft_utils import *
 
 
-class FTCNNModel(BaseModel):
+class FTATTCNNModel(BaseModel):
     def name(self):
-        return 'FTCNNModel'
+        return 'FTATTCNNModel'
 
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
 
-        # changing the default values to match the pix2pix paper
-        # (https://phillipi.github.io/pix2pix/)
+
         parser.set_defaults(pool_size=0)
         parser.set_defaults(no_lsgan=True)
         parser.set_defaults(norm='batch')
@@ -42,6 +41,7 @@ class FTCNNModel(BaseModel):
             self.model_names = ['G']
         else:  # during test time, only load Gs
             self.model_names = ['G']
+        assert(opt.output_nc == 2)
         # load/define networks
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
                                     opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
@@ -112,10 +112,12 @@ class FTCNNModel(BaseModel):
         return float(self.loss_FFTVisiable), float(self.loss_FFTInvisiable)
 
     def forward(self):
-        if 'residual' in self.opt.which_model_netG:
-            self.fake_B, self.fake_B_res = self.netG(self.real_A)
-        else: 
-            self.fake_B = self.netG(self.real_A)
+        # conditioned on mask
+        import pdb ; pdb.set_trace()
+        h = self.mask.shape[2]
+        b = self.real_A.shape[0]
+        mask = Variable(mask.view(1,h,1,1).expand(b,h,1,1))
+        self.fake_B, self.fake_B_res = self.netG(self.real_A, mask)
 
         if self.isTrain and self.opt.consistency_loss:
             # we expect the self consistency in model

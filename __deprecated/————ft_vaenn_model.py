@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from .fft_utils import *
 from torch.autograd import Variable
 
+
 class FTVAENNModel(BaseModel):
     def name(self):
         return 'FTVAENNModel'
@@ -22,7 +23,7 @@ class FTVAENNModel(BaseModel):
         parser.set_defaults(which_model_netG='jure_unet_vae_residual')
         parser.set_defaults(output_nc=1) # currently, use 2
         if is_train:
-            parser.add_argument('--lambda_KL', type=float, default=0.0001, help='weight for KL loss')
+            parser.add_argument('--lambda_KL', type=float, default=1, help='weight for KL loss')
             parser.add_argument('--kl_min_clip', type=float, default=0.0, help='clip value for KL loss')
 
         return parser
@@ -46,7 +47,7 @@ class FTVAENNModel(BaseModel):
         norm = 'none' if 'jure_unet' in opt.which_model_netG else opt.norm
         self.netE_prior = networks.define_E(opt.input_nc, opt.nz, opt.ngf, 'conv_128', 
                                     norm, 'lrelu', opt.init_type, self.gpu_ids, vaeLike=True)
-        self.netE_posterior = networks.define_E(opt.input_nc*2, opt.nz, opt.ngf, 'conv_128', 
+        self.netE_posterior = networks.define_E(opt.input_nc, opt.nz, opt.ngf, 'conv_128', 
                                     norm, 'lrelu', opt.init_type, self.gpu_ids, vaeLike=True)  
 
         self.RFFT = RFFT().to(self.device)
@@ -61,7 +62,7 @@ class FTVAENNModel(BaseModel):
 
             # initialize optimizers
             self.optimizers = []
-            self.optimizer_G = torch.optim.Adam(list(self.netG.parameters()) + list(self.netE_posterior.parameters()) + list(self.netE_prior.parameters()),
+            self.optimizer_G = torch.optim.Adam(self.netG.parameters(),
                                                 lr=opt.lr, betas=(opt.beta1, 0.999))
 
             self.optimizers.append(self.optimizer_G)
@@ -119,16 +120,12 @@ class FTVAENNModel(BaseModel):
     #     elif random_type == 'gauss':
     #         self.eps = torch.randn(batchSize, nz)
         
-    def reparam(self, mu, logvar, zero_eps=False):
-       
-        if zero_eps:
-            return mu
-        else:
-            std = logvar.mul(0.5).exp()
-            eps = Variable(torch.cuda.FloatTensor(mu.size()).normal_())
-            q_z = eps.mul(std).add_(mu)
+    def reparam(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        eps = Variable(torch.cuda.FloatTensor(mu.size()).normal_())
+        q_z = eps.mul(std).add_(mu)
 
-            return q_z
+        return q_z
 
     def decode_distribution(self, sampling):
         
@@ -137,8 +134,8 @@ class FTVAENNModel(BaseModel):
         
         # compute KL loss
         if self.isTrain:
-            q_mu, q_logvar = self.netE_posterior.forward(torch.cat([self.real_A, self.real_A_], 1))
-            q_z = self.reparam(q_mu, q_logvar)  # TODO
+            q_mu, q_logvar = self.netE_posterior.forward(self.real_A_)
+            q_z = self.reparam(q_mu, q_logvar)
             self.loss_KL = self.kld(q_mu, q_logvar, p_mu, p_logvar)
         else:
             self.loss_KL = 0
@@ -155,24 +152,15 @@ class FTVAENNModel(BaseModel):
 
     def kld(self, mu1, logvar1, mu2, logvar2):
         
-        sigma1 = logvar1.mul(0.5).exp() 
-        sigma2 = logvar2.mul(0.5).exp() 
-        kl_cost = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
-        if self.opt.kl_min_clip > 0:
-            # way 2: clip min value [0, 1, 2, 3] -> [0, 1] -> [1] / (b * k)
-            # we use sum_axes insetad of torch.sum to be able to pass axes
-            if len(kl_cost.shape) == 4:
-                kl_ave = torch.mean(util.sum_axes(kl_cost, axes=[2, 3]), 0, keepdim=True)
-            else:
-                kl_ave = torch.mean(kl_cost, 0, keepdim=True)
-            kl_ave = torch.clamp(kl_ave, min=self.opt.kl_min_clip)
-            kl_ave = kl_ave.repeat([mu1.shape[0], 1])
-            kl_obj = torch.sum(kl_ave, 1)
+        prior = torch.distributions.Normal(mu2, torch.exp(logvar2))
+        posterior = torch.distributions.Normal(mu1, torch.exp(logvar1))
 
-        else:
-            kl_obj = util.sum_axes(kl_cost, -1)
-        
-        kl_obj = kl_obj.mean()
+        z = posterior.rsample()
+        logqs = posterior.log_prob(z)
+        logps = prior.log_prob(z)
+
+        kl_obj = logqs - logps
+        kl_obj = kl_obj.sum(1).mean()
         
         return kl_obj
 
@@ -189,7 +177,7 @@ class FTVAENNModel(BaseModel):
         self.loss_G = self.criterion(self.fake_B, self.real_B) 
         
         # kl divergence
-        self.loss_G += self.loss_KL * self.opt.lambda_KL # TODO
+        self.loss_G += self.loss_KL * self.opt.lambda_KL
 
         # residual loss
         # observed part should be all zero during residual training (y(x)+x)
@@ -236,10 +224,10 @@ class FTVAENNModel(BaseModel):
         all_pixel_diff = []
         all_pixel_avg = []
 
-        repeated_data = replicate_tensor(data, n_samples)
-        repeated_data_list = [repeated_data] + data_list[1:] # concat extra useless output
+        data = replicate_tensor(data, n_samples)
+        repeated_data = [data] + data_list[1:] # concat extra useless output
 
-        self.set_input(repeated_data_list)
+        self.set_input(repeated_data)
         self.test()
 
         input_imgs = data.cpu().view(b,n_samples,c,h,w)

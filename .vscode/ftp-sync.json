@@ -15,7 +15,9 @@
         "\\.vscode",
         "\\.git",
         "\\.DS_Store",
-        "\\.results"
+        "\\results",
+        "\\data\\__pycache__",
+        "\\pics"
     ],
     "generatedFiles": {
         "uploadOnSave": false,
