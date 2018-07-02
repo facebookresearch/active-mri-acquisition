@@ -50,7 +50,6 @@ class FTATTCNNModel(BaseModel):
         self.IFFT = IFFT().to(self.device)
         # for evaluation
         self.FFT = FFT().to(self.device)
-        
         if self.isTrain:
             # define loss functions
             self.criterion = torch.nn.MSELoss()

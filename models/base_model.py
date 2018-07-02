@@ -129,8 +129,8 @@ class BaseModel():
                 state_dict = torch.load(load_path, map_location=str(self.device))
                 # patch InstanceNorm checkpoints prior to 0.4
                 for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
-                    self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
-                net.load_state_dict(state_dict)
+                    self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))                    
+                net.load_state_dict(state_dict, strict=not self.opt.non_strict_state_dict)
 
     # print network information
     def print_networks(self, verbose):
