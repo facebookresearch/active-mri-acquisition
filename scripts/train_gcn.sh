@@ -1,19 +1,22 @@
-export CUDA_VISIBLE_DEVICES=$device
+export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
 # Debug output
+echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES
 set -ex
-name=imagenet_resnet_9blocks_attention_residual_fullimagenet_v2
-python test.py --dataroot 'ImageNet' \
+
+name=imagenet_gcn_6layers
+python train.py --dataroot 'ImageNet' \
                 --name $name \
-                --model ft_attcnn \
-                --which_model_netG resnet_9blocks_attention_residual \
+                --model ft_gcn \
+                --which_model_netG gcn_6layers \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
                 --checkpoints_dir '/private/home/zizhao/work/checkpoint_fmri' \
                 --batchSize 64 \
+                --niter_decay 100 \
+                --niter 100 \
                 --input_nc 2 \
                 --output_nc 2 \
-                --how_many -1 \
                 --no_dropout \
-                --non_strict_state_dict \
+                --print_freq 10 \
 

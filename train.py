@@ -11,10 +11,12 @@ if __name__ == '__main__':
 
     # data_loader = CreateDataLoader(opt)
     # dataset = data_loader.load_data()
-    train_data_loader, val_data_loader = CreateFtTLoader(opt, valid_size=0.9)
     if opt.eval_full_valid:
         # use validation data
         val_data_loader = CreateFtTLoader(opt, is_test=True)
+        train_data_loader, _ = CreateFtTLoader(opt, valid_size=0.001) # use all as training
+    else:
+        train_data_loader, val_data_loader = CreateFtTLoader(opt, valid_size=0.9)
 
     dataset_size = len(train_data_loader)
 
@@ -22,7 +24,6 @@ if __name__ == '__main__':
     model.setup(opt)
     visualizer = Visualizer(opt=opt)
     total_steps = 0
-
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
         epoch_start_time = time.time()
         iter_data_time = time.time()

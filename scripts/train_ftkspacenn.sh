@@ -3,11 +3,11 @@ export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES
 set -ex
 
-name=imagenet_resnet_9blocks_cvae_residual
+name=imagenet_kspace_unet_residual
 python train.py --dataroot 'ImageNet' \
                 --name $name \
-                --model ft_cvaenn \
-                --which_model_netG resnet_9blocks_residual \
+                --model ft_kspace \
+                --which_model_netG kspace_unet_residual \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
@@ -15,7 +15,8 @@ python train.py --dataroot 'ImageNet' \
                 --batchSize 64 \
                 --niter_decay 100 \
                 --niter 100 \
-                --input_nc 2 \
-                --output_nc 2 \
+                --input_nc 256 \
+                --output_nc 256 \
                 --no_dropout \
-                --print_freq 50
+                --print_freq 50 \
+

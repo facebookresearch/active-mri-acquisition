@@ -18,7 +18,7 @@
 
 ## number of tasks per node
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:8
 
 ### Section 2: Setting environment variables for the job
 ### Remember that all the module command does is set environment

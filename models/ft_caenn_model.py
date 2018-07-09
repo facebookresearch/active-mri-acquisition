@@ -11,6 +11,8 @@ import torch.nn.functional as F
 from .fft_utils import *
 from torch.autograd import Variable
 import torch.nn.utils.weight_norm as weightNorm
+import argparse
+from .networks import init_net
 
 class FTCAENNModel(BaseModel):
     def name(self):
@@ -19,12 +21,55 @@ class FTCAENNModel(BaseModel):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
 
-        parser.set_defaults(nz=8)
-        parser.set_defaults(which_model_netG='jure_unet_vae_residual')
-        parser.set_defaults(output_nc=1) # currently, use 2
-        if is_train:
-            parser.add_argument('--lambda_KL', type=float, default=0.0001, help='weight for KL loss')
-            parser.add_argument('--kl_min_clip', type=float, default=0.0, help='clip value for KL loss')
+        def str2bool(v):
+            if v.lower() in ('yes', 'true', 't', 'y', '1'):
+                return True
+            elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+                return False
+            else:
+                raise argparse.ArgumentTypeError('Boolean value expected.')
+                
+        parser.add_argument("--ctx_gen_det_skip", type=str2bool, nargs='?', const=True, default=True,
+                            help="Add deterministic skip connections from context path to generator path?")
+        parser.add_argument("--ctx_mask_loss", type=str2bool, nargs='?', const=True, default=False,
+                            help="Mask loss to context info for samples from model prior?")
+        parser.add_argument("--ctx_gen_det_conn", type=str2bool, nargs='?', const=True, default=True,
+                            help="Connect ctx to generator via deterministic skip in the bottleneck?")
+                    
+        parser.add_argument("--std_in_nll_dep_on_z", type=str2bool, nargs='?', const=True, default=False,
+                    help="Std in generator output depends on z?")             
+        parser.add_argument("--use_ctx_as_input", type=str2bool, nargs='?', const=True, default=False,
+                    help="Use context information as input instead of the images. This flag allows to train the model from ctx to x direclty. Note that this flag ignores conditioning the learnable prior on additional context.")
+        parser.add_argument('--n_ctx', type=int, default = 1,
+                    help='Number of context frames to use. Set to 0 if no context is required.')
+        parser.add_argument("--sum_m_s_from_gen", type=str2bool, nargs='?', const=True, default=True,
+                    help="sum mean and std in prior and posterior to values comming from generator network?")
+        parser.add_argument("--weight_norm", type=str2bool, nargs='?', const=True, default=True,
+                    help="Use weight norm?")
+        parser.add_argument('--beta', type=float, default=4.,
+                    help='Weight on KL term.')
+        parser.add_argument('--no_context_mask_cond', action='store_false', help='if mask is used as the input of conditional input')
+        parser.add_argument("--h_size", type=int, default=160,
+                            help="Size of resnet block")
+        parser.add_argument("--depth", type=int, default=1,
+                            help="Number of downsampling blocks.")
+        parser.add_argument("--num_blocks", type=int, default=5,
+                    help="Number of resnet blocks for each downsampling layer.")
+        parser.add_argument("--loss_rec", type=str, choices=['MSE','NLL'], default='NLL', help="Which loss for p(x).")
+        parser.add_argument("--z_size", type=int, default=32,
+                    help="Size of z variables.")
+        parser.add_argument("--k", type=int, default=1,
+                    help="Number of samples for IS objective.")
+        parser.add_argument("--loss_div", type=str, choices=['KL','MMD', 'GAN'], default='KL', help="Which loss for q(z|x).")
+        parser.add_argument("--kl_min", type=float, default=0.25,
+                    help="Number of free bits/nats.")
+        parser.add_argument('--alpha', type=float, default = 0.,
+                    help='Ratio of samples from the prior at training time.')
+        parser.add_argument("--model_vae", type=str, default='VAE', choices=['VAE', 'IAF', 'WAE'],
+                    help="Use flow, VAE model or WAE model.")
+
+        parser.add_argument('--preload_G', action='store_true', help='pre_load Generator')
+        parser.add_argument('--train_G', action='store_true', help='also train Generator')
 
         return parser
 
@@ -32,23 +77,30 @@ class FTCAENNModel(BaseModel):
         BaseModel.initialize(self, opt)
         self.isTrain = opt.isTrain
         # specify the training losses you want to print out. The program will call base_model.get_current_losses
-        self.loss_names = ['G', 'FFTVisiable', 'FFTInvisiable', 'KL']
+        self.loss_names = ['G', 'FFTVisiable', 'FFTInvisiable', 'KL', 'VAE', 'E', 'div', 'bits_per_dim']
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
         self.visual_names = ['real_A', 'fake_B', 'real_B']
         # specify the models you want to save to the disk. The program will call base_model.save_networks and base_model.load_networks
         if self.isTrain:
-            self.model_names = ['G', 'E_prior','E_posterior']
+            self.model_names = ['G', 'CVAE']
         else:  # during test time, only load Gs
-            self.model_names = ['G', 'E_prior']
+            self.model_names = ['G', 'CVAE']
         # load/define networks
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
-                                    opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
+                        opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
+        
+        if self.isTrain:
+            assert(opt.preload_G or opt.train_G)
+            if opt.preload_G:
+                self.model_names = ['G']
+                self.load_networks(opt.which_epoch)
+                self.model_names = ['G', 'CVAE']
 
-        norm = 'none' if 'jure_unet' in opt.which_model_netG else opt.norm
-        self.netE_prior = networks.define_E(opt.input_nc, opt.nz, opt.ngf, 'conv_128', 
-                                    norm, 'lrelu', opt.init_type, self.gpu_ids, vaeLike=True)
-        self.netE_posterior = networks.define_E(opt.input_nc*2, opt.nz, opt.ngf, 'conv_128', 
-                                    norm, 'lrelu', opt.init_type, self.gpu_ids, vaeLike=True)  
+        output_channels = image_channels = 1
+        if opt.use_ctx_as_input:
+            image_channels = image_channels*opt.n_ctx + opt.n_ctx
+
+        self.netCVAE = init_net(CVAE(opt, image_channels, output_channels), opt.init_type, self.gpu_ids) 
 
         self.RFFT = RFFT().to(self.device)
         self.mask = create_mask(opt.fineSize).to(self.device)
@@ -62,39 +114,36 @@ class FTCAENNModel(BaseModel):
 
             # initialize optimizers
             self.optimizers = []
-            self.optimizer_G = torch.optim.Adam(list(self.netG.parameters()) + list(self.netE_posterior.parameters()) + list(self.netE_prior.parameters()),
-                                                lr=opt.lr, betas=(opt.beta1, 0.999))
+            params = list(self.netCVAE.parameters()) + (list(self.netG.parameters()) if opt.train_G else [])
+            # self.optimizer_G = torch.optim.Adam(params, lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizer_G = torch.optim.Adamax(params, lr=opt.lr)
 
             self.optimizers.append(self.optimizer_G)
-
-        if self.opt.output_nc == 2:
-            # the imagnary part of reconstrued data
-            self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
 
     def set_input(self, input):
         # output from FT loader
         # BtoA is used to test if the network is identical
-        AtoB = self.opt.which_direction == 'AtoB'
         img, _, _ = input
         img = img.to(self.device)
         # doing FFT
         # if has two dimension output, 
         # we actually want toe imagary part is also supervised, which should be all zero
         fft_kspace = self.RFFT(img)
-        if self.opt.output_nc == 2:
-            if self.imag_gt.shape[0] != img.shape[0]:
-                # imagnary part is all zeros
-                self.imag_gt = torch.zeros_like(img)
-            img = torch.cat([img, self.imag_gt], dim=1)
+        
+        # TODO: be careful of the normalization [-0.5, 0.5]
+        ifft_img = self.IFFT(fft_kspace * self.mask)
 
-        if AtoB:
-            self.real_A = self.IFFT(fft_kspace * self.mask)
-            self.real_B = img
-            self.real_A_ = self.IFFT(fft_kspace * (1-self.mask))
+        if not self.opt.no_context_mask_cond:
+            b,c,h,w = fft_kspace.shape
+            mask = self.mask.expand(b,c,h,w)
+            fft_mask = self.RFFT(mask)
+            self.real_A = torch.cat([ifft_img, fft_mask], 1) # has four channels
         else:
-            self.real_A = self.IFFT(fft_kspace)
-            self.real_B = img
-    
+            self.real_A = ifft_img   
+
+        self.real_B = self.IFFT(fft_kspace)
+        self.real_A_ = self.IFFT(fft_kspace * (1-self.mask)) # inversed masked ifft, the input of encoder of cvae 
+ 
     def compute_special_losses(self):
         # compute losses between fourier spaces of fake_B and real_B
         # if output one dimension
@@ -114,101 +163,46 @@ class FTCAENNModel(BaseModel):
         
         return float(self.loss_FFTVisiable), float(self.loss_FFTInvisiable)
 
-    # def get_z_random(self, batchSize, nz, random_type='gauss'):
-    #     if random_type == 'uni':
-    #         self.eps = torch.rand(batchSize, nz) * 2.0 - 1.0
-    #     elif random_type == 'gauss':
-    #         self.eps = torch.randn(batchSize, nz)
-        
-    def reparam(self, mu, logvar, zero_eps=False):
-       
-        if zero_eps:
-            return mu
-        else:
-            std = logvar.mul(0.5).exp()
-            eps = Variable(torch.cuda.FloatTensor(mu.size()).normal_())
-            q_z = eps.mul(std).add_(mu)
-
-            return q_z
-
-    def decode_distribution(self, sampling):
-        
-        p_mu, p_logvar = self.netE_prior.forward(self.real_A)
-        p_z = self.reparam(p_mu, p_logvar)
-        
-        # compute KL loss
-        if self.isTrain:
-            q_mu, q_logvar = self.netE_posterior.forward(torch.cat([self.real_A, self.real_A_], 1))
-            q_z = self.reparam(q_mu, q_logvar)  # TODO
-            self.loss_KL = self.kld(q_mu, q_logvar, p_mu, p_logvar)
-        else:
-            self.loss_KL = 0
-        if sampling:
-            # in the training stage, return posteriors
-            return p_z
-        else:
-            # in testing, return learned priors
-            return q_z
-
-    def test(self):
+    def test(self, sampling=False):
         with torch.no_grad():
-            self.forward(sampling=True)
-
-    def kld(self, mu1, logvar1, mu2, logvar2):
-        
-        sigma1 = logvar1.mul(0.5).exp() 
-        sigma2 = logvar2.mul(0.5).exp() 
-        kl_cost = torch.log(sigma2/sigma1) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
-        if self.opt.kl_min_clip > 0:
-            # way 2: clip min value [0, 1, 2, 3] -> [0, 1] -> [1] / (b * k)
-            # we use sum_axes insetad of torch.sum to be able to pass axes
-            if len(kl_cost.shape) == 4:
-                kl_ave = torch.mean(util.sum_axes(kl_cost, axes=[2, 3]), 0, keepdim=True)
-            else:
-                kl_ave = torch.mean(kl_cost, 0, keepdim=True)
-            kl_ave = torch.clamp(kl_ave, min=self.opt.kl_min_clip)
-            kl_ave = kl_ave.repeat([mu1.shape[0], 1])
-            kl_obj = torch.sum(kl_ave, 1)
-
-        else:
-            kl_obj = util.sum_axes(kl_cost, -1)
-        
-        kl_obj = kl_obj.mean()
-        
-        return kl_obj
+            self.forward(sampling=sampling)
 
     def forward(self, sampling=False):
-        
-        z = self.decode_distribution(sampling)
+        h, b = self.mask.shape[2], self.real_A.shape[0]
+        mask = Variable(self.mask.view(1,h,1,1).expand(b,h,1,1))
+        self.fake_B_G, _ = self.netG(self.real_A, mask)
+        self.fake_B_res = self.fake_B_G - self.real_A
 
-        if 'residual' in self.opt.which_model_netG:
-            self.fake_B, self.fake_B_res = self.netG(self.real_A, z=z)
-        else: 
-            self.fake_B = self.netG(self.real_A, z=z)
+        if not self.opt.train_G:
+            self.fake_B_res = self.fake_B_res.detach()
+        
+        sample_from = 'prior' if sampling else 'posterior'
+        # normalize to [-0.5, 0.5] by dividing 2
+        # then normalize back
+        self.fake_B, self.div_obj, self.aux_loss, self.dec_log_stdv, self.ft_stdv \
+                                = self.netCVAE(self.real_B.div(2), self.fake_B_res.div(2), self.real_A.div(2), 
+                                            sample_from=sample_from)
+        
+        self.fake_B.mul_(2)
+
+        self.div_obj.mul_(self.opt.beta)
+        self.loss_div = self.div_obj.mean()
 
     def backward_G(self):
-        self.loss_G = self.criterion(self.fake_B, self.real_B) 
-        
-        # kl divergence
-        self.loss_G += self.loss_KL * self.opt.lambda_KL # TODO
+        self.loss_E = self.criterion(self.fake_B_G, self.real_B) 
+        self.loss_VAE, _loss = criteria(self.fake_B.div(2), self.real_B.div(2), self.div_obj, 
+                                    self.aux_loss, self.dec_log_stdv, self.opt, 
+                                    None, [], None, self.ft_stdv)
+            
+        # normalize loss_VAE
+        b,c,h,w = self.fake_B.shape
+        # self.loss_VAE.div_(b*c*h*w)
+        cst = np.log(2.) if self.opt.loss_rec == 'NLL' else 1.
+        self.loss_bits_per_dim = _loss.item() / (cst*h*w*b)
 
-        # residual loss
-        # observed part should be all zero during residual training (y(x)+x)
-        if self.opt.residual_loss:
-            _k_fake_B_res = self.FFT(self.fake_B_res)
-            if not hasattr(self, '_residual_gt') or (self._residual_gt.shape[0] != _k_fake_B_res.shape[0]):
-                self._residual_gt = torch.zeros_like(_k_fake_B_res)
-            loss_residual = self.criterion(_k_fake_B_res * self.mask, self._residual_gt)
-            self.loss_G += loss_residual * 0.01 # around 100 smaller
-
-        # l2 regularization 
-        if self.opt.l2_weight:
-            l2_loss = 0
-            for param in self.netG.parameters():
-                if len(param.shape) != 1: # no regualize bias term
-                    l2_loss += param.norm(2)
-            self.loss_G += l2_loss * 0.0001
-
+        self.loss_G = self.loss_VAE 
+        if self.opt.train_G:
+            self.loss_G += self.loss_E
         self.loss_G.backward()
 
         self.compute_special_losses()
@@ -221,7 +215,7 @@ class FTCAENNModel(BaseModel):
         self.backward_G()
         self.optimizer_G.step()
 
-    def sampling(self, data_list, n_samples=9):
+    def sampling(self, data_list, n_samples=8):
         def replicate_tensor(data, times):
             ks = list(data.shape)
             data = data.view(ks[0], 1, ks[1], ks[2], ks[3])
@@ -241,18 +235,70 @@ class FTCAENNModel(BaseModel):
         repeated_data_list = [repeated_data] + data_list[1:] # concat extra useless output
 
         self.set_input(repeated_data_list)
-        self.test()
+        self.test(sampling=True)
 
-        input_imgs = data.cpu().view(b,n_samples,c,h,w)
-        sample_x = self.fake_B.cpu() # bxn_samples
+        input_imgs = repeated_data.cpu()
+        sample_x = self.fake_B.cpu()[:,:1,:,:] # bxn_samples
 
-        all_pixel_diff = (input_imgs - sample_x.view(b,n_samples,c,h,w)).abs()
+        all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w))
 
         pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
         pixel_diff_std = torch.std(all_pixel_diff, dim=1) # n_samples
 
         return sample_x, pixel_diff_mean, pixel_diff_std
 
+def discretized_logistic(mean, logscale, binsize = 1/256.0, sample=None):
+    # from PixelCNN++
+    scale = torch.exp(logscale)
+    sample = (torch.floor(sample / binsize) * binsize - mean) / scale
+    logp = torch.log(F.sigmoid(sample + binsize / scale) - F.sigmoid(sample) + 1e-7)
+    return logp
+def logsumexp(x):
+    x_max, _ = torch.max(x, dim=1, keepdim=True)
+    return x_max.view(-1) + torch.log(torch.sum(torch.exp(x - x_max), 1))
+def compute_lowerbound(log_pxz, sum_kl_costs, k=1):
+    if k == 1:
+        return sum_kl_costs - log_pxz
+    # log 1/k \sum p(x | z) * p(z) / q(z | x) = -log(k) + logsumexp(log p(x|z) + log p(z) - log q(z|x))
+    log_pxz = log_pxz.view([-1, k])
+    sum_kl_costs = sum_kl_costs.view([-1, k])
+    return - (- torch.log(torch.Tensor(np.copy(k)).cuda()) + logsumexp(log_pxz - sum_kl_costs))
+
+def criteria(x, orig_x, div_loss, aux_loss, dec_log_stdv, hps, ctx=None, ids=[], mask=None, ft_stdv=None):
+    if hps.loss_rec == 'MSE': # gray scale images
+        if hps.model == 'WAE':
+            log_pxz = F.mse_loss(x, orig_x, reduce=False)
+        else:
+            log_pxz = - F.mse_loss(x, orig_x, reduce=False)
+
+    elif hps.loss_rec == 'NLL':
+        # be careful about the - 0.5
+        log_pxz = discretized_logistic(x, dec_log_stdv, sample=orig_x)
+
+    # mask loss for the model prior samples (context to x path)
+    # TODO: should we consider reweighting for masked datapoints?
+    if (hps.alpha > 0 and hps.ctx_mask_loss and ctx is not None):
+        if hps.dataset == 'cifar10':
+            #TODO: should we compute the loss on the imaginary part too?
+            x_ft = torch.fft(x.permute(0, 2, 3, 1), 2).permute(0,3,1,2)
+            orig_x_ft = torch.rfft(orig_x[:,:1,:,:], 2, onesided=False).squeeze().permute(0,3,1,2)
+            log_pxz2 = discretized_logistic(x_ft, ft_stdv, sample=orig_x_ft)
+            log_pxz2 = util.sum_axes(log_pxz2, axes=[1]).unsqueeze(1)
+            log_pxz[ids, :, :, :] = (mask[ids, :, :, :] * log_pxz2[ids, :, :, :])
+        else:
+            mask = ctx[:, 1, :, :].unsqueeze(1)
+            log_pxz[ids, :, :, :] = mask[ids, :, :, :] * log_pxz[ids, :, :, :]
+
+    log_pxz = util.sum_axes(log_pxz, axes=[1, 2, 3])
+
+    if hps.model == 'WAE':
+        obj = torch.mean(log_pxz) + div_loss
+        loss = obj
+    else:
+        obj = torch.sum(div_loss - log_pxz)
+        loss = torch.sum(compute_lowerbound(log_pxz, aux_loss, hps.k))
+
+    return obj, loss
 
 def crop(layer, target_size):
     dif = [(layer.shape[2] - target_size[0]) // 2, (layer.shape[3] - target_size[1]) // 2]
@@ -274,7 +320,7 @@ class IAFLayer(nn.Module):
         else:
             z_dim_mult = 0
 
-        if hps.model == 'IAF':
+        if hps.model_vae == 'IAF':
             self.ar_multiconv2d = ArMulticonv2d(hps, [self.h_size, self.h_size], [
                                                 self.z_size, self.z_size])
             self.conv1down = nn.Conv2d(self.h_size, z_dim_mult * self.z_size + 2 * self.h_size,
@@ -339,7 +385,7 @@ class IAFLayer(nn.Module):
         self.qz_mean = x[:,:self.z_size,:,:]
         self.qz_logsd = x[:,self.z_size:2*self.z_size,:,:]
         h = x[:,2*self.z_size:2*self.z_size+self.h_size,:,:]
-        if self.hps.model == 'IAF':
+        if self.hps.model_vae == 'IAF':
             self.up_context = x[:,2*self.z_size+self.h_size:,:,:]
         h = F.elu(h)
         h = self.conv2up(h)
@@ -373,7 +419,7 @@ class IAFLayer(nn.Module):
         posterior = torch.distributions.Normal(rz_mean + self.qz_mean,
                                                torch.exp(rz_logsd + self.qz_logsd))
 
-        if hps.model == 'IAF':
+        if hps.model_vae == 'IAF':
             down_context = x[:,z_dim_mult*self.z_size + self.h_size:z_dim_mult*self.z_size + 2*self.h_size,:,:]
             context = self.up_context + down_context
 
@@ -389,7 +435,7 @@ class IAFLayer(nn.Module):
                 kl_cost = kl_obj = torch.zeros([input.shape[0]]).cuda()
             else:
                 logqs = posterior.log_prob(z)
-                if hps.model == 'IAF':
+                if hps.model_vae == 'IAF':
                     x = self.ar_multiconv2d(z, context)
                     arw_mean, arw_logsd = x[0] * 0.1, x[1] * 0.1
                     z = (z - arw_mean) / torch.exp(arw_logsd)
@@ -408,14 +454,14 @@ class IAFLayer(nn.Module):
                 if hps.kl_min > 0:
                     # [0, 1, 2, 3] -> [0, 1] -> [1] / (b * k)
                     # we use sum_axes insetad of torch.sum to be able to pass axes
-                    kl_ave = torch.mean(sum_axes(kl_cost, axes=[2, 3]), 0, keepdim=True)
+                    kl_ave = torch.mean(util.sum_axes(kl_cost, axes=[2, 3]), 0, keepdim=True)
                     kl_ave = torch.clamp(kl_ave, min=hps.kl_min)
                     kl_ave = kl_ave.repeat([input.shape[0], 1])
                     kl_obj = torch.sum(kl_ave, 1)
                 else:
                     kl_obj = torch.sum(kl_cost, [1, 2, 3])
 
-                kl_cost = sum_axes(kl_cost, [1, 2, 3])
+                kl_cost = util.sum_axes(kl_cost, [1, 2, 3])
         else:
             raise ValueError('Unknown divergence.')
 
@@ -448,7 +494,6 @@ class IAFLayer(nn.Module):
             x, kl_obj, kl_cost = self.down(x, ids, target_size, sample_from)
             return x, kl_obj, kl_cost
 
-
 class CVAE(nn.Module):
     def __init__(self, hps, in_channels, out_channels):
         super(CVAE, self).__init__()
@@ -467,7 +512,8 @@ class CVAE(nn.Module):
         self.ft_log_stdv =  nn.Parameter(torch.zeros(1,1))
 
         if hps.n_ctx > 0 and not hps.use_ctx_as_input:
-            self.convinit_ctx = nn.Conv2d(4 * in_channels, hps.h_size, 5, stride=2, padding=(5-1)//2)
+            # self.convinit_ctx = nn.Conv2d(4 * in_channels, hps.h_size, 5, stride=2, padding=(5-1)//2)
+            self.convinit_ctx = nn.Conv2d(2 * in_channels, hps.h_size, 5, stride=2, padding=(5-1)//2)
         else:
             self.h_top = nn.Parameter(torch.zeros(hps.h_size))
 
@@ -480,7 +526,6 @@ class CVAE(nn.Module):
             if hps.n_ctx > 0 and not hps.use_ctx_as_input:
                 self.convinit_ctx = weightNorm(self.convinit_ctx)
 
-
         self.dec_log_stdv =  nn.Parameter(torch.zeros(1,1))
         self.layers = nn.ModuleList([])
         for i in range(hps.depth):
@@ -489,11 +534,11 @@ class CVAE(nn.Module):
                 downsample = (i > 0) and (j == 0)
                 self.layers[-1].append(IAFLayer(hps, downsample))
 
-    def forward(self, x, ctx, ids=[], sample_from='posterior'):
+    def forward(self, x, ctx, true_ctx, ids=[], sample_from='posterior'):
 
         input_size = x.shape[-2:]
         hps = self.hps
-        x = x - ctx[:,:2,:,:]
+        x = x - true_ctx[:,:2,:,:]
         # x = x - 0.5
         # ctx = ctx - 0.5 if ctx is not None else None
         # Input images are repeated k times on the input.
@@ -524,7 +569,6 @@ class CVAE(nn.Module):
             h_top = h_top.view([1, -1, 1, 1])
             h = h_top.repeat([batch_size, 1, shapes[-1][0], shapes[-1][1]])
 
-
         kl_cost = Variable(torch.zeros([batch_size])).cuda()
         kl_obj = Variable(torch.zeros([batch_size])).cuda()
         for i, layer in reversed(list(enumerate(self.layers))):
@@ -545,7 +589,7 @@ class CVAE(nn.Module):
         else:
             dec_log_stdv = self.dec_log_stdv
 
-        x = x + ctx[:,:2,:,:]
+        x = x + true_ctx[:,:2,:,:]
         if hps.loss_rec == 'NLL':
             x = torch.clamp(x, -0.5 + 1 / 512., 0.5 - 1 / 512.)
         else:
@@ -590,7 +634,6 @@ class ArMulticonv2d(nn.Module):
         for i, layer in enumerate(self.layersB):
             out.append(layer(x))
         return out
-
 
 class MaskedConv2d_tf(nn.Conv2d):
 

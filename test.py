@@ -21,9 +21,9 @@ if __name__ == '__main__':
     # opt.display_id = -1  # no visdom display
     # data_loader = CreateDataLoader(opt)
     # dataset = data_loader.load_data()
+    assert (opt.no_dropout)
 
     opt.results_dir = opt.checkpoints_dir
-    # _, val_data_loader = CreateFtTLoader(opt, valid_size=0.9)
     test_data_loader = CreateFtTLoader(opt, is_test=True)
 
     model = create_model(opt)
@@ -43,11 +43,12 @@ if __name__ == '__main__':
         model.test()
         visuals = model.get_current_visuals()
 
-        ## scale the value to the imagenet normalization
+        ## scale the value to the imagenet normalization for comparison
         model.fake_B.add_(1).div_(2).add_(-0.43).div_(0.23)
         model.real_B.add_(1).div_(2).add_(-0.43).div_(0.23)
 
-        reconst_loss.append(float(F.mse_loss(model.fake_B, model.real_B, size_average=True)))
+        # MSE only evaluate on the real part if output_nc==2
+        reconst_loss.append(float(F.mse_loss(model.fake_B[:,:1,:,:], model.real_B[:,:1,:,:], size_average=True)))
         val_count += model.fake_B.shape[0]
     
         # print('processing (%04d)-th / %d image... [mse loss = %.5f]' % (val_count, total_test_n, np.mean(reconst_loss)), flush=True)

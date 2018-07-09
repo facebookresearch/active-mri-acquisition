@@ -1,19 +1,18 @@
 export CUDA_VISIBLE_DEVICES=$device
-# Debug output
-set -ex
-name=imagenet_resnet_9blocks_attention_residual_fullimagenet_v2
-python test.py --dataroot 'ImageNet' \
+
+name=imagenet_resnet_9blocks_attention_residual_CVAE
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri'
+
+python sampling.py --dataroot 'ImageNet' \
                 --name $name \
-                --model ft_attcnn \
+                --model ft_caenn \
                 --which_model_netG resnet_9blocks_attention_residual \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
                 --checkpoints_dir '/private/home/zizhao/work/checkpoint_fmri' \
-                --batchSize 64 \
+                --batchSize 24 \
                 --input_nc 2 \
                 --output_nc 2 \
-                --how_many -1 \
                 --no_dropout \
-                --non_strict_state_dict \
-
+                --how_many 256     

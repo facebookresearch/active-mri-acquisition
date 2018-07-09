@@ -187,13 +187,15 @@ class BaseModel():
         visuals['reconstructions'] = util.tensor2im(tvutil.make_grid(torch.cat([a[1] for a in val_data], dim=0)))
         visuals['groundtruths'] = util.tensor2im(tvutil.make_grid(torch.cat([a[2] for a in val_data], dim=0)))  
 
-        if 'VAE' in self.name():
+        if 'vae' in self.opt.name.lower():
+            
             # we need to do sampling
             sample_x, pixel_diff_mean, pixel_diff_std = self.sampling(self.display_data[0])
             
             visuals['sample'] = util.tensor2im(tvutil.make_grid(sample_x, nrow=int(np.sqrt(sample_x.shape[0]))))
-            visuals['pixel_diff_mean'] = util.tensor2im(tvutil.make_grid(pixel_diff_mean, nrow=int(np.sqrt(pixel_diff_mean.shape[0]))))
-            visuals['pixel_diff_std'] = util.tensor2im(tvutil.make_grid(pixel_diff_std, nrow=int(np.sqrt(pixel_diff_std.shape[0]))))
+            nrow = int(np.ceil(np.sqrt(pixel_diff_mean.shape[0])))
+            visuals['pixel_diff_mean'] = util.tensor2im(tvutil.make_grid(pixel_diff_mean, nrow=nrow, normalize=True, scale_each=True ))
+            visuals['pixel_diff_std'] = util.tensor2im(tvutil.make_grid(pixel_diff_std, nrow=nrow, normalize=True, scale_each=True))
 
             losses['pixel_diff_std'] = np.mean(visuals['pixel_diff_std'])
 

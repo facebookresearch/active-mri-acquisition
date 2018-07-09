@@ -11,21 +11,12 @@ import torch.nn.functional as F
 from .fft_utils import *
 from torch.autograd import Variable
 
-class FTATTCNNModel(BaseModel):
+class FTGCNModel(BaseModel):
     def name(self):
-        return 'FTATTCNNModel'
+        return 'FTGCNModel'
 
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
-
-
-        parser.set_defaults(pool_size=0)
-        parser.set_defaults(no_lsgan=True)
-        parser.set_defaults(norm='batch')
-        parser.set_defaults(dataset_mode='aligned')
-        parser.set_defaults(which_model_netG='unet_256')
-        if is_train:
-            parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
 
         return parser
 
@@ -35,7 +26,7 @@ class FTATTCNNModel(BaseModel):
         # specify the training losses you want to print out. The program will call base_model.get_current_losses
         self.loss_names = ['G', 'FFTVisiable', 'FFTInvisiable']
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
-        self.visual_names = ['real_A', 'fake_B', 'real_B']
+        self.visual_names = ['real_A_vis', 'fake_B_vis', 'real_B_vis']
         # specify the models you want to save to the disk. The program will call base_model.save_networks and base_model.load_networks
         if self.isTrain:
             self.model_names = ['G']
@@ -47,6 +38,7 @@ class FTATTCNNModel(BaseModel):
                                     opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
         self.RFFT = RFFT().to(self.device)
         self.mask = create_mask(opt.fineSize).to(self.device)
+        self.mask = self.mask.view(1, self.mask.shape[2], 1)
         self.IFFT = IFFT().to(self.device)
         # for evaluation
         self.FFT = FFT().to(self.device)
@@ -64,6 +56,24 @@ class FTATTCNNModel(BaseModel):
         if self.opt.output_nc == 2:
             # the imagnary part of reconstrued data
             self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
+        
+        self._adj = Variable(torch.ones(1, opt.fineSize, opt.fineSize).float())
+        self._adj.div_(opt.fineSize)
+
+    def to_graph_space(self, data):
+        # data [B, 2, H, W]
+        b,c,h,w = data.shape
+        data = data.permute(0,2,3,1).contiguous().view(b,h,w*c)
+
+        return data
+
+    def to_image_space(self, data):
+        # data [B, H, W*2]
+        b,h,w = data.shape
+        w = w//2
+        data = data.view(b,h,w,2).permute(0,3,1,2)
+
+        return data
 
     def set_input(self, input):
         # output from FT loader
@@ -73,60 +83,67 @@ class FTATTCNNModel(BaseModel):
         img = img.to(self.device)
         # doing FFT
         # if has two dimension output, 
-        # we actually want toe imagary part is also supervised, which should be all zero
-        fft_kspace = self.RFFT(img)
+        # we actually want the imagary part is also supervised, which should be all zero
+        fft_kspace = self.RFFT(img, normalized=True) #[B, 2, H, W]
         if self.opt.output_nc == 2:
             if self.imag_gt.shape[0] != img.shape[0]:
                 # imagnary part is all zeros
                 self.imag_gt = torch.zeros_like(img)
             img = torch.cat([img, self.imag_gt], dim=1)
 
-        if AtoB:
-            self.real_A = self.IFFT(fft_kspace * self.mask)
-            self.real_B = img
-        else:
-            self.real_A = self.IFFT(fft_kspace)
-            self.real_B = img
-    
+        self.real_A = self.to_graph_space(fft_kspace * self.mask)
+        self.real_B = self.to_graph_space(fft_kspace)
+
+        # for visualization only
+        self.real_A_vis = self.IFFT(fft_kspace * self.mask, normalized=True)
+        self.real_B_vis = img
+
+        self.adj = self._adj.expand(self.real_A.shape[0], self._adj.shape[1], self._adj.shape[2])
+        
     def compute_special_losses(self):
         # compute losses between fourier spaces of fake_B and real_B
         # if output one dimension
-        if self.fake_B.shape[1] == 1:
-            _k_fakeB = self.RFFT(self.fake_B)
-            _k_realB = self.RFFT(self.real_B)
-        else:
-            # if output are two dimensional
-            _k_fakeB = self.FFT(self.fake_B)
-            _k_realB = self.FFT(self.real_B)
-
-        mask_deno = self.mask.sum() * self.fake_B.shape[0] * self.fake_B.shape[1] * self.fake_B.shape[3]
-        invmask_deno = (1-self.mask).sum() * self.fake_B.shape[0] * self.fake_B.shape[1] * self.fake_B.shape[3]
+        # if self.fake_B.shape[1] == 1:
+        #     _k_fakeB = self.RFFT(self.fake_B)
+        #     _k_realB = self.RFFT(self.real_B)
+        # else:
+        #     # if output are two dimensional
+        #     _k_fakeB = self.FFT(self.fake_B)
+        #     _k_realB = self.FFT(self.real_B)
+        
+        _k_fakeB = self.fake_B
+        _k_realB = self.real_B
+        mask_deno = self.mask.sum() * self.fake_B.shape[0] * self.fake_B.shape[2] 
+        invmask_deno = (1-self.mask).sum() * self.fake_B.shape[0] * self.fake_B.shape[2] 
 
         self.loss_FFTVisiable = F.mse_loss(_k_fakeB * self.mask, _k_realB*self.mask, reduce=False).sum().div(mask_deno)
         self.loss_FFTInvisiable = F.mse_loss(_k_fakeB * (1-self.mask), _k_realB*(1-self.mask), reduce=False).sum().div(invmask_deno)
         
         return float(self.loss_FFTVisiable), float(self.loss_FFTInvisiable)
 
-    def forward(self):
+    def test(self):
+        with torch.no_grad():
+            self.forward(test_mode=True)
+
+    def forward(self, test_mode=False):
         # conditioned on mask
-        h, b = self.mask.shape[2], self.real_A.shape[0]
-        mask = Variable(self.mask.view(1,h,1,1).expand(b,h,1,1))
-        self.fake_B, self.fake_B_res = self.netG(self.real_A, mask)
+        h, b = self.mask.shape[1], self.real_A.shape[0]
+        mask = Variable(self.mask.expand(b,h,1))
+        self.fake_B, self.fake_B_res = self.netG(self.real_A, self.adj, mask)
+
+        self.fake_B_vis = self.IFFT(self.to_image_space(self.fake_B), normalized=True)
+
+        if test_mode:
+            self.real_A = self.real_A_vis
+            self.real_B = self.real_B_vis
+            self.fake_B = self.fake_B_vis
 
     def backward_G(self):
         # First, G(A) should fake the discriminator
-        self.loss_G = self.criterion(self.fake_B, self.real_B) 
-        if self.opt.consistency_loss:
-            self.loss_G = self.loss_G*0.9 + self.criterion(self.fake_B2, self.real_B) * 0.1 
-        
-        # residual loss
-        # observed part should be all zero during residual training (y(x)+x)
-        if self.opt.residual_loss:
-            _k_fake_B_res = self.FFT(self.fake_B_res)
-            if not hasattr(self, '_residual_gt') or (self._residual_gt.shape[0] != _k_fake_B_res.shape[0]):
-                self._residual_gt = torch.zeros_like(_k_fake_B_res)
-            loss_residual = self.criterion(_k_fake_B_res * self.mask, self._residual_gt)
-            self.loss_G += loss_residual * 0.01 # around 100 smaller
+        self.loss_G_k = self.criterion(self.fake_B, self.real_B) 
+        # for visualization only
+        self.loss_G = self.criterion(self.IFFT(self.to_image_space(self.fake_B), normalized=True), 
+                                self.IFFT(self.to_image_space(self.real_B), normalized=True))
             
         # l2 regularization 
         if self.opt.l2_weight:
@@ -134,9 +151,9 @@ class FTATTCNNModel(BaseModel):
             for param in self.netG.parameters():
                 if len(param.shape) != 1: # no regualize bias term
                     l2_loss += param.norm(2)
-            self.loss_G += l2_loss * 0.00001
+            self.loss_G_k += l2_loss * 0.00001
 
-        self.loss_G.backward()
+        self.loss_G_k.backward()
 
         self.compute_special_losses()
 
