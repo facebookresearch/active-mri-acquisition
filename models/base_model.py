@@ -159,11 +159,14 @@ class BaseModel():
     def validation(self, val_data_loader, how_many_to_display=64, how_many_to_valid=4096*4):
         val_data = []
         val_count = 0
+        need_sampling = hasattr(self, 'sampling') 
         losses = {
             'reconst_loss': [],
             'FFTVisiable_loss': [],
             'FFTInvisiable_loss': []
         }
+        if need_sampling:
+            losses['sampling_loss'] = []
 
         netG = getattr(self, 'netG')
 
@@ -187,8 +190,7 @@ class BaseModel():
         visuals['reconstructions'] = util.tensor2im(tvutil.make_grid(torch.cat([a[1] for a in val_data], dim=0)))
         visuals['groundtruths'] = util.tensor2im(tvutil.make_grid(torch.cat([a[2] for a in val_data], dim=0)))  
 
-        if 'vae' in self.opt.name.lower():
-            
+        if need_sampling:
             # we need to do sampling
             sample_x, pixel_diff_mean, pixel_diff_std = self.sampling(self.display_data[0])
             
@@ -206,6 +208,10 @@ class BaseModel():
             self.test() # Weird. using forward will cause a mem leak
             # only evaluate the real part if has two channels
             losses['reconst_loss'].append(float(F.mse_loss(self.fake_B[:,:1,...], self.real_B[:,:1,...], size_average=True)))
+
+            if need_sampling:
+                self.test(sampling=True)
+                losses['sampling_loss'].append(float(F.mse_loss(self.fake_B[:,:1,...], self.real_B[:,:1,...], size_average=True)))
 
             fft_vis, fft_inv = self.compute_special_losses()
             losses['FFTVisiable_loss'].append(fft_vis)

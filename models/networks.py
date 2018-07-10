@@ -76,7 +76,8 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
     if which_model_netG == 'resnet_9blocks':
         netG = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
     elif which_model_netG == 'resnet_9blocks_zz':
-        netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh)
+        # netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh)
+        netG = ResnetGenerator3(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=True, n_downsampling=3)
     elif which_model_netG == 'resnet_6blocks':
         netG = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6)
     elif which_model_netG == 'unet_128':
@@ -518,6 +519,7 @@ class ResnetGenerator3(nn.Module):
     def forward(self, input):
         return self.model(input)
 
+## inherited from ResnetGenerator3
 from .fft_utils import *
 class ResnetGeneratorAttResidual(nn.Module):
     
@@ -613,7 +615,7 @@ class ResnetGeneratorAttResidual(nn.Module):
         # vis_ratio = (att_w[0].squeeze() * (1-mask[0].squeeze())).mean()
         # print('visiable ratio {vis_ratio} and invisible ratio {inv_ratio}' )
 
-        return fuse, res
+        return fuse, att_w
 
 class ResnetGeneratorMaskingResidual(nn.Module):
     
@@ -723,6 +725,7 @@ class PSPModule(nn.Module):
         out = self.model_out(fuse)
         
         return out
+
 class ResnetGeneratorPixelAttResidual(nn.Module):
     # Compared with ResnetGeneratorAttResidual, this generates pixel-wise soft attention and do not need to back to fourier space
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 

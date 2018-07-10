@@ -18,7 +18,7 @@
 
 ## number of tasks per node
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:8
+#SBATCH --gres=gpu:1
 
 ### Section 2: Setting environment variables for the job
 ### Remember that all the module command does is set environment
@@ -44,4 +44,4 @@ source activate zzfair
 ### task seeing all the GPUs on each node. However I am using
 ### the wrapper.sh example I showed before so that each task only
 ### sees one GPU
-srun --label sh scripts/train_ftattcnn.sh
+srun --label sh scripts/train_ftcvaenn.sh

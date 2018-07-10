@@ -70,6 +70,7 @@ class FTCAENNModel(BaseModel):
 
         parser.add_argument('--preload_G', action='store_true', help='pre_load Generator')
         parser.add_argument('--train_G', action='store_true', help='also train Generator')
+        parser.add_argument('--cvae_attention', type=str, default='mask', choices=['mask', 'softatt','None'], help='use attention')
 
         return parser
 
@@ -142,7 +143,7 @@ class FTCAENNModel(BaseModel):
             self.real_A = ifft_img   
 
         self.real_B = self.IFFT(fft_kspace)
-        self.real_A_ = self.IFFT(fft_kspace * (1-self.mask)) # inversed masked ifft, the input of encoder of cvae 
+        # self.real_A_ = self.IFFT(fft_kspace * (1-self.mask)) # inversed masked ifft, the input of encoder of cvae 
  
     def compute_special_losses(self):
         # compute losses between fourier spaces of fake_B and real_B
@@ -170,26 +171,35 @@ class FTCAENNModel(BaseModel):
     def forward(self, sampling=False):
         h, b = self.mask.shape[2], self.real_A.shape[0]
         mask = Variable(self.mask.view(1,h,1,1).expand(b,h,1,1))
-        self.fake_B_G, _ = self.netG(self.real_A, mask)
-        self.fake_B_res = self.fake_B_G - self.real_A
+        self.fake_B_G, kspace_attention = self.netG(self.real_A, mask)
+        self.fake_B_res = self.fake_B_G - self.real_A # estimated unobserved part
 
         if not self.opt.train_G:
             self.fake_B_res = self.fake_B_res.detach()
+            kspace_attention = kspace_attention.detach()
         
         sample_from = 'prior' if sampling else 'posterior'
         # normalize to [-0.5, 0.5] by dividing 2
         # then normalize back
+        if self.opt.cvae_attention == 'None':
+            att_w = None
+        elif self.opt.cvae_attention == 'mask':
+            att_w = 1-self.mask.view(1,1,h,1)
+        elif self.opt.cvae_attention == 'softatt':
+            att_w = kspace_attention
+        else:
+            ValueError('Unknown cvae attention type')
+            
         self.fake_B, self.div_obj, self.aux_loss, self.dec_log_stdv, self.ft_stdv \
                                 = self.netCVAE(self.real_B.div(2), self.fake_B_res.div(2), self.real_A.div(2), 
-                                            sample_from=sample_from)
+                                att_w=att_w, sample_from=sample_from)
         
         self.fake_B.mul_(2)
-
         self.div_obj.mul_(self.opt.beta)
         self.loss_div = self.div_obj.mean()
 
     def backward_G(self):
-        self.loss_E = self.criterion(self.fake_B_G, self.real_B) 
+        self.loss_E = self.criterion(self.fake_B_G, self.real_B) # from resnet
         self.loss_VAE, _loss = criteria(self.fake_B.div(2), self.real_B.div(2), self.div_obj, 
                                     self.aux_loss, self.dec_log_stdv, self.opt, 
                                     None, [], None, self.ft_stdv)
@@ -240,7 +250,7 @@ class FTCAENNModel(BaseModel):
         input_imgs = repeated_data.cpu()
         sample_x = self.fake_B.cpu()[:,:1,:,:] # bxn_samples
 
-        all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w))
+        all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w)).abs()
 
         pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
         pixel_diff_std = torch.std(all_pixel_diff, dim=1) # n_samples
@@ -533,8 +543,10 @@ class CVAE(nn.Module):
             for j in range(hps.num_blocks):
                 downsample = (i > 0) and (j == 0)
                 self.layers[-1].append(IAFLayer(hps, downsample))
+        self.IFFT = IFFT()
+        self.FFT = FFT()
 
-    def forward(self, x, ctx, true_ctx, ids=[], sample_from='posterior'):
+    def forward(self, x, ctx, true_ctx, att_w=None, ids=[], sample_from='posterior'):
 
         input_size = x.shape[-2:]
         hps = self.hps
@@ -588,12 +600,22 @@ class CVAE(nn.Module):
             x = x[:,:self.out_channels,:,:]
         else:
             dec_log_stdv = self.dec_log_stdv
+        
+        if att_w is None:
+            ## way 1 of fusing ctx
+            x = x + true_ctx[:,:2,:,:]
+        else:
+            ## way 2 of fusing ctx
+            ft_x = self.FFT(x)
+            ft_in = self.FFT(true_ctx) # visible part
+            ft_fuse = att_w * ft_x + (1-att_w) * ft_in
+            x = self.IFFT(ft_fuse)
 
-        x = x + true_ctx[:,:2,:,:]
         if hps.loss_rec == 'NLL':
             x = torch.clamp(x, -0.5 + 1 / 512., 0.5 - 1 / 512.)
         else:
             x = F.sigmoid(x) - 0.5
+            
         return x, kl_obj, kl_cost, dec_log_stdv, self.ft_log_stdv
 
 class ArMulticonv2d(nn.Module):

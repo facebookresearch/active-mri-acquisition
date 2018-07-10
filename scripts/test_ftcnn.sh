@@ -15,11 +15,11 @@
 #                 | tee -a $path/$name/'val_log.txt' 
 
 # set -ex
-name=imagenet_resnet_9blocks_residual_1c_3down_v3
+name=imagenet_unet_2c
 python test.py --dataroot 'ImageNet' \
                 --name $name \
                 --model ft_cnn \
-                --which_model_netG resnet_9blocks_residual \
+                --which_model_netG unet_128 \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
@@ -27,6 +27,6 @@ python test.py --dataroot 'ImageNet' \
                 --batchSize 64 \
                 --how_many 256 \
                 --input_nc 2 \
-                --output_nc 1 \
+                --output_nc 2 \
                 --how_many -1 \
                 --no_dropout 

@@ -98,11 +98,6 @@ def get_train_valid_loader(batch_size,
         download=True, transform=train_transform,  unmask_ratio=keep_ratio,
     )
 
-    # valid_dataset = dataset(
-    #     root=data_dir, train=True, normalize=normalize,
-    #     download=True, transform=valid_transform,  unmask_ratio=keep_ratio,
-    # )
-
     num_train = len(dataset)
     indices = list(range(num_train))
     split = int(np.floor(valid_size * num_train))
