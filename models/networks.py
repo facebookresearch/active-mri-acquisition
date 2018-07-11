@@ -602,7 +602,6 @@ class ResnetGeneratorAttResidual(nn.Module):
             att_w = self.model_att(avg_hidden) # [B,imSize, 1,1]
 
         att_w = att_w.view(att_w.shape[0], 1, att_w.shape[1], 1) # [B, 1, imSize, 1]
-
         # attention residual in kspace
         ft_x = self.FFT(res)
         ft_in = self.FFT(input) # visible part
@@ -855,7 +854,6 @@ class ResnetBlock(nn.Module):
         out = x + self.conv_block(x)
         return out
 
-
 # Defines the Unet generator.
 # |num_downs|: number of downsamplings in UNet. For example,
 # if |num_downs| == 7, image of size 128x128 will become of size 1x1
@@ -961,7 +959,6 @@ class UnetSkipConnectionBlock(nn.Module):
         else:
             return torch.cat([x, self.model(x)], 1)
 
-
 # Defines the PatchGAN discriminator with the specified arguments.
 class NLayerDiscriminator(nn.Module):
     def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, use_sigmoid=False):
@@ -1009,7 +1006,6 @@ class NLayerDiscriminator(nn.Module):
     def forward(self, input):
         return self.model(input)
 
-
 class PixelDiscriminator(nn.Module):
     def __init__(self, input_nc, ndf=64, norm_layer=nn.BatchNorm2d, use_sigmoid=False):
         super(PixelDiscriminator, self).__init__()
@@ -1033,8 +1029,6 @@ class PixelDiscriminator(nn.Module):
 
     def forward(self, input):
         return self.net(input)
-
-
 
 class VGGLoss(nn.Module):
     def __init__(self, gpu_ids, input_channel):

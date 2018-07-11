@@ -78,7 +78,7 @@ class FTCAENNModel(BaseModel):
         BaseModel.initialize(self, opt)
         self.isTrain = opt.isTrain
         # specify the training losses you want to print out. The program will call base_model.get_current_losses
-        self.loss_names = ['G', 'FFTVisiable', 'FFTInvisiable', 'KL', 'VAE', 'E', 'div', 'bits_per_dim']
+        self.loss_names = ['G', 'FFTVisiable', 'FFTInvisiable', 'KL', 'VAE', 'div', 'bits_per_dim']
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
         self.visual_names = ['real_A', 'fake_B', 'real_B']
         # specify the models you want to save to the disk. The program will call base_model.save_networks and base_model.load_networks
@@ -130,7 +130,6 @@ class FTCAENNModel(BaseModel):
         # if has two dimension output, 
         # we actually want toe imagary part is also supervised, which should be all zero
         fft_kspace = self.RFFT(img)
-        
         # TODO: be careful of the normalization [-0.5, 0.5]
         ifft_img = self.IFFT(fft_kspace * self.mask)
 
@@ -169,15 +168,16 @@ class FTCAENNModel(BaseModel):
             self.forward(sampling=sampling)
 
     def forward(self, sampling=False):
+        # CNN part
         h, b = self.mask.shape[2], self.real_A.shape[0]
         mask = Variable(self.mask.view(1,h,1,1).expand(b,h,1,1))
         self.fake_B_G, kspace_attention = self.netG(self.real_A, mask)
-        self.fake_B_res = self.fake_B_G - self.real_A # estimated unobserved part
-
+        self.fake_A = self.fake_B_G - self.real_A # estimated unobserved counterpart of real_A
         if not self.opt.train_G:
-            self.fake_B_res = self.fake_B_res.detach()
+            self.fake_A = self.fake_A.detach()
             kspace_attention = kspace_attention.detach()
         
+        # CVAE part
         sample_from = 'prior' if sampling else 'posterior'
         # normalize to [-0.5, 0.5] by dividing 2
         # then normalize back
@@ -190,30 +190,37 @@ class FTCAENNModel(BaseModel):
         else:
             ValueError('Unknown cvae attention type')
             
+        X = self.real_B.div(2)
+        FCTX = self.fake_A.div(2)
+        TCTX = self.real_A.div(2)
+        
         self.fake_B, self.div_obj, self.aux_loss, self.dec_log_stdv, self.ft_stdv \
-                                = self.netCVAE(self.real_B.div(2), self.fake_B_res.div(2), self.real_A.div(2), 
+                                = self.netCVAE(X, FCTX, TCTX, 
                                 att_w=att_w, sample_from=sample_from)
         
+        if len(self.opt.gpu_ids) > 1:
+            self.dec_log_stdv = self.dec_log_stdv.mean()
+            self.ft_stdv = self.ft_stdv.mean()
+
         self.fake_B.mul_(2)
         self.div_obj.mul_(self.opt.beta)
         self.loss_div = self.div_obj.mean()
 
     def backward_G(self):
-        self.loss_E = self.criterion(self.fake_B_G, self.real_B) # from resnet
+        self.loss_G = self.criterion(self.fake_B_G, self.real_B) # from resnet
         self.loss_VAE, _loss = criteria(self.fake_B.div(2), self.real_B.div(2), self.div_obj, 
                                     self.aux_loss, self.dec_log_stdv, self.opt, 
-                                    None, [], None, self.ft_stdv)
+                                    ctx=None, ids=[], mask=None, ft_stdv=self.ft_stdv)
             
         # normalize loss_VAE
         b,c,h,w = self.fake_B.shape
-        # self.loss_VAE.div_(b*c*h*w)
         cst = np.log(2.) if self.opt.loss_rec == 'NLL' else 1.
         self.loss_bits_per_dim = _loss.item() / (cst*h*w*b)
 
-        self.loss_G = self.loss_VAE 
+        loss_total = self.loss_VAE 
         if self.opt.train_G:
-            self.loss_G += self.loss_E
-        self.loss_G.backward()
+            loss_total += self.loss_G
+        loss_total.backward()
 
         self.compute_special_losses()
 
@@ -225,37 +232,57 @@ class FTCAENNModel(BaseModel):
         self.backward_G()
         self.optimizer_G.step()
 
-    def sampling(self, data_list, n_samples=8):
-        def replicate_tensor(data, times):
+    def sampling(self, data_list, n_samples=8, max_display=8):
+        def replicate_tensor(data, times, expand=False):
             ks = list(data.shape)
             data = data.view(ks[0], 1, ks[1], ks[2], ks[3])
             data = data.repeat(1, times, 1, 1, 1) # repeat will copy memories which we do not need here
-            data = data.view(ks[0]*times, ks[1], ks[2], ks[3])
+            if not expand:
+                data = data.view(ks[0]*times, ks[1], ks[2], ks[3])
             return data
 
         # data points [N,2,H,W] for multiple sampling and observe sample difference
         data = data_list[0]
-        assert(data.shape[0] >= n_samples)
-        data = data[:n_samples]
+        assert(data.shape[0] >= max_display)
+        data = data[:max_display]
         b,c,h,w = data.shape
         all_pixel_diff = []
         all_pixel_avg = []
 
-        repeated_data = replicate_tensor(data, n_samples)
-        repeated_data_list = [repeated_data] + data_list[1:] # concat extra useless output
-
-        self.set_input(repeated_data_list)
-        self.test(sampling=True)
+        if n_samples*b < 128:
+            repeated_data = replicate_tensor(data, n_samples)
+            repeated_data_list = [repeated_data] + data_list[1:] # concat extra useless input
+            self.set_input(repeated_data_list)
+            self.test(sampling=True)
+            sample_x = self.fake_B.cpu()[:,:1,:,:] # bxn_samples
+        else:
+            # for larger samples, do batch forward
+            print(f'> sampling {n_samples} times of {b} input ...')
+            repeated_data = replicate_tensor(data, n_samples, expand=True) # five dimension
+            sample_x = []
+            for rdata in repeated_data.transpose(0,1):
+                repeated_data_list = [rdata] + data_list[1:] # concat extra useless input
+                self.set_input(repeated_data_list)
+                self.test(sampling=True)
+                sample_x.append(self.fake_B.cpu()[:,:1,:,:])
+            sample_x = torch.stack(sample_x, 1)
 
         input_imgs = repeated_data.cpu()
-        sample_x = self.fake_B.cpu()[:,:1,:,:] # bxn_samples
-
+        
+        # compute sample mean std
         all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w)).abs()
-
         pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
         pixel_diff_std = torch.std(all_pixel_diff, dim=1) # n_samples
 
+        sample_x = sample_x.view(b,n_samples,c,h,w)[:,:max_display,:,:,:].contiguous()
+        sample_x[:,0,:,:] = data[:,:1,:,:]
+        sample_x[:,-1,:,:] = pixel_diff_mean.div(pixel_diff_mean.max()).mul_(2).add_(-1)
+        
+        sample_x = sample_x.view(b*max_display,c,h,w)
+
         return sample_x, pixel_diff_mean, pixel_diff_std
+
+
 
 def discretized_logistic(mean, logscale, binsize = 1/256.0, sample=None):
     # from PixelCNN++
@@ -305,8 +332,10 @@ def criteria(x, orig_x, div_loss, aux_loss, dec_log_stdv, hps, ctx=None, ids=[],
         obj = torch.mean(log_pxz) + div_loss
         loss = obj
     else:
-        obj = torch.sum(div_loss - log_pxz)
-        loss = torch.sum(compute_lowerbound(log_pxz, aux_loss, hps.k))
+        # obj = torch.sum(div_loss - log_pxz)
+        # loss = torch.sum(compute_lowerbound(log_pxz, aux_loss, hps.k))
+        obj = torch.mean(div_loss - log_pxz)
+        loss = torch.mean(compute_lowerbound(log_pxz, aux_loss, hps.k))
 
     return obj, loss
 
@@ -434,11 +463,12 @@ class IAFLayer(nn.Module):
             context = self.up_context + down_context
 
         if hps.loss_div == 'KL':
-
+                
             if sample_from in ["prior"]:
                 # print("Sampling from prior!")
                 z = prior.rsample()
             else:
+                # print("Sampling from posterior!")
                 z = posterior.rsample()
 
             if sample_from == "prior":
@@ -486,7 +516,6 @@ class IAFLayer(nn.Module):
             if hps.ctx_gen_det_skip:
                 input = input + self.skip_ctx
             h = crop(h, target_size)
-
 
         output = input + 0.1 * h
         return output, kl_obj, kl_cost

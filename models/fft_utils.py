@@ -33,9 +33,18 @@ class FFT(nn.Module):
     def __repr__(self):
         return 'FFT()'
 
-def create_mask(n = 128, mask_fraction = 0.25, mask_low_freqs = 5):
+def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5):
     
-    mask_fft = (np.random.RandomState(42).rand(n) < mask_fraction).astype(np.float32)
-    mask_fft[:mask_low_freqs] = mask_fft[-mask_low_freqs:] = 1
-    mask_fft = torch.from_numpy(mask_fft).view(1, 1, n, 1)
+    if type(n) is int:
+        b = 1
+        mask_fft = (np.random.RandomState(42).rand(b,n) < mask_fraction).astype(np.float32)
+    elif type(n) is tuple:
+        assert len(n) == 2
+        b, n = n[0], n[1]
+        mask_fft = (np.random.rand(b,n) < mask_fraction).astype(np.float32)
+        
+
+    mask_fft[:,:mask_low_freqs] = mask_fft[:,-mask_low_freqs:] = 1
+    mask_fft = torch.from_numpy(mask_fft).view(b, 1, n, 1)
+    
     return mask_fft

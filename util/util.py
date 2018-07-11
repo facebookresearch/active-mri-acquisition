@@ -22,14 +22,17 @@ def sum_axes(input, axes=[], keepdim=False):
 
 # Converts a Tensor into an image array (numpy)
 # |imtype|: the desired type of the converted numpy array
-def tensor2im(input_image, imtype=np.uint8):
+def tensor2im(input_image, imtype=np.uint8, renormalize=True):
     if isinstance(input_image, torch.Tensor):
         image_tensor = input_image.data
     else:
         return input_image
     
     # do normalization first, since we working on fourier space. we need to clamp
-    image_tensor.add_(1).div_(2).mul_(255).clamp_(0, 255)
+    if renormalize:
+        image_tensor.add_(1).div_(2)
+    
+    image_tensor.mul_(255).clamp_(0, 255)
 
     if len(image_tensor.shape) == 4:
         image_numpy = image_tensor[0].cpu().float().numpy()

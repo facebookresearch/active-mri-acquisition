@@ -10,6 +10,7 @@ import numpy as np
 import torch.nn.functional as F
 from .fft_utils import *
 from torch.autograd import Variable
+import inspect
 
 class FTATTCNNModel(BaseModel):
     def name(self):
@@ -71,9 +72,16 @@ class FTATTCNNModel(BaseModel):
         AtoB = self.opt.which_direction == 'AtoB'
         img, _, _ = input
         img = img.to(self.device)
+
+        caller = inspect.stack()[1][3]
+
+        if self.opt.dynamic_mask_type in ['random','random_plus','curriculum']:
+            # TODO: implement curriculum, random_plus
+            self.mask = create_mask((img.shape[0], img.shape[2]), mask_fraction=self.opt.kspace_keep_ratio, mask_low_freqs=5).to(self.device)
+
         # doing FFT
         # if has two dimension output, 
-        # we actually want toe imagary part is also supervised, which should be all zero
+        # we actually want the imagary part is also supervised, which should be all zero
         fft_kspace = self.RFFT(img)
         if self.opt.output_nc == 2:
             if self.imag_gt.shape[0] != img.shape[0]:
@@ -110,7 +118,7 @@ class FTATTCNNModel(BaseModel):
     def forward(self):
         # conditioned on mask
         h, b = self.mask.shape[2], self.real_A.shape[0]
-        mask = Variable(self.mask.view(1,h,1,1).expand(b,h,1,1))
+        mask = Variable(self.mask.view(self.mask.shape[0],h,1,1).expand(b,h,1,1))
         self.fake_B, self.fake_B_res = self.netG(self.real_A, mask)
 
     def backward_G(self):

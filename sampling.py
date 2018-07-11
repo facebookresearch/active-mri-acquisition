@@ -26,8 +26,8 @@ if __name__ == '__main__':
     web_dir = os.path.join(opt.results_dir, opt.name, '%s_%s' % (opt.phase, opt.which_epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
     # sampling multiple times
-    visuals, losses = model.validation(test_data_loader, how_many_to_valid=1024)
+    visuals, losses = model.validation(test_data_loader, how_many_to_valid=1024, n_samples=opt.n_samples)
 
-    save_images(webpage, visuals, 'sampling', aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
+    save_images(webpage, visuals, f'sampling ({opt.n_samples} samples)', aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
 
     webpage.save()

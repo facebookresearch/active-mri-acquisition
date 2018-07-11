@@ -156,7 +156,7 @@ class BaseModel():
                     param.requires_grad = requires_grad
 
 
-    def validation(self, val_data_loader, how_many_to_display=64, how_many_to_valid=4096*4):
+    def validation(self, val_data_loader, how_many_to_display=64, how_many_to_valid=4096*4, n_samples=8):
         val_data = []
         val_count = 0
         need_sampling = hasattr(self, 'sampling') 
@@ -170,7 +170,7 @@ class BaseModel():
 
         netG = getattr(self, 'netG')
 
-        # visualization
+        # visualization for a fixed number of data
         if not hasattr(self, 'display_data'):
             self.display_data = []
             for data in val_data_loader:
@@ -192,14 +192,15 @@ class BaseModel():
 
         if need_sampling:
             # we need to do sampling
-            sample_x, pixel_diff_mean, pixel_diff_std = self.sampling(self.display_data[0])
+            sample_x, pixel_diff_mean, pixel_diff_std = self.sampling(self.display_data[0], n_samples=n_samples)
             
             visuals['sample'] = util.tensor2im(tvutil.make_grid(sample_x, nrow=int(np.sqrt(sample_x.shape[0]))))
             nrow = int(np.ceil(np.sqrt(pixel_diff_mean.shape[0])))
-            visuals['pixel_diff_mean'] = util.tensor2im(tvutil.make_grid(pixel_diff_mean, nrow=nrow, normalize=True, scale_each=True ))
-            visuals['pixel_diff_std'] = util.tensor2im(tvutil.make_grid(pixel_diff_std, nrow=nrow, normalize=True, scale_each=True))
-
-            losses['pixel_diff_std'] = np.mean(visuals['pixel_diff_std'])
+            visuals['pixel_diff_mean'] = util.tensor2im(tvutil.make_grid(pixel_diff_mean, nrow=nrow, normalize=True, scale_each=True), renormalize=False)
+            visuals['pixel_diff_std'] = util.tensor2im(tvutil.make_grid(pixel_diff_std, nrow=nrow, normalize=True, scale_each=True), renormalize=False)
+            
+            losses['pixel_diff_std'] = np.array(torch.mean(pixel_diff_mean).item())
+            losses['pixel_diff_mean'] = np.array(torch.mean(pixel_diff_std).item())
 
         # evaluation
         val_count = 0
