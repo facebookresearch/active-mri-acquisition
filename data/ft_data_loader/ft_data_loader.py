@@ -118,7 +118,7 @@ def get_train_valid_loader(batch_size,
         dataset, batch_size=batch_size, sampler=valid_sampler, shuffle=False,
         num_workers=num_workers, pin_memory=pin_memory
     )
- 
+    
     return (train_loader, valid_loader)
 
 

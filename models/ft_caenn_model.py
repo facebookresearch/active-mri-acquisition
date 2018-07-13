@@ -168,34 +168,34 @@ class FTCAENNModel(BaseModel):
             self.forward(sampling=sampling)
 
     def forward(self, sampling=False):
-        # CNN part
+        ## CNN part
         h, b = self.mask.shape[2], self.real_A.shape[0]
         mask = Variable(self.mask.view(1,h,1,1).expand(b,h,1,1))
         self.fake_B_G, kspace_attention = self.netG(self.real_A, mask)
-        self.fake_A = self.fake_B_G - self.real_A # estimated unobserved counterpart of real_A
+        self.fake_A_ = self.fake_B_G - self.real_A # estimated unobserved counterpart of real_A
         if not self.opt.train_G:
-            self.fake_A = self.fake_A.detach()
+            self.fake_A_ = self.fake_A_.detach()
             kspace_attention = kspace_attention.detach()
         
-        # CVAE part
+        ## CVAE part
         sample_from = 'prior' if sampling else 'posterior'
         # normalize to [-0.5, 0.5] by dividing 2
         # then normalize back
         if self.opt.cvae_attention == 'None':
             att_w = None
         elif self.opt.cvae_attention == 'mask':
-            att_w = 1-self.mask.view(1,1,h,1)
+            att_w = 1 - self.mask.view(1,1,h,1)
         elif self.opt.cvae_attention == 'softatt':
             att_w = kspace_attention
         else:
             ValueError('Unknown cvae attention type')
-            
+        
         X = self.real_B.div(2)
-        FCTX = self.fake_A.div(2)
-        TCTX = self.real_A.div(2)
+        CTX_ = self.fake_A_.div(2)
+        CTX = self.real_A.div(2)
         
         self.fake_B, self.div_obj, self.aux_loss, self.dec_log_stdv, self.ft_stdv \
-                                = self.netCVAE(X, FCTX, TCTX, 
+                                = self.netCVAE(X, CTX_, CTX, 
                                 att_w=att_w, sample_from=sample_from)
         
         if len(self.opt.gpu_ids) > 1:
@@ -203,19 +203,22 @@ class FTCAENNModel(BaseModel):
             self.ft_stdv = self.ft_stdv.mean()
 
         self.fake_B.mul_(2)
-        self.div_obj.mul_(self.opt.beta)
+
+        self.div_obj
         self.loss_div = self.div_obj.mean()
 
     def backward_G(self):
+        avg_batch = True
         self.loss_G = self.criterion(self.fake_B_G, self.real_B) # from resnet
-        self.loss_VAE, _loss = criteria(self.fake_B.div(2), self.real_B.div(2), self.div_obj, 
+        KL_div = self.div_obj.mul(self.opt.beta)
+        self.loss_VAE, _loss = criteria(self.fake_B.div(2), self.real_B.div(2), KL_div, 
                                     self.aux_loss, self.dec_log_stdv, self.opt, 
-                                    ctx=None, ids=[], mask=None, ft_stdv=self.ft_stdv)
+                                    ctx=None, ids=[], mask=None, ft_stdv=self.ft_stdv, avg_batch=avg_batch)
             
         # normalize loss_VAE
         b,c,h,w = self.fake_B.shape
         cst = np.log(2.) if self.opt.loss_rec == 'NLL' else 1.
-        self.loss_bits_per_dim = _loss.item() / (cst*h*w*b)
+        self.loss_bits_per_dim = _loss.item() / (cst*h*w) / (1 if avg_batch else b)#(cst*h*w*b)
 
         loss_total = self.loss_VAE 
         if self.opt.train_G:
@@ -232,7 +235,7 @@ class FTCAENNModel(BaseModel):
         self.backward_G()
         self.optimizer_G.step()
 
-    def sampling(self, data_list, n_samples=8, max_display=8):
+    def sampling(self, data_list, n_samples=8, max_display=8, return_all=False):
         def replicate_tensor(data, times, expand=False):
             ks = list(data.shape)
             data = data.view(ks[0], 1, ks[1], ks[2], ks[3])
@@ -274,15 +277,17 @@ class FTCAENNModel(BaseModel):
         pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
         pixel_diff_std = torch.std(all_pixel_diff, dim=1) # n_samples
 
-        sample_x = sample_x.view(b,n_samples,c,h,w)[:,:max_display,:,:,:].contiguous()
-        sample_x[:,0,:,:] = data[:,:1,:,:]
-        sample_x[:,-1,:,:] = pixel_diff_mean.div(pixel_diff_mean.max()).mul_(2).add_(-1)
+        if return_all:
+            return sample_x.view(b,n_samples,c,h,w)
+        else:    
+            sample_x = sample_x.view(b,n_samples,c,h,w)[:,:max_display,:,:,:].contiguous()
+            sample_x[:,0,:,:] = data[:,:1,:,:]
+            sample_x[:,-1,:,:] = pixel_diff_mean.div(pixel_diff_mean.max()).mul_(2).add_(-1)
+            
+            sample_x = sample_x.view(b*max_display,c,h,w)
         
-        sample_x = sample_x.view(b*max_display,c,h,w)
 
         return sample_x, pixel_diff_mean, pixel_diff_std
-
-
 
 def discretized_logistic(mean, logscale, binsize = 1/256.0, sample=None):
     # from PixelCNN++
@@ -300,8 +305,7 @@ def compute_lowerbound(log_pxz, sum_kl_costs, k=1):
     log_pxz = log_pxz.view([-1, k])
     sum_kl_costs = sum_kl_costs.view([-1, k])
     return - (- torch.log(torch.Tensor(np.copy(k)).cuda()) + logsumexp(log_pxz - sum_kl_costs))
-
-def criteria(x, orig_x, div_loss, aux_loss, dec_log_stdv, hps, ctx=None, ids=[], mask=None, ft_stdv=None):
+def criteria(x, orig_x, div_loss, aux_loss, dec_log_stdv, hps, ctx=None, ids=[], mask=None, ft_stdv=None, avg_batch=True):
     if hps.loss_rec == 'MSE': # gray scale images
         if hps.model == 'WAE':
             log_pxz = F.mse_loss(x, orig_x, reduce=False)
@@ -332,13 +336,15 @@ def criteria(x, orig_x, div_loss, aux_loss, dec_log_stdv, hps, ctx=None, ids=[],
         obj = torch.mean(log_pxz) + div_loss
         loss = obj
     else:
-        # obj = torch.sum(div_loss - log_pxz)
-        # loss = torch.sum(compute_lowerbound(log_pxz, aux_loss, hps.k))
-        obj = torch.mean(div_loss - log_pxz)
-        loss = torch.mean(compute_lowerbound(log_pxz, aux_loss, hps.k))
+        
+        if avg_batch:
+            obj = torch.mean(div_loss - log_pxz)
+            loss = torch.mean(compute_lowerbound(log_pxz, aux_loss, hps.k))
+        else:
+            obj = torch.sum(div_loss - log_pxz)
+            loss = torch.sum(compute_lowerbound(log_pxz, aux_loss, hps.k))
 
     return obj, loss
-
 def crop(layer, target_size):
     dif = [(layer.shape[2] - target_size[0]) // 2, (layer.shape[3] - target_size[1]) // 2]
     cs=target_size
@@ -434,6 +440,7 @@ class IAFLayer(nn.Module):
         return input + 0.1 * h
 
     def down(self, x, ids, target_size, sample_from):
+
         hps = self.hps
         input = x
         x = F.elu(x)
@@ -452,9 +459,8 @@ class IAFLayer(nn.Module):
             z_dim_mult = 0
 
         h_det = x[:,z_dim_mult*self.z_size:z_dim_mult*self.z_size + self.h_size,:,:]
-
-        prior = torch.distributions.Normal(pz_mean + self.qz_mean_ctx,
-                                           torch.exp(pz_logsd + self.qz_logsd_ctx))
+        prior = torch.distributions.Normal(pz_mean + self.qz_mean_ctx, 
+                                               torch.exp(pz_logsd + self.qz_logsd_ctx))
         posterior = torch.distributions.Normal(rz_mean + self.qz_mean,
                                                torch.exp(rz_logsd + self.qz_logsd))
 
@@ -467,6 +473,8 @@ class IAFLayer(nn.Module):
             if sample_from in ["prior"]:
                 # print("Sampling from prior!")
                 z = prior.rsample()
+                ## for testing 
+                # z = pz_mean + self.qz_mean_ctx
             else:
                 # print("Sampling from posterior!")
                 z = posterior.rsample()
@@ -526,7 +534,6 @@ class IAFLayer(nn.Module):
             if ctx is not None:
                 ctx = self.context(ctx)
             return x, ctx
-
         else:
             if target_size is None:
                 target_size = x.shape[-2:]
@@ -631,10 +638,10 @@ class CVAE(nn.Module):
             dec_log_stdv = self.dec_log_stdv
         
         if att_w is None:
-            ## way 1 of fusing ctx
+            ## way 1 of fusing ctx on pixelspace
             x = x + true_ctx[:,:2,:,:]
         else:
-            ## way 2 of fusing ctx
+            ## way 2 of fusing ctx on kspace
             ft_x = self.FFT(x)
             ft_in = self.FFT(true_ctx) # visible part
             ft_fuse = att_w * ft_x + (1-att_w) * ft_in

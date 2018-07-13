@@ -1,3 +1,5 @@
+export CUDA_VISIBLE_DEVICES=$device
+
 # # jure unet
 # set -ex
 # name=imagenet_unet
@@ -15,17 +17,16 @@
 #                 | tee -a $path/$name/'val_log.txt' 
 
 # set -ex
-name=imagenet_unet_2c
+name=imagenet_resnet_9blocks_zz
 python test.py --dataroot 'ImageNet' \
                 --name $name \
                 --model ft_cnn \
-                --which_model_netG unet_128 \
+                --which_model_netG resnet_9blocks_zz \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
-                --checkpoints_dir '/private/home/zizhao/work/checkpoint_fmri' \
+                --checkpoints_dir '/private/home/zizhao/work/checkpoint_fmri/cnn_session' \
                 --batchSize 64 \
-                --how_many 256 \
                 --input_nc 2 \
                 --output_nc 2 \
                 --how_many -1 \

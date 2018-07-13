@@ -4,7 +4,7 @@ echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES
 set -ex
 ## 4GPUS batchSize 24 beta 0.01 work well
 
-name=imagenet_resnet_CVAE_maskatt_gpus_beta.01
+name=imagenet_resnet_CVAE_maskatt_gpus_beta1_noctxdet_dep2_block2
 checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/vae_session'
 mkdir -p -v $checkpoints_dir/$name
 cp $checkpoints_dir'/imagenet_resnet_9blocks_attention_residual/200_net_G.pth' $checkpoints_dir/$name/'0_net_G.pth'
@@ -29,7 +29,10 @@ python train.py --dataroot 'ImageNet' \
                 --lr 0.00005 \
                 --cvae_attention 'mask' \
                 --print_freq 50 \
-                --beta 0.01 \
+                --beta 1 \
+                --ctx_gen_det_skip 'False' \
+                --num_blocks 2 \
+                --depth 2 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES 
 
                 # --train_G \

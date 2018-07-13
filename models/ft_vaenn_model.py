@@ -19,12 +19,11 @@ class FTVAENNModel(BaseModel):
     def modify_commandline_options(parser, is_train=True):
 
         parser.set_defaults(nz=8)
-        parser.set_defaults(which_model_netG='jure_unet_vae_residual')
-        parser.set_defaults(output_nc=1) # currently, use 2
-        if is_train:
-            parser.add_argument('--lambda_KL', type=float, default=0.0001, help='weight for KL loss')
-            parser.add_argument('--kl_min_clip', type=float, default=0.0, help='clip value for KL loss')
-
+        parser.set_defaults(output_nc=2) # currently, use 2
+        parser.add_argument('--lambda_KL', type=float, default=0.0001, help='weight for KL loss')
+        parser.add_argument('--kl_min_clip', type=float, default=0.0, help='clip value for KL loss')
+        parser.add_argument('--preload_G', action='store_true', help='pre_load Generator')
+        parser.add_argument('--train_G', action='store_true', help='also train Generator')
         return parser
 
     def initialize(self, opt):
@@ -38,10 +37,16 @@ class FTVAENNModel(BaseModel):
         if self.isTrain:
             self.model_names = ['G', 'E_prior','E_posterior']
         else:  # during test time, only load Gs
-            self.model_names = ['G', 'E_prior']
+            self.model_names = ['G', 'E_prior','E_posterior']
         # load/define networks
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
                                     opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
+        if self.isTrain:
+            assert(opt.preload_G or opt.train_G)
+            if opt.preload_G:
+                self.model_names = ['G']
+                self.load_networks('0')
+                self.model_names = ['G', 'E_prior','E_posterior']
 
         norm = 'none' if 'jure_unet' in opt.which_model_netG else opt.norm
         self.netE_prior = networks.define_E(opt.input_nc, opt.nz, opt.ngf, 'conv_128', 
@@ -136,12 +141,12 @@ class FTVAENNModel(BaseModel):
         p_z = self.reparam(p_mu, p_logvar)
         
         # compute KL loss
-        if self.isTrain:
-            q_mu, q_logvar = self.netE_posterior.forward(torch.cat([self.real_A, self.real_A_], 1))
-            q_z = self.reparam(q_mu, q_logvar)  # TODO
-            self.loss_KL = self.kld(q_mu, q_logvar, p_mu, p_logvar)
-        else:
-            self.loss_KL = 0
+        # if self.isTrain:
+        q_mu, q_logvar = self.netE_posterior.forward(torch.cat([self.real_A, self.real_A_], 1))
+        q_z = self.reparam(q_mu, q_logvar)  # TODO
+        self.loss_KL = self.kld(q_mu, q_logvar, p_mu, p_logvar)
+        # else:
+        #     self.loss_KL = 0
         if sampling:
             # in the training stage, return posteriors
             return p_z
@@ -149,9 +154,9 @@ class FTVAENNModel(BaseModel):
             # in testing, return learned priors
             return q_z
 
-    def test(self):
+    def test(self, sampling=False):
         with torch.no_grad():
-            self.forward(sampling=True)
+            self.forward(sampling=sampling)
 
     def kld(self, mu1, logvar1, mu2, logvar2):
         
@@ -172,16 +177,18 @@ class FTVAENNModel(BaseModel):
         else:
             kl_obj = util.sum_axes(kl_cost, -1)
         
-        kl_obj = kl_obj.mean()
+        kl_obj = kl_obj.mean() # mean over batches
         
         return kl_obj
 
     def forward(self, sampling=False):
-        
+
         z = self.decode_distribution(sampling)
+        h, b = self.mask.shape[2], self.real_A.shape[0]
+        mask = Variable(self.mask.view(self.mask.shape[0],h,1,1).expand(b,h,1,1))
 
         if 'residual' in self.opt.which_model_netG:
-            self.fake_B, self.fake_B_res = self.netG(self.real_A, z=z)
+            self.fake_B, _ = self.netG(self.real_A, mask=mask, z=z)
         else: 
             self.fake_B = self.netG(self.real_A, z=z)
 
@@ -220,34 +227,56 @@ class FTVAENNModel(BaseModel):
         self.backward_G()
         self.optimizer_G.step()
 
-    def sampling(self, data_list, n_samples=9):
-        def replicate_tensor(data, times):
+    def sampling(self, data_list, n_samples=8, max_display=8, return_all=False):
+        def replicate_tensor(data, times, expand=False):
             ks = list(data.shape)
             data = data.view(ks[0], 1, ks[1], ks[2], ks[3])
             data = data.repeat(1, times, 1, 1, 1) # repeat will copy memories which we do not need here
-            data = data.view(ks[0]*times, ks[1], ks[2], ks[3])
+            if not expand:
+                data = data.view(ks[0]*times, ks[1], ks[2], ks[3])
             return data
 
         # data points [N,2,H,W] for multiple sampling and observe sample difference
         data = data_list[0]
-        assert(data.shape[0] >= n_samples)
-        data = data[:n_samples]
+        assert(data.shape[0] >= max_display)
+        data = data[:max_display]
         b,c,h,w = data.shape
         all_pixel_diff = []
         all_pixel_avg = []
 
-        repeated_data = replicate_tensor(data, n_samples)
-        repeated_data_list = [repeated_data] + data_list[1:] # concat extra useless output
+        if n_samples*b < 128:
+            repeated_data = replicate_tensor(data, n_samples)
+            repeated_data_list = [repeated_data] + data_list[1:] # concat extra useless input
+            self.set_input(repeated_data_list)
+            self.test(sampling=True)
+            sample_x = self.fake_B.cpu()[:,:1,:,:] # bxn_samples
+        else:
+            # for larger samples, do batch forward
+            print(f'> sampling {n_samples} times of {b} input ...')
+            repeated_data = replicate_tensor(data, n_samples, expand=True) # five dimension
+            sample_x = []
+            for rdata in repeated_data.transpose(0,1):
+                repeated_data_list = [rdata] + data_list[1:] # concat extra useless input
+                self.set_input(repeated_data_list)
+                self.test(sampling=True)
+                sample_x.append(self.fake_B.cpu()[:,:1,:,:])
+            sample_x = torch.stack(sample_x, 1)
 
-        self.set_input(repeated_data_list)
-        self.test()
-
-        input_imgs = data.cpu().view(b,n_samples,c,h,w)
-        sample_x = self.fake_B.cpu() # bxn_samples
-
-        all_pixel_diff = (input_imgs - sample_x.view(b,n_samples,c,h,w)).abs()
-
+        input_imgs = repeated_data.cpu()
+        
+        # compute sample mean std
+        all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w)).abs()
         pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
         pixel_diff_std = torch.std(all_pixel_diff, dim=1) # n_samples
+
+        if return_all:
+            return sample_x.view(b,n_samples,c,h,w)
+        else:    
+            sample_x = sample_x.view(b,n_samples,c,h,w)[:,:max_display,:,:,:].contiguous()
+            sample_x[:,0,:,:] = data[:,:1,:,:]
+            sample_x[:,-1,:,:] = pixel_diff_mean.div(pixel_diff_mean.max()).mul_(2).add_(-1)
+            
+            sample_x = sample_x.view(b*max_display,c,h,w)
+        
 
         return sample_x, pixel_diff_mean, pixel_diff_std

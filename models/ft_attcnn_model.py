@@ -73,11 +73,9 @@ class FTATTCNNModel(BaseModel):
         img, _, _ = input
         img = img.to(self.device)
 
-        caller = inspect.stack()[1][3]
-
-        if self.opt.dynamic_mask_type in ['random','random_plus','curriculum']:
-            # TODO: implement curriculum, random_plus
-            self.mask = create_mask((img.shape[0], img.shape[2]), mask_fraction=self.opt.kspace_keep_ratio, mask_low_freqs=5).to(self.device)
+        # if self.opt.dynamic_mask_type in ['random','random_plus','curriculum']:
+        #     # TODO: implement curriculum, random_plus
+        #     self.mask = create_mask((img.shape[0], img.shape[2]), mask_fraction=self.opt.kspace_keep_ratio, mask_low_freqs=5).to(self.device)
 
         # doing FFT
         # if has two dimension output, 

@@ -112,6 +112,10 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         # 3 downsampling is enough
         netG = ResnetGeneratorAttResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True)
+    elif which_model_netG == 'resnet_9blocks_attention_residual_fixedbone':
+        # 3 downsampling is enough
+        netG = ResnetGeneratorAttResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
+                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, fixed_bone=True)
     elif which_model_netG == 'resnet_9blocks_attention_residual_psp':
         # 3 downsampling is enough
         netG = ResnetGeneratorAttResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
@@ -131,7 +135,9 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         # the input is [B,C,H,1]
         _netG = nn.Sequential(*kspace_unet_layers(input_nc, output_nc, to_output=True))
         netG = ResidualNetWrapper(_netG, no_last_tanh=True, output_nc=output_nc)
-
+    elif 'resnet_9blocks_attention_residual_vae':
+        netG = ResnetGeneratorAttResidualVAE(input_nc, output_nc, ngf, norm_layer=norm_layer, 
+                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, fixed_bone=False)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % which_model_netG)
 
@@ -214,6 +220,8 @@ class ResidualNetWrapper(nn.Module):
             return y, residual
         else:
             return F.tanh(y), residual
+
+
 
 class FuseModel(nn.Module):
     # perform y = f(x) + x and adding distribution
@@ -524,13 +532,15 @@ from .fft_utils import *
 class ResnetGeneratorAttResidual(nn.Module):
     
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 
-                n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128, use_psp=False, mask_cond=True):
+                n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128, 
+                use_psp=False, mask_cond=True, fixed_bone=False):
         assert(n_blocks >= 0)
         super(ResnetGeneratorAttResidual, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
         self.ngf = ngf
         self.no_last_tanh = no_last_tanh
+        self.fixed_bone = fixed_bone
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
@@ -592,7 +602,131 @@ class ResnetGeneratorAttResidual(nn.Module):
 
     def forward(self, input, mask):
         # mask_vector [B, imSize, 1, 1]
-        hidden = self.model(input)
+        if self.fixed_bone:
+            with torch.no_grad():
+                hidden = self.model(input)
+        else:
+            hidden = self.model(input)
+
+        res = self.model_decode(hidden)
+
+        avg_hidden = F.avg_pool2d(hidden, hidden.shape[2])
+        if self.mask_cond:
+            att_w = self.model_att(torch.cat([avg_hidden, mask], 1)) # [B,imSize, 1,1]
+        else:
+            att_w = self.model_att(avg_hidden) # [B,imSize, 1,1]
+
+        att_w = att_w.view(att_w.shape[0], 1, att_w.shape[1], 1) # [B, 1, imSize, 1]
+        # attention residual in kspace
+        ft_x = self.FFT(res)
+        ft_in = self.FFT(input) # visible part
+        ft_fuse = att_w * ft_x + (1-att_w) * ft_in
+        fuse = self.IFFT(ft_fuse)
+
+        ## to check the attention weight dist
+        # import pdb; pdb.set_trace()
+        # inv_ratio = ((1-att_w[0].squeeze()) * mask[0].squeeze()).mean()
+        # vis_ratio = (att_w[0].squeeze() * (1-mask[0].squeeze())).mean()
+        # print('visiable ratio {vis_ratio} and invisible ratio {inv_ratio}' )
+
+        return fuse, att_w
+
+## inherited from ResnetGenerator3
+from .fft_utils import *
+class ResnetGeneratorAttResidualVAE(nn.Module):
+    
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 
+                n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128, 
+                use_psp=False, mask_cond=True, fixed_bone=False):
+        assert(n_blocks >= 0)
+        super(ResnetGeneratorAttResidualVAE, self).__init__()
+        self.input_nc = input_nc
+        self.output_nc = output_nc
+        self.ngf = ngf
+        self.no_last_tanh = no_last_tanh
+        self.fixed_bone = fixed_bone
+        if type(norm_layer) == functools.partial:
+            use_bias = norm_layer.func == nn.InstanceNorm2d
+        else:
+            use_bias = norm_layer == nn.InstanceNorm2d
+
+        model = [nn.ReflectionPad2d(1),
+                    nn.Conv2d(input_nc, ngf*2, kernel_size=3,
+                            stride=2, padding=0, bias=use_bias),
+                    norm_layer(ngf*2),
+                    nn.ReLU(True)]
+
+        for i in range(1, n_downsampling):
+            mult = 2**i
+            model += [nn.ReflectionPad2d(1),
+                     nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3,
+                                stride=2, padding=0, bias=use_bias),
+                      norm_layer(ngf * mult * 2),
+                      nn.ReLU(True)]
+
+        mult = 2**n_downsampling
+        for i in range(n_blocks):
+            model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
+
+        self.model = nn.Sequential(*model)
+        self.mask_cond = mask_cond
+        attention_ngf = ngf * mult + (imgSize if mask_cond else 0) # conditioned on mask. imgSize is the mask row dimension
+        affine_ngf = ngf * mult 
+        model = []
+        for i in range(n_downsampling):
+            mult = 2**(n_downsampling - i)
+            model += [nn.Upsample(scale_factor=2),
+                      nn.ReflectionPad2d(1),
+                      nn.Conv2d(ngf * mult, int(ngf * mult / 2),
+                                         kernel_size=3, stride=1,
+                                         padding=0,
+                                         bias=use_bias),
+                      norm_layer(int(ngf * mult / 2)),
+                      nn.ReLU(True)]
+
+        if use_psp:
+            model += [PSPModule(ngf, output_nc, norm_layer)]
+        else:
+            model += [nn.Conv2d(ngf, output_nc, kernel_size=1, padding=0)]
+
+        if not self.no_last_tanh:
+            model += [nn.Tanh()]
+
+        self.model_decode = nn.Sequential(*model)
+
+        # attention 
+        self.model_att = nn.Sequential(
+            nn.Conv2d(attention_ngf, attention_ngf//2, 1, bias=use_bias),
+            nn.ReLU(True),
+            nn.Conv2d(attention_ngf//2, imgSize, 1, bias=use_bias),
+            nn.Sigmoid(),
+        )
+        self.IFFT = IFFT()
+        self.FFT = FFT()
+
+        self.affine_scale = nn.Sequential(*[nn.Linear(ngf * 2, affine_ngf)])
+        self.affine_shift = nn.Sequential(*[nn.Linear(ngf * 2, affine_ngf)])
+
+    def get_affine_params(self, z):
+        
+        scale = self.affine_scale(z)
+        shift = self.affine_shift(z)
+
+        return scale, shift
+        
+    def forward(self, input, mask, z):
+        # mask_vector [B, imSize, 1, 1]
+        if self.fixed_bone:
+            with torch.no_grad():
+                hidden = self.model(input)
+        else:
+            hidden = self.model(input)
+        
+        # perform feature-wise transformation
+        scale, shift = self.get_affine_params(z)
+        b,d = scale.shape
+        hidden = hidden * scale.view(b,d,1,1) + shift.view(b,d,1,1) 
+
         res = self.model_decode(hidden)
 
         avg_hidden = F.avg_pool2d(hidden, hidden.shape[2])

@@ -1,19 +1,19 @@
 export CUDA_VISIBLE_DEVICES=$device
-# Debug output
+
+name=imagenet_resnet_CVAE_maskatt_gpus_beta.01
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/vae_session'
 set -ex
-name=imagenet_resnet_9blocks_attention_residual
 python test.py --dataroot 'ImageNet' \
                 --name $name \
-                --model ft_attcnn \
+                --model ft_caenn \
                 --which_model_netG resnet_9blocks_attention_residual \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
-                --checkpoints_dir '/private/home/zizhao/work/checkpoint_fmri/vae_session' \
-                --batchSize 64 \
+                --checkpoints_dir $checkpoints_dir \
+                --batchSize 24 \
                 --input_nc 2 \
                 --output_nc 2 \
-                --how_many -1 \
                 --no_dropout \
-                --non_strict_state_dict \
-
+                --how_many -1 \
+                --n_samples 256 

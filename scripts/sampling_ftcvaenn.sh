@@ -15,5 +15,5 @@ python sampling.py --dataroot 'ImageNet' \
                 --input_nc 2 \
                 --output_nc 2 \
                 --no_dropout \
-                --how_many 256 \
-                --n_samples 64 \
+                --how_many -1 \
+                --n_samples 256 \

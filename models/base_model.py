@@ -103,7 +103,7 @@ class BaseModel():
                     net.cuda(self.gpu_ids[0])
                 else:
                     torch.save(net.cpu().state_dict(), save_path)
-
+        
     def __patch_instance_norm_state_dict(self, state_dict, module, keys, i=0):
         key = keys[i]
         if i + 1 == len(keys):  # at the end, pointing to a parameter/buffer
@@ -211,6 +211,7 @@ class BaseModel():
             losses['reconst_loss'].append(float(F.mse_loss(self.fake_B[:,:1,...], self.real_B[:,:1,...], size_average=True)))
 
             if need_sampling:
+                self.set_input(data)
                 self.test(sampling=True)
                 losses['sampling_loss'].append(float(F.mse_loss(self.fake_B[:,:1,...], self.real_B[:,:1,...], size_average=True)))
 

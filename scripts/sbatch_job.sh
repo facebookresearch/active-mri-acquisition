@@ -44,4 +44,5 @@ source activate zzfair
 ### task seeing all the GPUs on each node. However I am using
 ### the wrapper.sh example I showed before so that each task only
 ### sees one GPU
-srun --label sh scripts/train_ftcvaenn.sh
+# srun --label sh scripts/train_ftcvaenn.sh
+srun --label sh scripts/train_ftvaenn.sh
