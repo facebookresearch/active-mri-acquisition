@@ -4,7 +4,7 @@
 ### Section1: SBATCH directives to specify job configuration
 
 ## job name
-#SBATCH --job-name=zizhao_work
+#SBATCH --job-name=zz_mask_work
 ## filename for job standard output (stdout)
 ## %j is the job id, %u is the user id
 #SBATCH --output=/checkpoint/%u/jobs/%j-sample.out
@@ -20,16 +20,19 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-user=zizhao@fb.com
+
 ### Section 2: Setting environment variables for the job
 ### Remember that all the module command does is set environment
 ### variables for the software you need to. Here I am assuming I
 ### going to run something with python.
 ### You can also set additional environment variables here and
 ### SLURM will capture all of them for each task
-# Start clean
+## Start clean
 module purge
 
-# Load what we need
+## Load what we need
 module load anaconda3
 module load cuda
 module load cudnn
@@ -44,5 +47,5 @@ source activate zzfair
 ### task seeing all the GPUs on each node. However I am using
 ### the wrapper.sh example I showed before so that each task only
 ### sees one GPU
-# srun --label sh scripts/train_ftcvaenn.sh
-srun --label sh scripts/train_ftvaenn.sh
+## srun --label sh scripts/train_ftcvaenn.sh
+srun --label sh scripts/train_ftattgan.sh

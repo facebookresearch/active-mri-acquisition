@@ -10,17 +10,16 @@ import numpy as np
 import torch.nn.functional as F
 from .fft_utils import *
 from torch.autograd import Variable
+import inspect
 
-
-class FTCNNModel(BaseModel):
+class FTRECURNNModel(BaseModel):
     def name(self):
-        return 'FTCNNModel'
+        return 'FTRECURNNModel'
 
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
 
-        # changing the default values to match the pix2pix paper
-        # (https://phillipi.github.io/pix2pix/)
+
         parser.set_defaults(pool_size=0)
         parser.set_defaults(no_lsgan=True)
         parser.set_defaults(norm='batch')
@@ -43,15 +42,15 @@ class FTCNNModel(BaseModel):
             self.model_names = ['G']
         else:  # during test time, only load Gs
             self.model_names = ['G']
+        assert(opt.output_nc == 2)
         # load/define networks
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
                                     opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
         self.RFFT = RFFT().to(self.device)
-        self.mask = create_mask(opt.fineSize).to(self.device)
+        self.mask = create_mask(opt.fineSize, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
         self.IFFT = IFFT().to(self.device)
         # for evaluation
         self.FFT = FFT().to(self.device)
-        
         if self.isTrain:
             # define loss functions
             self.criterion = torch.nn.MSELoss()
@@ -73,18 +72,18 @@ class FTCNNModel(BaseModel):
         AtoB = self.opt.which_direction == 'AtoB'
         img, _, _ = input
         img = img.to(self.device)
-
         if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
             if self.opt.dynamic_mask_type == 'random':
-                    self.mask = create_mask(self.opt.fineSize, random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+                self.mask = create_mask(self.opt.fineSize, random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
             elif self.opt.dynamic_mask_type == 'random_plus':
                 seed = np.random.randint(100)
                 self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
         else:
             self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+
         # doing FFT
         # if has two dimension output, 
-        # we actually want toe imagary part is also supervised, which should be all zero
+        # we actually want the imagary part is also supervised, which should be all zero
         fft_kspace = self.RFFT(img)
         if self.opt.output_nc == 2:
             if self.imag_gt.shape[0] != img.shape[0]:
@@ -95,9 +94,6 @@ class FTCNNModel(BaseModel):
         if AtoB:
             self.real_A = self.IFFT(fft_kspace * self.mask)
             self.real_B = img
-            if self.isTrain and self.opt.consistency_loss:
-                # without any mask
-                self.real_A2 = self.IFFT(fft_kspace)
         else:
             self.real_A = self.IFFT(fft_kspace)
             self.real_B = img
@@ -122,21 +118,18 @@ class FTCNNModel(BaseModel):
         return float(self.loss_FFTVisiable), float(self.loss_FFTInvisiable)
 
     def forward(self):
-        
-        if 'residual' in self.opt.which_model_netG:
-            h, b = self.mask.shape[2], self.real_A.shape[0]
-            mask = Variable(self.mask.view(self.mask.shape[0],h,1,1).expand(b,h,1,1))
-            self.fake_B, _ = self.netG(self.real_A, mask)
-        else: 
-            self.fake_B = self.netG(self.real_A)
-
-        if self.isTrain and self.opt.consistency_loss:
-            # we expect the self consistency in model
-            self.fake_B2 = self.netG(self.real_A2)
+        # conditioned on mask
+        h, b = self.mask.shape[2], self.real_A.shape[0]
+        mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
+        self.fake_Bs = self.netG(self.real_A, mask)
+        self.fake_B = self.fake_Bs[-1]
 
     def backward_G(self):
         # First, G(A) should fake the discriminator
-        self.loss_G = self.criterion(self.fake_B, self.real_B) 
+        self.loss_G = 0
+        for fake_B in self.fake_Bs:
+            self.loss_G += self.criterion(self.fake_B, self.real_B) 
+            
         if self.opt.consistency_loss:
             self.loss_G = self.loss_G*0.9 + self.criterion(self.fake_B2, self.real_B) * 0.1 
         
@@ -148,6 +141,7 @@ class FTCNNModel(BaseModel):
                 self._residual_gt = torch.zeros_like(_k_fake_B_res)
             loss_residual = self.criterion(_k_fake_B_res * self.mask, self._residual_gt)
             self.loss_G += loss_residual * 0.01 # around 100 smaller
+            
         # l2 regularization 
         if self.opt.l2_weight:
             l2_loss = 0

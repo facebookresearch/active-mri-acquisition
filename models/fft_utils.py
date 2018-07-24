@@ -14,6 +14,15 @@ class IFFT(nn.Module):
     def __repr__(self):
         return 'IFFT()'
 
+class IRFFT(nn.Module):
+    def forward(self, x, normalized=False):
+        x = x.permute(0, 2, 3, 1)
+        y = torch.irfft(x, 2, onesided=False, normalized=normalized).unsqueeze(3)
+        return y.permute(0, 3, 1, 2)
+
+    def __repr__(self):
+        return 'IRFFT()'
+
 class RFFT(nn.Module):
     def forward(self, x, normalized=False):
         # x is in gray scale and has 1-d in the 1st dimension
@@ -33,11 +42,19 @@ class FFT(nn.Module):
     def __repr__(self):
         return 'FFT()'
 
-def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5):
+def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42, random_frac=False):
     
+    if random_frac:
+        # we sample fraction and mask_low_freqs lines
+        ratio = np.random.rand(1) + 0.5
+        mask_fraction *= ratio
+        ratio = np.random.rand(1) + 0.5
+        mask_low_freqs = int(mask_low_freqs * ratio)
+        seed = np.random.randint(100)
+
     if type(n) is int:
         b = 1
-        mask_fft = (np.random.RandomState(42).rand(b,n) < mask_fraction).astype(np.float32)
+        mask_fft = (np.random.RandomState(seed).rand(b,n) < mask_fraction).astype(np.float32)
     elif type(n) is tuple:
         assert len(n) == 2
         b, n = n[0], n[1]

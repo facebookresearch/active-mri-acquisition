@@ -77,9 +77,10 @@ class FT_ImageNet(data.Dataset):
         self.target_transform = target_transform
         self.loader = loader
 
-        low_freq_portion = 0.8
-        self.ft_util = FourierUtil(unmask_ratio, normalize=normalize, low_freq_portion=low_freq_portion)
-        print('FT_ImageNet loader (keep ratio={:.2f}/{:.2f}): Found {} images in {} classes'.format(unmask_ratio, low_freq_portion, len(imgs), len(cats)))
+        # low_freq_portion = 0.8
+        # self.ft_util = FourierUtil(unmask_ratio, normalize=normalize, low_freq_portion=low_freq_portion)
+        # print('FT_ImageNet loader (keep ratio={:.2f}/{:.2f}): Found {} images in {} classes'.format(unmask_ratio, low_freq_portion, len(imgs), len(cats)))
+        # print('FT_ImageNet loader')
 
     def __getitem__(self, index):
         path, target = self.imgs[index]
@@ -90,7 +91,8 @@ class FT_ImageNet(data.Dataset):
             img = self.transform(img)
 
          # transfer to fourier space
-        kspace_data = self.ft_util._to_kspace(img)
+        # kspace_data = self.ft_util._to_kspace(img)
+        kspace_data = np.array(0)
         
         if self.target_transform is not None:
             target = self.target_transform(target)

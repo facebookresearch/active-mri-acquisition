@@ -31,7 +31,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--residual_loss', action='store_true', help='supervise the residual loss')
         parser.add_argument('--l2_weight', action='store_true', help='network l2 regularization')
 
-        parser.add_argument('--dynamic_mask_type', type=str, choices=['random', 'random_plus', 'curriculum'], help='changing mask during training')
+        parser.add_argument('--dynamic_mask_type', type=str, choices=['random', 'random_plus', 'curriculum', 'None'], default='None', help='changing mask during training')
 
         self.isTrain = True
         return parser

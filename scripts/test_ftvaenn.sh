@@ -30,3 +30,5 @@ python sampling.py --dataroot 'ImageNet' \
                 --no_dropout \
                 --nz 128 \
                 --n_samples 64 \
+                --preload_G
+

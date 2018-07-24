@@ -2,9 +2,9 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/vae_session'
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/cnn_session'
 
-name=imagenet_randomm
+name=imagenetresnet_9blocks_attention_residual_randomplusmask
 python train.py --dataroot 'ImageNet' \
                 --name $name \
                 --model ft_attcnn \
@@ -13,14 +13,14 @@ python train.py --dataroot 'ImageNet' \
                 --fineSize 128 \
                 --norm instance \
                 --checkpoints_dir $checkpoints_dir \
-                --batchSize 96 \
+                --batchSize 64 \
                 --niter_decay 100 \
                 --niter 100 \
                 --input_nc 2 \
                 --output_nc 2 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
-                --no_dropout \
-                --dynamic_mask_type 'random'
+                --dynamic_mask_type 'random_plus' \
+                --no_dropout  
 
 # name=imagenet_resnet_9blocks_pixelattention_residual
 # python train.py --dataroot 'ImageNet' \

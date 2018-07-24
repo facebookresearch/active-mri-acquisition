@@ -8,7 +8,6 @@ from util.visualizer import Visualizer
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()
-
     # data_loader = CreateDataLoader(opt)
     # dataset = data_loader.load_data()
     if opt.eval_full_valid:
@@ -19,11 +18,11 @@ if __name__ == '__main__':
         train_data_loader, val_data_loader = CreateFtTLoader(opt, valid_size=0.9)
 
     dataset_size = len(train_data_loader)
-
     model = create_model(opt)
     model.setup(opt)
     visualizer = Visualizer(opt=opt)
     total_steps = 0
+    
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
         epoch_start_time = time.time()
         iter_data_time = time.time()
@@ -60,7 +59,7 @@ if __name__ == '__main__':
             visuals, losses = model.validation(val_data_loader, how_many_to_valid=float('inf'))
         else:
             visuals, losses = model.validation(val_data_loader)
-            
+
         visualizer.display_current_results(visuals, epoch, mode='eval')
         visualizer.plot_current_losses('eval', epoch, **losses)
 

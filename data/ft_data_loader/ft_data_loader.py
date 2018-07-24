@@ -134,6 +134,7 @@ def get_test_loader(batch_size,
                     data_dir='/private/home/zizhao/work/data/'
                     ):
 
+    random_seed = 1234
     normalize_tf = get_norm_transform(normalize)
     # define transform
     transform = transforms.Compose([
@@ -152,6 +153,12 @@ def get_test_loader(batch_size,
         data_dir = '/datasets01/imagenet_resized_144px/060718/061417'
     elif which_dataset == 'MNIST':
         dataset = FT_MNIST
+    
+
+    if shuffle:
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        torch.cuda.manual_seed_all(random_seed)
 
     dataset = dataset(
         root=data_dir, train=False, normalize=normalize,

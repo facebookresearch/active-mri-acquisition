@@ -77,7 +77,7 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         netG = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
     elif which_model_netG == 'resnet_9blocks_zz':
         # netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh)
-        netG = ResnetGenerator3(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=True, n_downsampling=3)
+        netG = ResnetGenerator3(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3)
     elif which_model_netG == 'resnet_6blocks':
         netG = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6)
     elif which_model_netG == 'unet_128':
@@ -87,12 +87,12 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
     elif which_model_netG == 'unet_128_residual':
         _netG = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout, no_last_tanh=True)
         netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
-    elif which_model_netG == 'resnet_9blocks_residual':
-        # _netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=True, n_downsampling=3)
-        ## v3 performs better
-        _netG = ResnetGenerator3(input_nc, output_nc, ngf, norm_layer=norm_layer, 
-                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=True, n_downsampling=3)
-        netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
+    # elif which_model_netG == 'resnet_9blocks_residual':
+    #     # _netG = ResnetGenerator2(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, no_last_tanh=True, n_downsampling=3)
+    #     ## v3 performs better
+    #     _netG = ResnetGenerator3(input_nc, output_nc, ngf, norm_layer=norm_layer, 
+    #                     use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3)
+    #     netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
     elif which_model_netG == 'jure_unet':
         netG = nn.Sequential(*unet_layers(input_nc, output_nc))
     elif which_model_netG == 'jure_unet_residual':
@@ -135,9 +135,14 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         # the input is [B,C,H,1]
         _netG = nn.Sequential(*kspace_unet_layers(input_nc, output_nc, to_output=True))
         netG = ResidualNetWrapper(_netG, no_last_tanh=True, output_nc=output_nc)
-    elif 'resnet_9blocks_attention_residual_vae':
+    elif which_model_netG == 'resnet_9blocks_attention_residual_vae' or \
+         which_model_netG == 'resnet_9blocks_attention_residual_vae_fixedbone':
         netG = ResnetGeneratorAttResidualVAE(input_nc, output_nc, ngf, norm_layer=norm_layer, 
-                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, fixed_bone=False)
+                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, 
+                        n_downsampling=3, imgSize=128, mask_cond=True, fixed_bone='fixedbone' in which_model_netG)
+    elif which_model_netG == 'stage_resnet_9blocks_residual':
+        netG = StageResnetGeneratorResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
+                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % which_model_netG)
 
@@ -204,22 +209,34 @@ def define_E(input_nc, output_nc, ndf, which_model_netE,
 
 class ResidualNetWrapper(nn.Module):
     # use to perform y = f(x) + x
-    def __init__(self, net, no_last_tanh, output_nc=1):
+    def __init__(self, net, no_last_tanh=True, output_nc=1):
         super(ResidualNetWrapper, self).__init__()
         self.no_last_tanh = no_last_tanh
         self.net = net
         self.take_first_channel = output_nc == 1
 
-    def forward(self, x):
+        self.IFFT = IFFT()
+        self.FFT = FFT()
+
+    def forward(self, x, mask=None):
         # kspace has two channels input (real and imag.)
-        residual = self.net(x)
-            
-        y = residual + (x[:,:1,:,:] if self.take_first_channel else x)
+        res = self.net(x)
+
+        if mask is None:
+            ## mask residual in image space
+            y = res + (x[:,:1,:,:] if self.take_first_channel else x)
+        else:
+            ### mask residual in kspace
+            mask = mask.view(mask.shape[0],1,mask.shape[1],1)
+            ft_x = self.FFT(res)
+            ft_in = self.FFT(x) # visible part
+            ft_fuse = (1 - mask) * ft_x + mask * ft_in
+            y = self.IFFT(ft_fuse)
 
         if self.no_last_tanh:
-            return y, residual
+            return y, res
         else:
-            return F.tanh(y), residual
+            return F.tanh(y), res
 
 
 
@@ -810,6 +827,8 @@ class ResnetGeneratorMaskingResidual(nn.Module):
 
         self.IFFT = IFFT()
         self.FFT = FFT()
+        self.RFFT = RFFT()
+        self.IRFFT = IRFFT()
 
     def forward(self, input, mask):
         # mask_vector [B, imSize, 1, 1]
@@ -818,10 +837,13 @@ class ResnetGeneratorMaskingResidual(nn.Module):
 
         # mask residual in kspace
         mask = mask.view(mask.shape[0],1,mask.shape[1],1)
-        ft_x = self.FFT(res)
-        ft_in = self.FFT(input) # visible part
-        ft_fuse = (1 - mask) * ft_x + mask * ft_in
-        fuse = self.IFFT(ft_fuse)
+        if res.shape[1] == 1:
+            ft_x = self.RFFT(res)
+            res = self.FFT(input) # input has two channels
+            fuse = self.IRFFT((1 - mask) * res) 
+        else:
+            ft_x = self.FFT(res)
+            fuse = self.IFFT((1 - mask) * ft_x) + input
 
         return fuse, res
 
@@ -1165,11 +1187,15 @@ class PixelDiscriminator(nn.Module):
         return self.net(input)
 
 class VGGLoss(nn.Module):
-    def __init__(self, gpu_ids, input_channel):
+    def __init__(self, gpu_ids, input_channel, loss_for_input=False):
         super(VGGLoss, self).__init__()        
         self.vgg = Vgg19().cuda()
         self.criterion = nn.L1Loss()
-        self.weights = [1.0/32, 1.0/16, 1.0/8, 1.0/4, 1.0]     
+        # self.weights = [1.0/32, 1.0/16, 1.0/8, 1.0/4, 1.0]     
+        self.weights = [1.0, 1.0/2.6, 1.0/4.8, 1.0/3.7, 1.0/5.6, 1/1.5] # from https://github.com/CQFIO/PhotographicImageSynthesis/blob/master/demo_1024p.py
+        self.loss_for_input = loss_for_input
+        if loss_for_input:
+            self.weights = [1.0] + self.weights
         self.input_channel = input_channel   
 
     def forward(self, x, y):      
@@ -1179,6 +1205,10 @@ class VGGLoss(nn.Module):
             y = y.expand(b,3,h,w)    
 
         x_vgg, y_vgg = self.vgg(x), self.vgg(y)
+        if self.loss_for_input:
+            x_vgg = [x] + x_vgg
+            y_vgg = [y] + y_vgg
+
         loss = 0
         for i in range(len(x_vgg)):
             loss += self.weights[i] * self.criterion(x_vgg[i], y_vgg[i].detach())        
@@ -1293,6 +1323,7 @@ class GraphConvolution(nn.Module):
                + str(self.out_features) + ')'
 
 class FTGCN(nn.Module):
+    
     def __init__(self, nfeat, hidden, out_dim, n_layers=6, dropout=0.0):
         super(FTGCN, self).__init__()
 
@@ -1315,3 +1346,103 @@ class FTGCN(nn.Module):
         output = (1 - mask) * x + mask * input
 
         return output, x
+
+
+class StageResnetGeneratorResidual(nn.Module):
+    
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 
+                n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128, 
+                mask_cond=True, fixed_bone=False):
+        assert(n_blocks >= 0)
+        super(StageResnetGeneratorResidual, self).__init__()
+        self.input_nc = input_nc
+        self.output_nc = output_nc
+        self.ngf = ngf
+        self.no_last_tanh = no_last_tanh
+        self.fixed_bone = fixed_bone
+        if type(norm_layer) == functools.partial:
+            use_bias = norm_layer.func == nn.InstanceNorm2d
+        else:
+            use_bias = norm_layer == nn.InstanceNorm2d
+
+        self.n_recurive = 3
+
+        for iii in range(1, self.n_recurive+1):
+
+            model = [nn.ReflectionPad2d(1),
+                        nn.Conv2d(input_nc, ngf*2, kernel_size=3,
+                                stride=2, padding=0, bias=use_bias),
+                        norm_layer(ngf*2),
+                        nn.ReLU(True)]
+
+            for i in range(1, n_downsampling):
+                mult = 2**i
+                model += [nn.ReflectionPad2d(1),
+                        nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3,
+                                    stride=2, padding=0, bias=use_bias),
+                        norm_layer(ngf * mult * 2),
+                        nn.ReLU(True)]
+            setattr(self, 'model_encode'+str(iii), nn.Sequential(*model))
+
+            model = []
+            mult = 2**n_downsampling
+            for i in range(n_blocks//self.n_recurive):
+                model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
+
+            setattr(self, 'model'+str(iii), nn.Sequential(*model))
+            # self.mask_cond = mask_cond
+            # attention_ngf = ngf * mult + (imgSize if mask_cond else 0) # conditioned on mask. imgSize is the mask row dimension
+            model = []
+            for i in range(n_downsampling):
+                mult = 2**(n_downsampling - i)
+                model += [nn.Upsample(scale_factor=2),
+                        nn.ReflectionPad2d(1)] + \
+                        ([nn.Conv2d(ngf * mult, int(ngf * mult / 2),
+                                            kernel_size=3, stride=1,
+                                            padding=0,
+                                            bias=use_bias),
+                        norm_layer(int(ngf * mult / 2)),
+                        nn.ReLU(True)] \
+                        if i +1 < n_downsampling else \
+                        [nn.Conv2d(ngf * mult, output_nc,
+                                            kernel_size=3, stride=1,
+                                            padding=0,
+                                            bias=use_bias)])
+            setattr(self, 'model_decode'+str(iii), nn.Sequential(*model))
+
+        
+        self.IFFT = IFFT()
+        self.FFT = FFT()
+
+    def kspace_fuse(self, x, input, mask):
+
+        ft_x = self.FFT(x)
+        fuse = self.IFFT( (1 - mask) * ft_x ) + input
+
+        return fuse
+
+    def forward(self, input, mask):
+
+        hidden_in1 = self.model_encode1(input)
+        hidden_out1 = self.model1(hidden_in1)
+        out1 = self.model_decode1(hidden_out1)
+
+        # out1 = out1 + input 
+        out1 = self.kspace_fuse(out1, input, mask)
+
+        hidden_in2 = self.model_encode2(out1)
+        # hidden_in2 = hidden_in2 + hidden_in1
+        hidden_out2 = self.model2(hidden_in2)
+        out2 = self.model_decode2(hidden_out2)
+
+        # out2 = out2 + input 
+        out2 = self.kspace_fuse(out2, input, mask)
+
+        hidden_in3 = self.model_encode3(out2)
+        # hidden_in3 = hidden_in3 + hidden_in2
+        hidden_out3 = self.model3(hidden_in3)
+        out3 = self.model_decode3(hidden_out3)
+
+        out3 = self.kspace_fuse(out3, input, mask)
+
+        return (out1, out2, out3)

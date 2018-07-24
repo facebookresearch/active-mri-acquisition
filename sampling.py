@@ -23,10 +23,11 @@ if __name__ == '__main__':
     model.setup(opt)
 
     # create website
-    web_dir = os.path.join(opt.results_dir, opt.name, '%s_%s' % (opt.phase, opt.which_epoch))
+    web_dir = os.path.join(opt.results_dir, opt.name, 'sampling_%s' % (opt.which_epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
     # sampling multiple times
-    visuals, losses = model.validation(test_data_loader, how_many_to_valid=1024, n_samples=opt.n_samples)
+    visuals, losses = model.validation(test_data_loader, how_many_to_valid=100, n_samples=opt.n_samples)
+
     sample_x = model.sampling(model.display_data[0], n_samples=opt.n_samples, max_display=16, return_all=True)
     sample_x = sample_x[:16] # display 4x4 grid gif
     visuals_gif_seq = []
@@ -34,6 +35,14 @@ if __name__ == '__main__':
         visuals_gif = util.tensor2im(tvutil.make_grid(sample_x[:,i,:,:,:], nrow=4))[:,:,0]
         visuals_gif_seq.append(Image.fromarray(visuals_gif))
     visuals['sample_gif'] = visuals_gif_seq
+
+    sample_x = model.sampling(model.display_data[0], n_samples=opt.n_samples, max_display=16, return_all=True, sampling=False)
+    sample_x = sample_x[:16] # display 4x4 grid gif
+    visuals_gif_seq = []
+    for i in range(sample_x.shape[1]):
+        visuals_gif = util.tensor2im(tvutil.make_grid(sample_x[:,i,:,:,:], nrow=4))[:,:,0]
+        visuals_gif_seq.append(Image.fromarray(visuals_gif))
+    visuals['rec_gif'] = visuals_gif_seq
 
     save_images(webpage, visuals, f'sampling ({opt.n_samples} samples)', aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
 

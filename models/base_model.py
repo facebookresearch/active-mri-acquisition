@@ -1,4 +1,4 @@
-import os
+import os, sys
 import torch
 from collections import OrderedDict
 from . import networks
@@ -30,6 +30,8 @@ class BaseModel():
         self.model_names = []
         self.visual_names = []
         self.image_paths = []
+
+        self.validation_phase = False
 
     def set_input(self, input):
         self.input = input
@@ -73,6 +75,8 @@ class BaseModel():
         lr = self.optimizers[0].param_groups[0]['lr']
         print('learning rate = %.7f' % lr)
 
+        # if self.opt.KL_w_decay:
+
     # return visualization images. train.py will display these images, and save the images to a html
     def get_current_visuals(self):
         visual_ret = OrderedDict()
@@ -103,7 +107,15 @@ class BaseModel():
                     net.cuda(self.gpu_ids[0])
                 else:
                     torch.save(net.cpu().state_dict(), save_path)
-        
+        # save optimizer         
+        optimizers = getattr(self, 'optimizers')
+        optim_dict = {}
+        save_filename = '%s_optim_%s.pth' % (which_epoch, name)
+        save_path = os.path.join(self.save_dir, save_filename)
+        for i, optim in enumerate(optimizers):
+            optim_dict[i] = optim.state_dict()
+        torch.save(optim_dict, save_path)
+
     def __patch_instance_norm_state_dict(self, state_dict, module, keys, i=0):
         key = keys[i]
         if i + 1 == len(keys):  # at the end, pointing to a parameter/buffer
@@ -131,6 +143,19 @@ class BaseModel():
                 for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
                     self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))                    
                 net.load_state_dict(state_dict, strict=not self.opt.non_strict_state_dict)
+
+        if self.isTrain and hasattr(self, 'optimizers'):
+            # load optimizer        
+            optimizers = getattr(self, 'optimizers')
+            load_filename = '%s_optim_%s.pth' % (which_epoch, name)
+            load_path = os.path.join(self.save_dir, load_filename)
+            if os.path.isfile(load_path):
+                state_dict = torch.load(load_path, map_location=str(self.device))
+                for i, optim in enumerate(optimizers):
+                    optim.load_state_dict(state_dict[i])
+                print('loading the optimizer from %s' % load_path)
+            else:
+                print('can not found optimizer checkpoint at', load_path)
 
     # print network information
     def print_networks(self, verbose):
@@ -169,6 +194,9 @@ class BaseModel():
             losses['sampling_loss'] = []
 
         netG = getattr(self, 'netG')
+        
+        # turn on the validation sign
+        self.validation_phase = True
 
         # visualization for a fixed number of data
         if not hasattr(self, 'display_data'):
@@ -177,7 +205,8 @@ class BaseModel():
                 self.display_data.append(data)
                 val_count += data[0].shape[0]
                 if val_count >= how_many_to_display: break
-        
+                   
+        # prepare display data
         for it, data in enumerate(self.display_data):
             self.set_input(data)
             self.test() # Weird. using forward will cause a mem leak
@@ -205,25 +234,44 @@ class BaseModel():
         # evaluation
         val_count = 0
         for it, data in enumerate(val_data_loader):
+            ## posterior
             self.set_input(data)
             self.test() # Weird. using forward will cause a mem leak
             # only evaluate the real part if has two channels
             losses['reconst_loss'].append(float(F.mse_loss(self.fake_B[:,:1,...], self.real_B[:,:1,...], size_average=True)))
 
             if need_sampling:
+                # compute at posterior
+                bits_per_dim = self.compute_logistic()
+                losses['bits_per_dim'] = bits_per_dim
+                losses['div'] = self.compute_KL()
+            # prior
+            if need_sampling:
                 self.set_input(data)
                 self.test(sampling=True)
                 losses['sampling_loss'].append(float(F.mse_loss(self.fake_B[:,:1,...], self.real_B[:,:1,...], size_average=True)))
+            else:
+                losses['sampling_loss'] = losses['reconst_loss']
 
+            # compute at prior
             fft_vis, fft_inv = self.compute_special_losses()
             losses['FFTVisiable_loss'].append(fft_vis)
             losses['FFTInvisiable_loss'].append(fft_inv)
 
+            # if optimize beta let's show it
+            if need_sampling and self.opt.optimize_beta:
+                losses['beta'] = float(self.loss_beta)
+
+            sys.stdout.write('\r validation [rec loss: %.5f smp loss: %.5f]' % (np.mean(losses['reconst_loss']), np.mean(losses['sampling_loss'])))
+            sys.stdout.flush()
+
             val_count += self.fake_B.shape[0]
             if val_count >= how_many_to_valid: break
-        
+        print(' ')
         for k, v in losses.items():
             losses[k] = np.mean(v)
-            print('\t {} (avg): {} '.format(k, losses[k]))
+            print('\t {} (E[error]): {} '.format(k, losses[k]))
+
+        self.validation_phase = False
 
         return visuals, losses

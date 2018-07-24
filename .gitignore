@@ -1,2 +1,5 @@
-./vscode
+.vscode
 ./results
+__deprecated
+misc
+.ipynb_checkpoints

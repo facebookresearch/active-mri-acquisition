@@ -47,7 +47,7 @@ class FTATTCNNModel(BaseModel):
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
                                     opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
         self.RFFT = RFFT().to(self.device)
-        self.mask = create_mask(opt.fineSize).to(self.device)
+        self.mask = create_mask(opt.fineSize, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
         self.IFFT = IFFT().to(self.device)
         # for evaluation
         self.FFT = FFT().to(self.device)
@@ -72,10 +72,14 @@ class FTATTCNNModel(BaseModel):
         AtoB = self.opt.which_direction == 'AtoB'
         img, _, _ = input
         img = img.to(self.device)
-
-        # if self.opt.dynamic_mask_type in ['random','random_plus','curriculum']:
-        #     # TODO: implement curriculum, random_plus
-        #     self.mask = create_mask((img.shape[0], img.shape[2]), mask_fraction=self.opt.kspace_keep_ratio, mask_low_freqs=5).to(self.device)
+        if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
+            if self.opt.dynamic_mask_type == 'random':
+                self.mask = create_mask(self.opt.fineSize, random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+            elif self.opt.dynamic_mask_type == 'random_plus':
+                seed = np.random.randint(100)
+                self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
+        else:
+            self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
 
         # doing FFT
         # if has two dimension output, 

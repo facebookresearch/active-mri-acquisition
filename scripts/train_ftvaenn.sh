@@ -22,7 +22,7 @@ checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/vae_session'
 #                 --no_dropout \
 #                 --print_freq 50
 
-name=imagenet_resnet_9blocks_filmvae_stratch
+name=imagenet_resnet_9blocks_filmvae
 mkdir -p -v $checkpoints_dir/$name
 cp $checkpoints_dir'/imagenet_resnet_9blocks_attention_residual/200_net_G.pth' $checkpoints_dir/$name/'0_net_G.pth'
 python train.py --dataroot 'ImageNet' \

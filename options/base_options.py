@@ -45,7 +45,7 @@ class BaseOptions():
         parser.add_argument('--suffix', default='', type=str, help='customized suffix: opt.name = opt.name + suffix: e.g., {model}_{which_model_netG}_size{loadSize}')
 
         # adding for my project fmri
-        parser.add_argument("--kspace_keep_ratio", type=float, default='0.25', help="use convolutional reparamatrization") 
+        parser.add_argument("--kspace_keep_ratio", type=float, default=0.25, help="mask raio of kspace lines") 
         parser.add_argument('--normalize_type', default='gan', type=str, choices=['gan','zero_one','imagenet','cae'], help='normalizing type')
         parser.add_argument('--eval_full_valid', action='store_true', help='if specified, evaluate the full validation set')
         parser.add_argument('--nz', type=int, default=8, help='dimension of prior/posterior')
@@ -113,7 +113,8 @@ class BaseOptions():
         # set gpu ids
         str_ids = opt.gpu_ids.split(',')
         opt.gpu_ids = []
-        for str_id in str_ids:
+        # for str_id in str_ids:
+        for str_id in range(len(str_ids)):
             id = int(str_id)
             if id >= 0:
                 opt.gpu_ids.append(id)
@@ -121,7 +122,8 @@ class BaseOptions():
             torch.cuda.set_device(opt.gpu_ids[0])
             opt.batchSize *= len(opt.gpu_ids)
 
-        self.print_options(opt)
+        if opt.isTrain:
+            self.print_options(opt)
 
         self.opt = opt
         return self.opt
