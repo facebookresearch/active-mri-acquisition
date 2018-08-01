@@ -4,7 +4,7 @@
 ### Section1: SBATCH directives to specify job configuration
 
 ## job name
-#SBATCH --job-name=zz_mask_work
+#SBATCH --job-name=zz_mri_work
 ## filename for job standard output (stdout)
 ## %j is the job id, %u is the user id
 #SBATCH --output=/checkpoint/%u/jobs/%j-sample.out
@@ -47,7 +47,5 @@ source activate zzfair
 ### task seeing all the GPUs on each node. However I am using
 ### the wrapper.sh example I showed before so that each task only
 ### sees one GPU
-# srun --label sh scripts/train_ftcvaennv2.sh
-# srun --label sh scripts/train_ftgauscnn.sh
-# srun --label sh scripts/train_ftkspacecnn.sh
-srun --label sh scripts/train_ftimkspacecnn.sh
+## srun --label sh scripts/train_ftcvaenn.sh
+srun --label sh mri_scripts/train_ftattcnn.sh

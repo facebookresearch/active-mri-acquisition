@@ -8,7 +8,7 @@ Easily extended to MNIST, CIFAR-100 and Imagenet.
 
 import torch
 import numpy as np
-import os
+import os, sys
 import PIL
 # from utils import plot_images
 from torchvision import datasets
@@ -17,7 +17,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from .ft_cifar10 import FT_CIFAR10
 from .ft_imagenet import FT_ImageNet
 from .ft_mnist import FT_MNIST
-
+import random
 
 def get_norm_transform(normalize):
     if normalize == 'gan':
@@ -82,21 +82,28 @@ def get_train_valid_loader(batch_size,
         train_transform = valid_transform
 
     print('load {} train/val (val ratio {:.4f}) dataset'.format(which_dataset, valid_size))
-
-    if which_dataset == 'CIFAR10':
-        dataset = FT_CIFAR10
-        data_dir = '/private/home/zizhao/work/data/'
-    elif which_dataset == 'ImageNet':
-        dataset = FT_ImageNet
-        data_dir = '/datasets01/imagenet_resized_144px/060718/061417'
-    elif which_dataset == 'MNIST':
-        dataset = FT_MNIST
-
-    # load the dataset
-    dataset = dataset(
-        root=data_dir, train=True, normalize=normalize,
-        download=True, transform=train_transform,  unmask_ratio=keep_ratio,
-    )
+    if which_dataset in ('KNEE'):
+         # a hacker way to import loader
+        sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
+        from common import args, dicom_dataset, subsample
+        args = args.Args().parse_args(args=[])
+        mask_func = subsample.Mask(reuse_mask=True)
+        dataset = dicom_dataset.Slice(mask_func, args)
+    else:
+        if which_dataset == 'CIFAR10':
+            dataset = FT_CIFAR10
+            data_dir = '/private/home/zizhao/work/data/'
+        elif which_dataset == 'ImageNet':
+            dataset = FT_ImageNet
+            data_dir = '/datasets01/imagenet_resized_144px/060718/061417'
+        elif which_dataset == 'MNIST':
+            dataset = FT_MNIST
+        
+        # load the dataset
+        dataset = dataset(
+            root=data_dir, train=True, normalize=normalize,
+            download=True, transform=train_transform,  unmask_ratio=keep_ratio,
+        )
 
     num_train = len(dataset)
     indices = list(range(num_train))
@@ -146,24 +153,32 @@ def get_test_loader(batch_size,
 
     print('load {} test dataset'.format(which_dataset))
 
-    if which_dataset == 'CIFAR10':
-        dataset = FT_CIFAR10
-    elif which_dataset == 'ImageNet':
-        dataset = FT_ImageNet
-        data_dir = '/datasets01/imagenet_resized_144px/060718/061417'
-    elif which_dataset == 'MNIST':
-        dataset = FT_MNIST
+    if which_dataset in ('KNEE'):
+         # a hacker way to import loader
+        sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
+        from common import args, dicom_dataset, subsample
+        args = args.Args().parse_args(args=[])
+        mask_func = subsample.Mask(reuse_mask=True)
+        dataset = dicom_dataset.Slice(mask_func, args, which='val')
+    else:  
+        if which_dataset == 'CIFAR10':
+            dataset = FT_CIFAR10
+        elif which_dataset == 'ImageNet':
+            dataset = FT_ImageNet
+            data_dir = '/datasets01/imagenet_resized_144px/060718/061417'
+        elif which_dataset == 'MNIST':
+            dataset = FT_MNIST
     
-
+        dataset = dataset(
+            root=data_dir, train=False, normalize=normalize,
+            transform=transform,  unmask_ratio=keep_ratio,
+        )
     if shuffle:
         np.random.seed(random_seed)
         torch.manual_seed(random_seed)
         torch.cuda.manual_seed_all(random_seed)
+        random.seed(random_seed)
 
-    dataset = dataset(
-        root=data_dir, train=False, normalize=normalize,
-        transform=transform,  unmask_ratio=keep_ratio,
-    )
     data_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, shuffle=shuffle,
         num_workers=num_workers, pin_memory=pin_memory

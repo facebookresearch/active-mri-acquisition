@@ -77,7 +77,7 @@ class FTCNNModel(BaseModel):
         if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
             if self.opt.dynamic_mask_type == 'random':
                     self.mask = create_mask(self.opt.fineSize, random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
-            elif self.opt.dynamic_mask_type == 'random_plus':
+            elif self.opt.dynamic_mask_type == 'random_lines':
                 seed = np.random.randint(100)
                 self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
         else:

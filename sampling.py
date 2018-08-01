@@ -44,6 +44,7 @@ if __name__ == '__main__':
         visuals_gif_seq.append(Image.fromarray(visuals_gif))
     visuals['rec_gif'] = visuals_gif_seq
 
+    import pdb ; pdb.set_trace()
     save_images(webpage, visuals, f'sampling ({opt.n_samples} samples)', aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
 
     webpage.save()

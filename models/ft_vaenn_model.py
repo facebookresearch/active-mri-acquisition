@@ -180,7 +180,10 @@ class FTVAENNModel(BaseModel):
         kl_obj = kl_obj.mean() # mean over batches
         
         return kl_obj
-
+    def compute_logistic(self):
+        return float(0)
+    def compute_KL(self):
+        return float(0)
     def forward(self, sampling=False):
 
         z = self.decode_distribution(sampling)
@@ -198,23 +201,6 @@ class FTVAENNModel(BaseModel):
         # kl divergence
         self.loss_G += self.loss_KL * self.opt.lambda_KL # TODO
 
-        # residual loss
-        # observed part should be all zero during residual training (y(x)+x)
-        if self.opt.residual_loss:
-            _k_fake_B_res = self.FFT(self.fake_B_res)
-            if not hasattr(self, '_residual_gt') or (self._residual_gt.shape[0] != _k_fake_B_res.shape[0]):
-                self._residual_gt = torch.zeros_like(_k_fake_B_res)
-            loss_residual = self.criterion(_k_fake_B_res * self.mask, self._residual_gt)
-            self.loss_G += loss_residual * 0.01 # around 100 smaller
-
-        # l2 regularization 
-        if self.opt.l2_weight:
-            l2_loss = 0
-            for param in self.netG.parameters():
-                if len(param.shape) != 1: # no regualize bias term
-                    l2_loss += param.norm(2)
-            self.loss_G += l2_loss * 0.0001
-
         self.loss_G.backward()
 
         self.compute_special_losses()
@@ -227,7 +213,7 @@ class FTVAENNModel(BaseModel):
         self.backward_G()
         self.optimizer_G.step()
 
-    def sampling(self, data_list, n_samples=8, max_display=8, return_all=False):
+    def sampling(self, data_list, n_samples=8, max_display=8, return_all=False, sampling=True):
         def replicate_tensor(data, times, expand=False):
             ks = list(data.shape)
             data = data.view(ks[0], 1, ks[1], ks[2], ks[3])
@@ -248,7 +234,7 @@ class FTVAENNModel(BaseModel):
             repeated_data = replicate_tensor(data, n_samples)
             repeated_data_list = [repeated_data] + data_list[1:] # concat extra useless input
             self.set_input(repeated_data_list)
-            self.test(sampling=True)
+            self.test(sampling=sampling)
             sample_x = self.fake_B.cpu()[:,:1,:,:] # bxn_samples
         else:
             # for larger samples, do batch forward
@@ -258,7 +244,7 @@ class FTVAENNModel(BaseModel):
             for rdata in repeated_data.transpose(0,1):
                 repeated_data_list = [rdata] + data_list[1:] # concat extra useless input
                 self.set_input(repeated_data_list)
-                self.test(sampling=True)
+                self.test(sampling=sampling)
                 sample_x.append(self.fake_B.cpu()[:,:1,:,:])
             sample_x = torch.stack(sample_x, 1)
 

@@ -15,7 +15,7 @@ if __name__ == '__main__':
         val_data_loader = CreateFtTLoader(opt, is_test=True)
         train_data_loader, _ = CreateFtTLoader(opt, valid_size=0.001) # use all as training
     else:
-        train_data_loader, val_data_loader = CreateFtTLoader(opt, valid_size=0.9)
+        train_data_loader, val_data_loader = CreateFtTLoader(opt, valid_size=0.9 if not opt.debug else 0.99)
 
     dataset_size = len(train_data_loader)
     model = create_model(opt)
@@ -57,6 +57,8 @@ if __name__ == '__main__':
         # TODO should we use evaluation mode? Not necessary
         if opt.eval_full_valid:
             visuals, losses = model.validation(val_data_loader, how_many_to_valid=float('inf'))
+        elif opt.debug:
+            visuals, losses = model.validation(val_data_loader, how_many_to_valid=4096)
         else:
             visuals, losses = model.validation(val_data_loader)
 

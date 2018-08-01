@@ -25,7 +25,7 @@ class FTATTGANModel(BaseModel):
         # parser.set_defaults(which_model_netG='unet_256')
         if is_train:
             parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
-
+            parser.add_argument('--lr_d_multipler', type=int, default=1, help='lr multiplier for D')
         return parser
 
     def initialize(self, opt):
@@ -71,7 +71,7 @@ class FTATTGANModel(BaseModel):
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(),
                                                 lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(),
-                                                lr=opt.lr, betas=(opt.beta1, 0.999))
+                                                lr=opt.lr*opt.lr_d_multipler, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
 
@@ -79,7 +79,7 @@ class FTATTGANModel(BaseModel):
             # the imagnary part of reconstrued data
             self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
 
-    def set_input(self, input):
+    def set_input1(self, input):
         # output from FT loader
         # BtoA is used to test if the network is identical
         AtoB = self.opt.which_direction == 'AtoB'
@@ -89,7 +89,7 @@ class FTATTGANModel(BaseModel):
         if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
             if self.opt.dynamic_mask_type == 'random':
                 self.mask = create_mask(self.opt.fineSize, random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
-            elif self.opt.dynamic_mask_type == 'random_plus':
+            elif self.opt.dynamic_mask_type == 'random_lines':
                 seed = np.random.randint(100)
                 self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
         else:
@@ -111,7 +111,32 @@ class FTATTGANModel(BaseModel):
         else:
             self.real_A = self.IFFT(fft_kspace)
             self.real_B = img
-    
+
+    def set_input2(self, input):
+        # for MRI data
+        input, target, mask, metadata = input
+        input = input.to(self.device)
+        input = input.squeeze(1).permute(0,3,1,2)
+        target = target.to(self.device)
+        mask = mask.to(self.device)
+        ifft_img = self.IFFT(input, normalized=True) # this has to be normalized IFFT
+        
+        self.mask = mask[:1,:1,:,:1,0] #(1,1,h,1)
+        if self.opt.output_nc == 2:
+            if self.imag_gt.shape[0] != target.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(target)
+            target = torch.cat([target, self.imag_gt], dim=1)
+
+        self.real_A = ifft_img
+        self.real_B = target # for medical data we need clamp real data
+
+    def set_input(self, input):
+        if self.mri_data:
+            self.set_input2(input)
+        else:
+            self.set_input1(input) 
+
     def compute_special_losses(self):
         # compute losses between fourier spaces of fake_B and real_B
         # if output one dimension
@@ -137,18 +162,20 @@ class FTATTGANModel(BaseModel):
         mask = Variable(self.mask.view(self.mask.shape[0],1,h,1))#.expand(b,h,1,1))
 
         self.fake_B = self.netG(self.real_A) # two channels
-
+        
+        # residual connection
         ft_x = self.FFT(self.fake_B)
         self.fake_B = self.IFFT((1 - mask) * ft_x) + self.real_A
 
-        # self.real_A = self.real_A[:,:1,:,:]
-        # self.fake_B = self.fake_B2[:,:1,:,:]
-        # self.real_B2 = self.real_B
-        # self.real_B = self.real_B[:,:1,:,:]
-    
     def _clamp(self, data):
-        data = data.clamp(-1,1)
+        # make consistent range with real_B for inputs of D
+        if self.mri_data:
+            zscore = 5
+            data = data.clamp(-zscore, zscore) 
+        else:
+            data = data.clamp(-1, 1) 
         data[:,1,:,:] = 0
+
         return data
         
     def backward_D(self):
@@ -165,7 +192,7 @@ class FTATTGANModel(BaseModel):
         if self.opt.no_cond_gan:
             real_AB = self.real_B
         else:
-            real_AB = torch.cat((self.real_A, self.real_B), 1)
+            real_AB = torch.cat((self.real_A, self._clamp(self.real_B)), 1)
             
         pred_real = self.netD(real_AB)
         self.loss_D_real = self.criterionGAN(pred_real, True)

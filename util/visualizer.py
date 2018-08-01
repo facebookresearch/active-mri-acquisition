@@ -57,7 +57,7 @@ class Visualizer():
 
         self.ncols = 4
         # remove existing 
-        if not opt.continue_train:
+        if not opt.continue_train and not opt.debug:
             for filename in glob.glob(self.checkpoints_dir+"/events*"):
                 os.remove(filename)
         self.writer = SummaryWriter(self.checkpoints_dir)

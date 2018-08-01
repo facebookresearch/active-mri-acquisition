@@ -3,6 +3,16 @@ import torch
 import numpy as np
 from PIL import Image
 import os
+from . import pytorch_mssim
+
+def ssim_metric(src, tar):
+    score = []
+    for i in range(src.shape[0]):
+        score.append(pytorch_mssim.ssim(src[i:i+1,:1,:,:], tar[i:i+1,:1,:,:]).item())
+    
+    mean_score = np.mean(score)
+
+    return mean_score
 
 def sum_axes(input, axes=[], keepdim=False):
     # mu2, logvar2 are prior
@@ -19,6 +29,20 @@ def sum_axes(input, axes=[], keepdim=False):
     return input
 
         
+def mri_denormalize(input_image):
+    if isinstance(input_image, torch.Tensor):
+        image_tensor = input_image.data
+    else:
+        return input_image
+    zscore = 3
+    # do normalization first, since we working on fourier space. we need to clamp
+    for dat in input_image:
+        minv = max(-zscore, dat.min())
+        maxv = min(zscore, dat.max())
+        dat.clamp_(minv, maxv)
+        dat.add_(-minv).div_(maxv-minv)
+
+    return input_image
 
 # Converts a Tensor into an image array (numpy)
 # |imtype|: the desired type of the converted numpy array
@@ -27,7 +51,7 @@ def tensor2im(input_image, imtype=np.uint8, renormalize=True):
         image_tensor = input_image.data
     else:
         return input_image
-    
+   
     # do normalization first, since we working on fourier space. we need to clamp
     if renormalize:
         image_tensor.add_(1).div_(2)
@@ -45,7 +69,6 @@ def tensor2im(input_image, imtype=np.uint8, renormalize=True):
     # image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.0
     image_numpy = np.transpose(image_numpy, (1, 2, 0))
     return image_numpy.astype(imtype)
-
 
 def diagnose_network(net, name='network'):
     mean = 0.0

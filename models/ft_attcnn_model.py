@@ -66,20 +66,14 @@ class FTATTCNNModel(BaseModel):
             # the imagnary part of reconstrued data
             self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
 
-    def set_input(self, input):
+    def set_input1(self, input):
         # output from FT loader
         # BtoA is used to test if the network is identical
         AtoB = self.opt.which_direction == 'AtoB'
         img, _, _ = input
         img = img.to(self.device)
-        if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
-            if self.opt.dynamic_mask_type == 'random':
-                self.mask = create_mask(self.opt.fineSize, random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
-            elif self.opt.dynamic_mask_type == 'random_plus':
-                seed = np.random.randint(100)
-                self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
-        else:
-            self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+        
+        self.mask = self.gen_random_mask(batchSize=img.shape[0])
 
         # doing FFT
         # if has two dimension output, 
@@ -97,7 +91,39 @@ class FTATTCNNModel(BaseModel):
         else:
             self.real_A = self.IFFT(fft_kspace)
             self.real_B = img
-    
+
+    def set_input2(self, input):
+        # for MRI data
+        input, target, mask, metadata = input
+        input = input.to(self.device)
+        input = input.squeeze(1).permute(0,3,1,2)
+        target = target.to(self.device)
+        mask = mask.to(self.device)
+        ifft_img = self.IFFT(input, normalized=True) # this has to be normalized IFFT
+        
+        if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
+            self.mask = self.gen_random_mask(batchSize=ifft_img.shape[0])
+            fft_kspace = self.RFFT(target)
+            ifft_img = self.IFFT(fft_kspace * self.mask)
+        else:
+            # use masked as provided
+            self.mask = mask[:1,:1,:,:1,0] #(1,1,h,1)
+
+        if self.opt.output_nc == 2:
+            if self.imag_gt.shape[0] != target.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(target)
+            target = torch.cat([target, self.imag_gt], dim=1)
+
+        self.real_A = ifft_img
+        self.real_B = target
+
+    def set_input(self, input):
+        if self.mri_data:
+            self.set_input2(input)
+        else:
+            self.set_input1(input)
+
     def compute_special_losses(self):
         # compute losses between fourier spaces of fake_B and real_B
         # if output one dimension

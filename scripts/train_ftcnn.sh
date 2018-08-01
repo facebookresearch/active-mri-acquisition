@@ -17,7 +17,7 @@ python train.py --dataroot 'ImageNet' \
                 --output_nc 2 \
                 --niter_decay 100 \
                 --niter 100 \
-                --dynamic_mask_type 'random_plus'
+                --dynamic_mask_type 'random_lines'
 
 # name=imagenet_resnet_9blocks_zz
 # python train.py --dataroot 'ImageNet' \

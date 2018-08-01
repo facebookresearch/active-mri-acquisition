@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=$device
+# export CUDA_VISIBLE_DEVICES=$device
 set -ex
 # name=imagenet_unet_vae
 # python test.py --dataroot 'ImageNet' \

@@ -2,10 +2,12 @@ import os, sys
 import torch
 from collections import OrderedDict
 from . import networks
-from util import util
 import torchvision.utils as tvutil
 import torch.nn.functional as F
 import numpy as np
+from util import util
+import functools
+from .fft_utils import create_mask
 
 class BaseModel():
 
@@ -32,6 +34,7 @@ class BaseModel():
         self.image_paths = []
 
         self.validation_phase = False
+        self.mri_data = self.opt.dataroot in ('KNEE')
 
     def set_input(self, input):
         self.input = input
@@ -82,7 +85,7 @@ class BaseModel():
         visual_ret = OrderedDict()
         for name in self.visual_names:
             if isinstance(name, str):
-                visual_ret[name] = getattr(self, name)
+                visual_ret[name] = getattr(self, name).cpu()
         return visual_ret
 
     # return traning losses/errors. train.py will print out these errors as debugging information
@@ -110,7 +113,7 @@ class BaseModel():
         # save optimizer         
         optimizers = getattr(self, 'optimizers')
         optim_dict = {}
-        save_filename = '%s_optim_%s.pth' % (which_epoch, name)
+        save_filename = '%s_optim.pth' % (which_epoch)
         save_path = os.path.join(self.save_dir, save_filename)
         for i, optim in enumerate(optimizers):
             optim_dict[i] = optim.state_dict()
@@ -147,7 +150,7 @@ class BaseModel():
         if self.isTrain and hasattr(self, 'optimizers'):
             # load optimizer        
             optimizers = getattr(self, 'optimizers')
-            load_filename = '%s_optim_%s.pth' % (which_epoch, name)
+            load_filename = '%s_optim.pth' % (which_epoch)
             load_path = os.path.join(self.save_dir, load_filename)
             if os.path.isfile(load_path):
                 state_dict = torch.load(load_path, map_location=str(self.device))
@@ -182,16 +185,24 @@ class BaseModel():
 
 
     def validation(self, val_data_loader, how_many_to_display=64, how_many_to_valid=4096*4, n_samples=8):
+        
+        if self.mri_data:
+            tensor2im = functools.partial(util.tensor2im, renormalize=False)
+        else:
+            tensor2im = util.tensor2im
+
         val_data = []
         val_count = 0
         need_sampling = hasattr(self, 'sampling') 
         losses = {
             'reconst_loss': [],
+            'reconst_ssim': [],
             'FFTVisiable_loss': [],
             'FFTInvisiable_loss': []
         }
         if need_sampling:
             losses['sampling_loss'] = []
+            losses['sampling_ssim'] = []
 
         netG = getattr(self, 'netG')
         
@@ -213,20 +224,26 @@ class BaseModel():
             c = min(self.fake_B.shape[0], how_many_to_display)
             real_A, fake_B, real_B, = self.real_A[:c,...].cpu(), self.fake_B[:c,...].cpu(), self.real_B[:c,...].cpu() # save mem
             val_data.append([real_A[:c,:1,...], fake_B[:c,:1,...], real_B[:c,:1,...]])            
-            
+        
+        if self.mri_data:
+            for i in range(3):
+                for a in val_data:
+                    util.mri_denormalize(a[i])
         visuals = {}
-        visuals['inputs'] = util.tensor2im(tvutil.make_grid(torch.cat([a[0] for a in val_data], dim=0)))
-        visuals['reconstructions'] = util.tensor2im(tvutil.make_grid(torch.cat([a[1] for a in val_data], dim=0)))
-        visuals['groundtruths'] = util.tensor2im(tvutil.make_grid(torch.cat([a[2] for a in val_data], dim=0)))  
+        visuals['inputs'] = tensor2im(tvutil.make_grid(torch.cat([a[0] for a in val_data], dim=0)[:how_many_to_display] ))
+        visuals['reconstructions'] = tensor2im(tvutil.make_grid(torch.cat([a[1] for a in val_data], dim=0)[:how_many_to_display]))
+        visuals['groundtruths'] = tensor2im(tvutil.make_grid(torch.cat([a[2] for a in val_data], dim=0)[:how_many_to_display]))  
 
         if need_sampling:
             # we need to do sampling
             sample_x, pixel_diff_mean, pixel_diff_std = self.sampling(self.display_data[0], n_samples=n_samples)
             
-            visuals['sample'] = util.tensor2im(tvutil.make_grid(sample_x, nrow=int(np.sqrt(sample_x.shape[0]))))
+            if self.mri_data: util.mri_denormalize(sample_x)
+
+            visuals['sample'] = tensor2im(tvutil.make_grid(sample_x, nrow=int(np.sqrt(sample_x.shape[0]))))
             nrow = int(np.ceil(np.sqrt(pixel_diff_mean.shape[0])))
-            visuals['pixel_diff_mean'] = util.tensor2im(tvutil.make_grid(pixel_diff_mean, nrow=nrow, normalize=True, scale_each=True), renormalize=False)
-            visuals['pixel_diff_std'] = util.tensor2im(tvutil.make_grid(pixel_diff_std, nrow=nrow, normalize=True, scale_each=True), renormalize=False)
+            visuals['pixel_diff_mean'] = tensor2im(tvutil.make_grid(pixel_diff_mean, nrow=nrow, normalize=True, scale_each=True), renormalize=False)
+            visuals['pixel_diff_std'] = tensor2im(tvutil.make_grid(pixel_diff_std, nrow=nrow, normalize=True, scale_each=True), renormalize=False)
             
             losses['pixel_diff_std'] = np.array(torch.mean(pixel_diff_mean).item())
             losses['pixel_diff_mean'] = np.array(torch.mean(pixel_diff_std).item())
@@ -239,6 +256,7 @@ class BaseModel():
             self.test() # Weird. using forward will cause a mem leak
             # only evaluate the real part if has two channels
             losses['reconst_loss'].append(float(F.mse_loss(self.fake_B[:,:1,...], self.real_B[:,:1,...], size_average=True)))
+            losses['reconst_ssim'].append(float(util.ssim_metric(self.fake_B[:,:1,...], self.real_B[:,:1,...])))
 
             if need_sampling:
                 # compute at posterior
@@ -250,6 +268,7 @@ class BaseModel():
                 self.set_input(data)
                 self.test(sampling=True)
                 losses['sampling_loss'].append(float(F.mse_loss(self.fake_B[:,:1,...], self.real_B[:,:1,...], size_average=True)))
+                losses['sampling_ssim'].append(float(util.ssim_metric(self.fake_B[:,:1,...], self.real_B[:,:1,...])))
             else:
                 losses['sampling_loss'] = losses['reconst_loss']
 
@@ -257,21 +276,56 @@ class BaseModel():
             fft_vis, fft_inv = self.compute_special_losses()
             losses['FFTVisiable_loss'].append(fft_vis)
             losses['FFTInvisiable_loss'].append(fft_inv)
-
-            # if optimize beta let's show it
-            if need_sampling and self.opt.optimize_beta:
-                losses['beta'] = float(self.loss_beta)
-
+            
             sys.stdout.write('\r validation [rec loss: %.5f smp loss: %.5f]' % (np.mean(losses['reconst_loss']), np.mean(losses['sampling_loss'])))
             sys.stdout.flush()
 
             val_count += self.fake_B.shape[0]
             if val_count >= how_many_to_valid: break
+
         print(' ')
         for k, v in losses.items():
+            if k in ('sampling_loss', 'reconst_loss'):
+                nan_n = len([a for a in v if str(a) == 'nan'])
+                if nan_n < (0.1 * len(v)):
+                    v = [a for a in v if str(a) != 'nan']
             losses[k] = np.mean(v)
             print('\t {} (E[error]): {} '.format(k, losses[k]))
 
         self.validation_phase = False
 
         return visuals, losses
+    
+    def gen_random_mask(self, batchSize=1):
+        if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
+            if self.opt.dynamic_mask_type == 'random':
+                mask = create_mask((batchSize, self.opt.fineSize), random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+            elif self.opt.dynamic_mask_type == 'random_lines':
+                seed = np.random.randint(10000)
+                mask = create_mask((batchSize, self.opt.fineSize), random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
+        else:
+            mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+            
+        return mask
+    
+    def compute_special_losses(self):
+        # compute losses between fourier spaces of fake_B and real_B
+        # if output one dimension
+        # import pdb ; pdb.set_trace()
+        if self.fake_B.shape[1] == 1:
+            _k_fakeB = self.RFFT(self.fake_B)
+            _k_realB = self.RFFT(self.real_B)
+        else:
+            # if output are two dimensional
+            _k_fakeB = self.FFT(self.fake_B)
+            _k_realB = self.FFT(self.real_B)
+
+        b = self.fake_B.shape[0] if self.mask.shape[0] == 1 else 1
+    
+        mask_deno = self.mask.sum() * b * self.fake_B.shape[1] * self.fake_B.shape[3]
+        invmask_deno = (1-self.mask).sum() * b * self.fake_B.shape[1] * self.fake_B.shape[3]
+
+        self.loss_FFTVisiable = F.mse_loss(_k_fakeB * self.mask, _k_realB*self.mask, reduce=False).sum().div(mask_deno)
+        self.loss_FFTInvisiable = F.mse_loss(_k_fakeB * (1-self.mask), _k_realB*(1-self.mask), reduce=False).sum().div(invmask_deno)
+        
+        return float(self.loss_FFTVisiable), float(self.loss_FFTInvisiable)

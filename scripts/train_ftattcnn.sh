@@ -19,7 +19,7 @@ python train.py --dataroot 'ImageNet' \
                 --input_nc 2 \
                 --output_nc 2 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
-                --dynamic_mask_type 'random_plus' \
+                --dynamic_mask_type 'random_lines' \
                 --no_dropout  
 
 # name=imagenet_resnet_9blocks_pixelattention_residual

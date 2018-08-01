@@ -2,7 +2,7 @@
 # Debug output
 set -ex
 checkpoint='/private/home/zizhao/work/checkpoint_fmri/cnn_session'
-name=imagenet_resnet_9blocks_attention_residual_fullimagenet_v2
+name=imagenet_resnet_9blocks_attention_residual_randommask
 python test.py --dataroot 'ImageNet' \
                 --name $name \
                 --model ft_attcnn \
@@ -16,7 +16,7 @@ python test.py --dataroot 'ImageNet' \
                 --output_nc 2 \
                 --how_many -1 \
                 --no_dropout \
-                --kspace_keep_ratio 0.25 \
+                --kspace_keep_ratio 0.125 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
                 | tee $checkpoint/$name/'eval_log.txt'
 
@@ -47,7 +47,7 @@ python test.py --dataroot 'ImageNet' \
 #                 --batchSize 64 \
 #                 --input_nc 2 \
 #                 --output_nc 2 \
-#                 --how_many -1 \
+#                 --how_many 20000 \
 #                 --no_dropout \
 #                 --kspace_keep_ratio 0.25 \
 #                 | tee -a $checkpoint/$name/'eval_log.txt'

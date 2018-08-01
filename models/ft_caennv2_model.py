@@ -15,9 +15,9 @@ import argparse
 from .networks import init_net
 import warnings
 
-class FTCAENNModel(BaseModel):
+class FTCAENNV2Model(BaseModel):
     def name(self):
-        return 'FTCAENNModel'
+        return 'FTCAENNV2Model'
 
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
@@ -30,7 +30,7 @@ class FTCAENNModel(BaseModel):
             else:
                 raise argparse.ArgumentTypeError('Boolean value expected.')
                 
-        parser.add_argument("--ctx_gen_det_skip", type=str2bool, nargs='?', const=True, default=True,
+        parser.add_argument("--ctx_gen_det_skip", type=str2bool, nargs='?', const=True, default=False,
                             help="Add deterministic skip connections from context path to generator path?")
         parser.add_argument("--ctx_mask_loss", type=str2bool, nargs='?', const=True, default=False,
                             help="Mask loss to context info for samples from model prior?")
@@ -45,9 +45,9 @@ class FTCAENNModel(BaseModel):
                     help='Number of context frames to use. Set to 0 if no context is required.')
         parser.add_argument("--sum_m_s_from_gen", type=str2bool, nargs='?', const=True, default=True,
                     help="sum mean and std in prior and posterior to values comming from generator network?")
-        parser.add_argument("--weight_norm", type=str2bool, nargs='?', const=True, default=True,
+        parser.add_argument("--weight_norm", type=str2bool, nargs='?', default=True,
                     help="Use weight norm?")
-        parser.add_argument('--beta', type=float, default=4.,
+        parser.add_argument('--beta', type=float, default=1.,
                     help='Weight on KL term.')
         parser.add_argument('--no_context_mask_cond', action='store_false', help='if mask is used as the input of conditional input')
         parser.add_argument("--h_size", type=int, default=160,
@@ -75,6 +75,8 @@ class FTCAENNModel(BaseModel):
 
         parser.add_argument('--optimize_beta', action='store_true', help='increase KL weight during training')
         parser.add_argument('--ctx_as_residual', action='store_true', help='use context as residual of cvae')
+        parser.add_argument('--log_stdv', type=float, default=None, help='stdv for logistic loss.')
+        parser.add_argument('--force_use_posterior', action='store_true', help='use posterior and use input of det net.')
 
         return parser
 
@@ -103,6 +105,7 @@ class FTCAENNModel(BaseModel):
 
         self.netCVAE = init_net(CVAE(opt, in_channels=6, ctx_in_channels=4, out_channels=2), opt.init_type, self.gpu_ids) 
 
+        assert not opt.optimize_beta
         self.loss_beta = self.opt.beta if not self.opt.optimize_beta else 0
         self.RFFT = RFFT().to(self.device)
         self.mask = create_mask(opt.fineSize).to(self.device)
@@ -123,12 +126,23 @@ class FTCAENNModel(BaseModel):
             self.optimizers.append(self.optimizer_G)
 
         assert not opt.ctx_gen_det_skip
+        if 'random' in self.opt.checkpoints_dir:
+            assert 'random' in self.opt.dynamic_mask_type
         
     def set_input(self, input):
         # output from FT loader
         # BtoA is used to test if the network is identical
         img, _, _ = input
         img = img.to(self.device)
+
+        if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
+            if self.opt.dynamic_mask_type == 'random':
+                self.mask = create_mask(self.opt.fineSize, random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+            elif self.opt.dynamic_mask_type == 'random_lines':
+                seed = np.random.randint(100)
+                self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
+        else:
+            self.mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
         # doing FFT
         # if has two dimension output, 
         # we actually want toe imagary part is also supervised, which should be all zero
@@ -179,8 +193,8 @@ class FTCAENNModel(BaseModel):
         if not self.opt.train_G:
             self.fake_A_ = self.fake_A_.detach()
             kspace_attention = kspace_attention.detach()
-        
-        ## CVAE part
+
+        ## CVAE part    
         sample_from = 'prior' if sampling else 'posterior'
 
         # normalize to [-0.5, 0.5] by dividing 2
@@ -193,12 +207,16 @@ class FTCAENNModel(BaseModel):
             att_w = kspace_attention
         else:
             ValueError('Unknown cvae attention type')
-        
+
+        if self.opt.force_use_posterior and not self.isTrain:
+            real_B = self.fake_B_G 
+        else:
+            real_B = self.real_B
         # errors from the determnistic mdoel
-        E = self.real_B - self.fake_B_G 
+        E = real_B - self.fake_B_G 
         # unobserved part
-        U = self.real_B - self.real_A 
-        X = torch.cat([self.real_B, U, E], 1)
+        U = real_B - self.real_A 
+        X = torch.cat([real_B, U, E], 1)
         # estimated unobserved part
         U_ = self.fake_A_ 
         ctx = torch.cat([self.fake_B_G, U_], 1)
@@ -208,7 +226,7 @@ class FTCAENNModel(BaseModel):
         else:
             residual = self.fake_B_G # take the determnistic output
 
-        self.fake_B, self.div_obj, self.aux_loss, self.dec_log_stdv, self.ft_stdv, beta = self.netCVAE(X, ctx, sample_from)
+        self.fake_B, self.div_obj, self.aux_loss, self.dec_log_stdv, self.ft_stdv = self.netCVAE(X, ctx, sample_from)
         
         # add residual 
         if att_w is None:
@@ -223,8 +241,9 @@ class FTCAENNModel(BaseModel):
             self.dec_log_stdv = self.dec_log_stdv.mean()
             self.ft_stdv = self.ft_stdv.mean()
 
-        if self.opt.optimize_beta:
-            self.loss_beta = beta.mean().clamp_(0.2, 0.8)
+        # no need to learn it
+        if self.opt.log_stdv is not None:
+            self.dec_log_stdv = torch.cuda.FloatTensor(1).fill_(self.opt.log_stdv).detach()
 
         self.loss_div = self.div_obj.mean()
 
@@ -308,7 +327,6 @@ class FTCAENNModel(BaseModel):
             sample_x = torch.stack(sample_x, 1)
 
         input_imgs = repeated_data.cpu()
-        
         # compute sample mean std
         all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w)).abs()
         pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
@@ -327,7 +345,6 @@ class FTCAENNModel(BaseModel):
 
             sample_x = sample_x.view(b*max_display,c,h,w)
         
-
         return sample_x, pixel_diff_mean, pixel_diff_std
 
 def discretized_logistic(mean, logscale, binsize = 1/256.0, sample=None):
@@ -352,10 +369,13 @@ def criteria(x, orig_x, div_loss, aux_loss, dec_log_stdv, hps, ctx=None, ids=[],
             log_pxz = F.mse_loss(x, orig_x, reduce=False)
         else:
             log_pxz = - F.mse_loss(x, orig_x, reduce=False)
+            one_over_var = torch.exp(-dec_log_stdv)
+            log_pxz = - (0.5 * (one_over_var * -log_pxz + dec_log_stdv))
 
     elif hps.loss_rec == 'NLL':
         # be careful about the - 0.5
         x = torch.clamp(x, -0.5 + 1 / 512., 0.5 - 1 / 512.)
+        orig_x.clamp_(-0.5, 0.5)
         log_pxz = discretized_logistic(x, dec_log_stdv, sample=orig_x)
 
     # mask loss for the model prior samples (context to x path)
@@ -374,7 +394,6 @@ def criteria(x, orig_x, div_loss, aux_loss, dec_log_stdv, hps, ctx=None, ids=[],
 
     _log_pxz = util.sum_axes(log_pxz, axes=[1, 2, 3])
     log_pxz = _log_pxz.mul(logp_beta)
-    
     if hps.model == 'WAE':
         obj = torch.mean(log_pxz) + div_loss
         loss = obj
@@ -387,11 +406,17 @@ def criteria(x, orig_x, div_loss, aux_loss, dec_log_stdv, hps, ctx=None, ids=[],
             loss = torch.sum(compute_lowerbound(_log_pxz, aux_loss, hps.k))
 
     return obj, loss
-def crop(layer, target_size):
-    dif = [(layer.shape[2] - target_size[0]) // 2, (layer.shape[3] - target_size[1]) // 2]
-    cs=target_size
 
-    return layer[:, :, dif[0]:dif[0]+cs[0], dif[1]:dif[1]+cs[1]]
+# def crop(layer, target_size):
+#     dif = [(layer.shape[2] - target_size[0]) // 2, (layer.shape[3] - target_size[1]) // 2]
+#     cs=target_size
+
+#     return layer[:, :, dif[0]:dif[0]+cs[0], dif[1]:dif[1]+cs[1]]
+
+def conv_same(n_in, n_out, stride=1):
+    ks = 4 if stride == 2 else 3
+    return nn.Conv2d(n_in, n_out, kernel_size=ks, stride=stride, padding=1, bias=True)
+
 class IAFLayer(nn.Module):
     def __init__(self, hps, downsample):
         super(IAFLayer, self).__init__()
@@ -407,24 +432,16 @@ class IAFLayer(nn.Module):
             z_dim_mult = 0
 
         if hps.model_vae == 'IAF':
-            self.ar_multiconv2d = ArMulticonv2d(hps, [self.h_size, self.h_size], [
-                                                self.z_size, self.z_size])
-            self.conv1down = nn.Conv2d(self.h_size, z_dim_mult * self.z_size + 2 * self.h_size,
-                                       3, stride=1, padding=(3 - 1) // 2)
-            self.conv1up = nn.Conv2d(self.h_size, 2 * self.z_size + 2 * self.h_size,
-                                  3, stride=stride, padding=(3 - 1) // 2)
+            self.ar_multiconv2d = ArMulticonv2d(hps, [self.h_size, self.h_size], [self.z_size, self.z_size])
+            self.conv1down = conv_same(self.h_size, z_dim_mult * self.z_size + 2 * self.h_size)
+            self.conv1up = conv_same(self.h_size, 2 * self.z_size + 2 * self.h_size, stride=stride)
         else:
-            self.conv1down = nn.Conv2d(self.h_size, z_dim_mult * self.z_size + self.h_size,
-                                       3, stride=1, padding=(3 - 1) // 2)
-            self.conv1up = nn.Conv2d(self.h_size, 2 * self.z_size + self.h_size,
-                                  3, stride=stride, padding=(3 - 1) // 2)
+            self.conv1down = conv_same(self.h_size, z_dim_mult * self.z_size + self.h_size)
+            self.conv1up = conv_same(self.h_size, 2 * self.z_size + self.h_size, stride=stride)
 
-        self.conv2up = nn.Conv2d(self.h_size, self.h_size, 3, stride = 1,
-                                 padding=(3 - 1) // 2)
-        self.conv1context = nn.Conv2d(self.h_size, self.h_size + 2 * self.z_size, 3, stride=stride,
-                                      padding=(3 - 1) // 2)
-        self.conv2context = nn.Conv2d(self.h_size, self.h_size, 3, stride = 1,
-                                      padding=(3 - 1) // 2)
+        self.conv2up = conv_same(self.h_size, self.h_size)
+        self.conv1context = conv_same(self.h_size, self.h_size + 2 * self.z_size, stride=stride)
+        self.conv2context = conv_same(self.h_size, self.h_size)
         self.skip_ctx = 0
         self.qz_mean_ctx = 0
         self.qz_logsd_ctx = 0
@@ -433,12 +450,9 @@ class IAFLayer(nn.Module):
             self.pool = nn.AvgPool2d(2, ceil_mode=True)
             self.pool_context = nn.AvgPool2d(2, ceil_mode=True)
             self.upsample1 = nn.Upsample(scale_factor = 2, mode = 'nearest')
-            self.conv2down = nn.ConvTranspose2d(self.h_size + self.z_size,
-                                                self.h_size, 3, stride = 2, padding = (3 - 1) // 2,
-                                                output_padding = 1)
+            self.conv2down = nn.ConvTranspose2d(self.h_size + self.z_size, self.h_size, 4, stride = 2, padding =1)
         else:
-            self.conv2down = nn.Conv2d(self.h_size + self.z_size, self.h_size, 3,
-                                       stride=1, padding=(3-1)//2)
+            self.conv2down = conv_same(self.h_size + self.z_size, self.h_size)
 
         if hps.weight_norm:
             self.conv1up = weightNorm(self.conv1up)
@@ -507,7 +521,6 @@ class IAFLayer(nn.Module):
             down_context = x[:,z_dim_mult*self.z_size + self.h_size:z_dim_mult*self.z_size + 2*self.h_size,:,:]
             context = self.up_context + down_context
         if hps.loss_div == 'KL':
-                
             if sample_from in ["prior"]:
                 # print("Sampling from prior!")
                 z = prior.rsample()
@@ -559,12 +572,11 @@ class IAFLayer(nn.Module):
 
         if self.downsample:
             input = self.upsample1(input)
-            input = crop(input, target_size)
             if hps.ctx_gen_det_skip:
                 input = input + self.skip_ctx
-            h = crop(h, target_size)
 
         output = input + 0.1 * h
+
         return output, kl_obj, kl_cost
 
     def forward(self, x, ctx=None, up=True, sample_from='None', ids=[], target_size=None):
@@ -590,21 +602,18 @@ class CVAE(nn.Module):
         super(CVAE, self).__init__()
         self.hps = hps
         self.m_trunc = []
-        self.convinit = nn.Conv2d(in_channels, hps.h_size, 5, stride=2, padding=(5-1)//2)
+        self.convinit = conv_same(in_channels, hps.h_size, stride=2)
         if hps.std_in_nll_dep_on_z:
-            self.deconvfin = nn.ConvTranspose2d(hps.h_size, 2 * out_channels, 5, stride=2, padding=(5-1)//2,
-                                                output_padding=1)
+            self.deconvfin = nn.ConvTranspose2d(hps.h_size, 2 * out_channels, 4, stride=2, padding=1)
             self.out_channels = 2 * out_channels
         else:
-            self.deconvfin = nn.ConvTranspose2d(hps.h_size, out_channels, 5, stride=2, padding=(5-1)//2,
-                                                output_padding=1)
+            self.deconvfin = nn.ConvTranspose2d(hps.h_size, out_channels, 4, stride=2, padding=1)
             self.dec_log_stdv =  nn.Parameter(torch.zeros(1,1))
 
         self.ft_log_stdv =  nn.Parameter(torch.zeros(1,1))
 
         if hps.n_ctx > 0 and not hps.use_ctx_as_input:
-            # self.convinit_ctx = nn.Conv2d(4 * in_channels, hps.h_size, 5, stride=2, padding=(5-1)//2)
-            self.convinit_ctx = nn.Conv2d(ctx_in_channels, hps.h_size, 5, stride=2, padding=(5-1)//2)
+            self.convinit_ctx = conv_same(ctx_in_channels, hps.h_size, stride=2)
         else:
             self.h_top = nn.Parameter(torch.zeros(hps.h_size))
 
@@ -618,7 +627,6 @@ class CVAE(nn.Module):
                 self.convinit_ctx = weightNorm(self.convinit_ctx)
 
         self.dec_log_stdv =  nn.Parameter(torch.zeros(1,1))
-        self.beta = nn.Parameter(torch.ones(1,1).fill_(0.5))
 
         self.layers = nn.ModuleList([])
         for i in range(hps.depth):
@@ -629,7 +637,6 @@ class CVAE(nn.Module):
 
         self.IFFT = IFFT()
         self.FFT = FFT()
-        self.IRFFT = IRFFT()
 
     # def forward(self, x, ctx, true_ctx, sample_from, att_w, ids=[]): # this one will cause in parallel_apply bugs
     def forward(self, x, ctx, sample_from='None', ids=[]):
@@ -675,7 +682,6 @@ class CVAE(nn.Module):
 
         x = F.elu(h)
         x = self.deconvfin(x)
-        x = crop(x, input_size)
         if hps.std_in_nll_dep_on_z:
             dec_log_stdv = x[:,self.out_channels:,:,:]
             dec_log_stdv = torch.log(F.softplus(dec_log_stdv) + 0.00001)
@@ -688,7 +694,8 @@ class CVAE(nn.Module):
         else:
             x = F.sigmoid(x) - 0.5
 
-        return x, kl_obj, kl_cost, dec_log_stdv, self.ft_log_stdv, self.beta
+        return x, kl_obj, kl_cost, dec_log_stdv, self.ft_log_stdv
+
 class ArMulticonv2d(nn.Module):
     
     def __init__(self, hps, n_h, n_out, nl=F.elu):
