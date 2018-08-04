@@ -8,6 +8,7 @@ import numpy as np
 from util import util
 import functools
 from .fft_utils import create_mask
+from util import visualizer
 
 class BaseModel():
 
@@ -210,9 +211,12 @@ class BaseModel():
         self.validation_phase = True
 
         # visualization for a fixed number of data
-        if not hasattr(self, 'display_data'):
+        if not hasattr(self, 'display_data') or self.display_data is None:
             self.display_data = []
             for data in val_data_loader:
+                if self.mri_data:
+                    assert len(data) == 4
+                    data = data[1:]
                 self.display_data.append(data)
                 val_count += data[0].shape[0]
                 if val_count >= how_many_to_display: break
@@ -223,16 +227,54 @@ class BaseModel():
             self.test() # Weird. using forward will cause a mem leak
             c = min(self.fake_B.shape[0], how_many_to_display)
             real_A, fake_B, real_B, = self.real_A[:c,...].cpu(), self.fake_B[:c,...].cpu(), self.real_B[:c,...].cpu() # save mem
-            val_data.append([real_A[:c,:1,...], fake_B[:c,:1,...], real_B[:c,:1,...]])            
-        
+            if not hasattr(self, 'logvars'):
+                val_data.append([real_A[:c,:1,...], fake_B[:c,:1,...], real_B[:c,:1,...]])            
+            else:
+                if type(self.logvars) is not list:
+                    self.logvars = [self.logvars]
+                # apply the same normalization for the (3) logvars maps for each image 
+                b = self.logvars[0].shape[0]
+                self.logvars = torch.stack(self.logvars,1).exp_()
+
+                if self.opt.scale_logvar_each:
+                    maxv = self.logvars.max(2)[0].max(2)[0].max(2)[0]
+                    maxv = maxv.view(maxv.shape[0],maxv.shape[1],1,1,1)
+                else:
+                    maxv = self.logvars.max(1)[0].max(1)[0].max(1)[0].max(1)[0]
+                    maxv = maxv.view(maxv.shape[0],1,1,1,1)
+                
+                self.logvars = self.logvars / maxv
+                # organize it to visable format, each line shows [vnd] samples and 
+                # the following lines are logvar maps of the same image
+                vnd = int(np.sqrt(how_many_to_display)) 
+                log_var_vis = []
+                self.logvars = self.logvars.transpose(0,1)
+                for s in range(2):
+                    star, end = s*vnd, (s+1)*vnd
+                    logvars = [logvar[star:end,...].cpu() for logvar in self.logvars]
+                    logvars = torch.cat(logvars, 0)
+                    log_var_vis.append(logvars)
+                log_var_vis = torch.cat(log_var_vis, 0)
+                # log_var_vis = torch.exp(log_var_vis) 
+                val_data.append([real_A[:c,:1,...], fake_B[:c,:1,...], real_B[:c,:1,...], log_var_vis])
+
         if self.mri_data:
-            for i in range(3):
-                for a in val_data:
+            for i in range(3): # do not normalize variance only the first three
+                for a in val_data: 
                     util.mri_denormalize(a[i])
+                    
         visuals = {}
-        visuals['inputs'] = tensor2im(tvutil.make_grid(torch.cat([a[0] for a in val_data], dim=0)[:how_many_to_display] ))
-        visuals['reconstructions'] = tensor2im(tvutil.make_grid(torch.cat([a[1] for a in val_data], dim=0)[:how_many_to_display]))
-        visuals['groundtruths'] = tensor2im(tvutil.make_grid(torch.cat([a[2] for a in val_data], dim=0)[:how_many_to_display]))  
+        visuals['inputs'] = tensor2im(tvutil.make_grid(torch.cat([a[0] for a in val_data], dim=0)[:how_many_to_display], nrow=int(np.sqrt(how_many_to_display)) ))
+        visuals['reconstructions'] = tensor2im(tvutil.make_grid(torch.cat([a[1] for a in val_data], dim=0)[:how_many_to_display], nrow=int(np.sqrt(how_many_to_display)) ))
+        visuals['groundtruths'] = tensor2im(tvutil.make_grid(torch.cat([a[2] for a in val_data], dim=0)[:how_many_to_display], nrow=int(np.sqrt(how_many_to_display)) ))  
+
+        # show variance images
+        if hasattr(self, 'logvars'):
+            _tmp = tvutil.make_grid(torch.cat([a[3] for a in val_data], dim=0), normalize=False, scale_each=False, nrow=vnd)
+            # conver to rgb heat map
+            _tmp = util.tensor2im(_tmp, renormalize=False)
+            _tmp = visualizer.gray2heatmap(_tmp[:,:,0])
+            visuals['certainty_map'] = _tmp
 
         if need_sampling:
             # we need to do sampling
@@ -250,7 +292,9 @@ class BaseModel():
 
         # evaluation
         val_count = 0
+        
         for it, data in enumerate(val_data_loader):
+            if how_many_to_valid == 0: break
             ## posterior
             self.set_input(data)
             self.test() # Weird. using forward will cause a mem leak
@@ -283,14 +327,15 @@ class BaseModel():
             val_count += self.fake_B.shape[0]
             if val_count >= how_many_to_valid: break
 
-        print(' ')
-        for k, v in losses.items():
-            if k in ('sampling_loss', 'reconst_loss'):
-                nan_n = len([a for a in v if str(a) == 'nan'])
-                if nan_n < (0.1 * len(v)):
-                    v = [a for a in v if str(a) != 'nan']
-            losses[k] = np.mean(v)
-            print('\t {} (E[error]): {} '.format(k, losses[k]))
+        if how_many_to_valid > 0:
+            print(' ')
+            for k, v in losses.items():
+                if k in ('sampling_loss', 'reconst_loss'):
+                    nan_n = len([a for a in v if str(a) == 'nan'])
+                    if nan_n < (0.1 * len(v)):
+                        v = [a for a in v if str(a) != 'nan']
+                losses[k] = np.mean(v)
+                print('\t {} (E[error]): {} '.format(k, losses[k]))
 
         self.validation_phase = False
 
@@ -329,3 +374,50 @@ class BaseModel():
         self.loss_FFTInvisiable = F.mse_loss(_k_fakeB * (1-self.mask), _k_realB*(1-self.mask), reduce=False).sum().div(invmask_deno)
         
         return float(self.loss_FFTVisiable), float(self.loss_FFTInvisiable)
+
+    def set_input1(self, input):
+        # output from FT loader
+        img, _, _ = input
+        img = img.to(self.device)
+
+        self.mask = self.gen_random_mask(batchSize=img.shape[0])
+
+        # doing FFT
+        # if has two dimension output, 
+        # we actually want the imagary part is also supervised, which should be all zero
+        fft_kspace = self.RFFT(img)
+        
+        if self.opt.output_nc == 2:
+            if self.imag_gt.shape[0] != img.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(img)
+            img = torch.cat([img, self.imag_gt], dim=1)
+
+        self.real_A = self.IFFT(fft_kspace * self.mask)
+        self.real_B = img
+
+    def set_input2(self, input, zscore=3):
+        # for MRI data Slice loader
+        target, mask, metadata = input
+        target = target.to(self.device)
+        
+        target.clamp_(-zscore, zscore)
+
+        if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
+            self.mask = self.gen_random_mask(batchSize=target.shape[0])
+        else:
+            # use provided fixed masked
+            # guarantee the target has the same size as mask
+            self.mask = mask[:1,:1,:,:1,0].to(self.device).repeat(target.shape[0],1,1,1) #(b,1,h,1)
+
+        fft_kspace = self.RFFT(target)
+        ifft_img = self.IFFT(fft_kspace * self.mask)
+
+        if self.opt.output_nc >= 2:
+            if self.imag_gt.shape[0] != target.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(target)
+            target = torch.cat([target, self.imag_gt], dim=1)
+
+        self.real_A = ifft_img
+        self.real_B = target

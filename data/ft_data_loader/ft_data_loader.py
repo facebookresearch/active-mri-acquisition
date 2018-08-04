@@ -13,7 +13,7 @@ import PIL
 # from utils import plot_images
 from torchvision import datasets
 from torchvision import transforms
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import SubsetRandomSampler, Sampler
 from .ft_cifar10 import FT_CIFAR10
 from .ft_imagenet import FT_ImageNet
 from .ft_mnist import FT_MNIST
@@ -128,6 +128,21 @@ def get_train_valid_loader(batch_size,
     
     return (train_loader, valid_loader)
 
+class SequentialSampler2(Sampler):
+    r"""Samples elements sequentially, in the order of given list.
+
+    Arguments:
+        data_source (Dataset): dataset to sample from
+    """
+
+    def __init__(self, data_source):
+        self.data_source = data_source
+
+    def __iter__(self):
+        return iter(self.data_source)
+
+    def __len__(self):
+        return len(self.data_source)
 
 def get_test_loader(batch_size,
                     load_size,
@@ -173,16 +188,27 @@ def get_test_loader(batch_size,
             root=data_dir, train=False, normalize=normalize,
             transform=transform,  unmask_ratio=keep_ratio,
         )
-    if shuffle:
-        np.random.seed(random_seed)
-        torch.manual_seed(random_seed)
-        torch.cuda.manual_seed_all(random_seed)
-        random.seed(random_seed)
 
-    data_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=shuffle,
-        num_workers=num_workers, pin_memory=pin_memory
-    )
+    if shuffle:
+        # TODO these seed setting may not really useful
+        # torch.manual_seed(random_seed)
+        # torch.cuda.manual_seed_all(random_seed)
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        # torch.backends.cudnn.deterministic = True
+
+        indices = list(range(len(dataset)))
+        np.random.shuffle(indices)
+        test_sampler = SequentialSampler2(indices)
+        data_loader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, shuffle=False,
+            num_workers=num_workers, pin_memory=pin_memory, sampler=test_sampler
+        )
+    else:
+        data_loader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, shuffle=False,
+            num_workers=num_workers, pin_memory=pin_memory
+        )
 
     return data_loader
 

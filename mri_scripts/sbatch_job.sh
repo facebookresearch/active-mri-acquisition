@@ -48,4 +48,5 @@ source activate zzfair
 ### the wrapper.sh example I showed before so that each task only
 ### sees one GPU
 ## srun --label sh scripts/train_ftcvaenn.sh
-srun --label sh mri_scripts/train_ftattcnn.sh
+# srun --label sh mri_scripts/train_ftcvaennv3.sh
+srun --label sh mri_scripts/train_ftrecurnnv2.sh

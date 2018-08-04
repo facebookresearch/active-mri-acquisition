@@ -12,8 +12,7 @@ import torch.nn.functional as F
 import numpy as np
 from collections import OrderedDict
 import functools
-
-from util import pytorch_mssim
+from util.util import ssim_metric
 
 if __name__ == '__main__':
     opt = TestOptions().parse()
@@ -33,10 +32,12 @@ if __name__ == '__main__':
     sample_loss, reconst_loss = [], []
     expt_r_loss, expt_s_loss = [], []
     vis_losses, invis_losses = [], []
+    sample_ssim, reconst_ssim = [], []
     stage1_losses = []
     val_count = 0
     saved = False
-    
+    ngrid = 9 # how many image to show in each grid
+
     # create website
     web_dir = os.path.join(opt.results_dir, opt.name, '%s_%s' % (opt.phase, opt.which_epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
@@ -61,15 +62,6 @@ if __name__ == '__main__':
         err = float(F.mse_loss(src[:,:1,:,:], tar[:,:1,:,:], size_average=True)) 
         return err 
     
-    # def imagenet_loss(src, tar):
-    #     score = []
-    #     for i in range(src.shape[0]):
-    #         score.append(pytorch_mssim.ssim(src[i:i+1,:1,:,:], tar[i:i+1,:1,:,:]).item())
-        
-    #     mean_score = np.mean(score)
-
-    #     return mean_score
-
     def compute_percentile(loss_array, none=None):
         # loss_array is in [N, n_samples]
         pct_10 = np.percentile(loss_array, 10, axis=1).mean()
@@ -90,24 +82,29 @@ if __name__ == '__main__':
         pct_90 = np.percentile(loss_array, 90, axis=1).mean()
         pct_50 = np.percentile(loss_array, 90, axis=1).mean()
 
-        return pct_10, pct_90, pct_50    
+        return pct_10, pct_90, pct_50 
+
     for i, data in enumerate(test_data_loader):
         s_loss, r_loss = [], []
         s_sample, r_sample = [], []
+        s_ssim, r_ssim = [], []
         for j in range(opt.n_samples):
             model.set_input(data)
             model.test()
             
             r_sample.append(model.fake_B.cpu())
             r_loss.append(imagenet_loss(model.fake_B.cpu(), model.real_B.cpu()))
+            r_ssim.append(ssim_metric(model.fake_B.cpu(), model.real_B.cpu()))
 
             if hasattr(model, 'sampling'):
                 model.test(sampling=True)
                 s_sample.append(model.fake_B.cpu())
                 s_loss.append(imagenet_loss(model.fake_B.cpu(), model.real_B.cpu()))
+                s_ssim.append(ssim_metric(model.fake_B.cpu(), model.real_B.cpu()))
             else:
                 s_loss = r_loss
                 s_sample = r_sample
+                s_ssim = r_ssim
             visuals = model.get_current_visuals()
 
             # compute fft vis and invis losses
@@ -124,31 +121,36 @@ if __name__ == '__main__':
         c_expt_r_loss = [imagenet_loss(torch.stack(r_sample, 0).mean(dim=0), model.real_B.cpu())]
         c_expt_s_loss = [imagenet_loss(torch.stack(s_sample, 0).mean(dim=0), model.real_B.cpu())]
 
-        val_count += model.fake_B.shape[0]
+        
         reconst_loss.append(r_loss)
         sample_loss.append(s_loss)
         expt_r_loss.append(c_expt_r_loss)
         expt_s_loss.append(c_expt_s_loss)
+        sample_ssim.append(s_ssim)
+        reconst_ssim.append(r_ssim)
+
         
         sample_pct10, sample_pct90, _ = compute_percentile(sample_loss, s_sample)
         rec_pct10, rec_pct90, _ = compute_percentile(reconst_loss, r_sample)
         
-        sys.stdout.write('\r processing %d / %d image E[posterior] = %.5f (%.5f, %.5f, %5f) E[prior](%d) = %.5f (%.5f, %.5f, %5f) vis/inv mse = %.5f/%.5f S1 = %.5f...' % 
+        sys.stdout.write('\r processing %d / %d image MSE[q] = %.3f (%.3f, %.3f, %5f) MSE[p](%d) = %.3f (%.3f, %.3f, %.3f) MSE[vis/inv] = %.3f/%.3f S1 = %.3f SSIM[q]/[p] = %.3f/%.3f' % 
                             (val_count, total_test_n, 
                             mean_expt(expt_r_loss), rec_pct10, rec_pct90, mean_expt(reconst_loss),
                             opt.n_samples, 
                             mean_expt(expt_s_loss), sample_pct10, sample_pct90, mean_expt(sample_loss),
                             np.mean(vis_losses), np.mean(invis_losses),
-                            np.mean(stage1_losses)))
+                            np.mean(stage1_losses),
+                            mean_expt(reconst_ssim), mean_expt(sample_ssim)))
         sys.stdout.flush()
         
+        val_count += ngrid
         # Only save some. Don't explode the disk
         if val_count < 256:
             for k, v in visuals.items():
-                v = v[:,:1,:,:]
+                v = v[:ngrid,:1,:,:]
                 if model.mri_data:
                     v = util.mri_denormalize(v)
-                visuals[k] = tensor2im(tvutil.make_grid(v))
+                visuals[k] = tensor2im(tvutil.make_grid(v, nrow=int(np.sqrt(ngrid))))
             
             save_images(webpage, visuals, 'test_iter{}'.format(i), aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
         elif not saved:

@@ -14,6 +14,7 @@ class TestOptions(BaseOptions):
         parser.set_defaults(model='test')
         # To avoid cropping, the loadSize should be the same as fineSize
         parser.set_defaults(loadSize=parser.get_default('fineSize'))
-        
+        parser.add_argument('--shuffle_testset_loader', action='store_true', help='if shuffle test set loader')
+
         self.isTrain = False
         return parser

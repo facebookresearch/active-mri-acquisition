@@ -7,6 +7,14 @@ from . import util
 from . import html
 from scipy.misc import imresize
 from tensorboardX import SummaryWriter
+import matplotlib.pyplot as plt
+
+def gray2heatmap(grayimg):
+    cmap = plt.get_cmap('jet')
+    rgba_img = cmap(grayimg)
+    rgb_img = np.delete(rgba_img, 3, 2) * 255.0
+    rgb_img = rgb_img.astype(np.uint8)
+    return rgb_img
 
 def save_images(webpage, visuals, name, aspect_ratio=1.0, width=256):
     image_dir = webpage.get_image_dir()
@@ -57,7 +65,7 @@ class Visualizer():
 
         self.ncols = 4
         # remove existing 
-        if not opt.continue_train and not opt.debug:
+        if not opt.continue_train:
             for filename in glob.glob(self.checkpoints_dir+"/events*"):
                 os.remove(filename)
         self.writer = SummaryWriter(self.checkpoints_dir)

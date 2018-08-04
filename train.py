@@ -64,6 +64,8 @@ if __name__ == '__main__':
 
         visualizer.display_current_results(visuals, epoch, mode='eval')
         visualizer.plot_current_losses('eval', epoch, **losses)
+        if hasattr(model, 'get_current_histograms'):
+             visualizer.display_current_histograms('eval', epoch, **model.get_current_histograms())
 
         if epoch % opt.save_epoch_freq == 0:
             print('saving the model at the end of epoch %d, iters %d' %

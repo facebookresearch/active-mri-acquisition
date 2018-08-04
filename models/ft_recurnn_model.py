@@ -26,7 +26,8 @@ class FTRECURNNModel(BaseModel):
         parser.set_defaults(dataset_mode='aligned')
         parser.set_defaults(which_model_netG='unet_256')
         if is_train:
-            parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
+            parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for rec loss')
+        parser.add_argument('--loss_type', type=str, default='MSE', choices=['MSE','L1'], help=' loss type')
 
         return parser
 
@@ -53,8 +54,10 @@ class FTRECURNNModel(BaseModel):
         self.FFT = FFT().to(self.device)
         if self.isTrain:
             # define loss functions
-            self.criterion = torch.nn.MSELoss()
-
+            if opt.loss_type == 'MSE':
+                self.criterion = torch.nn.MSELoss() 
+            elif opt.loss_type == 'L1':
+                self.criterion = torch.nn.L1Loss() 
             # initialize optimizers
             self.optimizers = []
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(),
@@ -66,97 +69,13 @@ class FTRECURNNModel(BaseModel):
             # the imagnary part of reconstrued data
             self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
 
-    def set_input1(self, input):
-        # output from FT loader
-        # BtoA is used to test if the network is identical
-        AtoB = self.opt.which_direction == 'AtoB'
-        img, _, _ = input
-        img = img.to(self.device)
-
-        self.mask = self.gen_random_mask(batchSize=img.shape[0])
-        
-        # doing FFT
-        # if has two dimension output, 
-        # we actually want the imagary part is also supervised, which should be all zero
-        fft_kspace = self.RFFT(img)
-        if self.opt.output_nc == 2:
-            if self.imag_gt.shape[0] != img.shape[0]:
-                # imagnary part is all zeros
-                self.imag_gt = torch.zeros_like(img)
-            img = torch.cat([img, self.imag_gt], dim=1)
-
-        if AtoB:
-            self.real_A = self.IFFT(fft_kspace * self.mask)
-            self.real_B = img
-        else:
-            self.real_A = self.IFFT(fft_kspace)
-            self.real_B = img
-
-    def gen_random_mask(self, batchSize=1):
-        if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
-            if self.opt.dynamic_mask_type == 'random':
-                mask = create_mask((batchSize, self.opt.fineSize), random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
-            elif self.opt.dynamic_mask_type == 'random_lines':
-                seed = np.random.randint(10000)
-                mask = create_mask((batchSize, self.opt.fineSize), random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
-        else:
-            mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
-            
-        return mask
-
-    def set_input2(self, input):
-        # for MRI data
-        input, target, mask, metadata = input
-        input = input.to(self.device)
-        input = input.squeeze(1).permute(0,3,1,2)
-        target = target.to(self.device)
-        mask = mask.to(self.device)
-        ifft_img = self.IFFT(input, normalized=True) # this has to be normalized IFFT
-        
-        if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
-            self.mask = self.gen_random_mask(batchSize=ifft_img.shape[0])
-            fft_kspace = self.RFFT(target)
-            ifft_img = self.IFFT(fft_kspace * self.mask)
-        else:
-            # use masked as provided
-            self.mask = mask[:1,:1,:,:1,0] #(1,1,h,1)
-
-        if self.opt.output_nc == 2:
-            if self.imag_gt.shape[0] != target.shape[0]:
-                # imagnary part is all zeros
-                self.imag_gt = torch.zeros_like(target)
-            target = torch.cat([target, self.imag_gt], dim=1)
-
-        self.real_A = ifft_img
-        self.real_B = target
-
     def set_input(self, input):
         if self.mri_data:
+            if len(input) == 4:
+                input = input[1:]
             self.set_input2(input)
         else:
             self.set_input1(input)
-
-    def compute_special_losses(self):
-        # compute losses between fourier spaces of fake_B and real_B
-        # if output one dimension
-        # import pdb ; pdb.set_trace()
-        if self.fake_B.shape[1] == 1:
-            _k_fakeB = self.RFFT(self.fake_B)
-            _k_realB = self.RFFT(self.real_B)
-        else:
-            # if output are two dimensional
-            _k_fakeB = self.FFT(self.fake_B)
-            _k_realB = self.FFT(self.real_B)
-
-        b = self.fake_B.shape[0] if self.mask.shape[0] == 1 else 1
-    
-        mask_deno = self.mask.sum() * b * self.fake_B.shape[1] * self.fake_B.shape[3]
-        invmask_deno = (1-self.mask).sum() * b * self.fake_B.shape[1] * self.fake_B.shape[3]
-
-        self.loss_FFTVisiable = F.mse_loss(_k_fakeB * self.mask, _k_realB*self.mask, reduce=False).sum().div(mask_deno)
-        self.loss_FFTInvisiable = F.mse_loss(_k_fakeB * (1-self.mask), _k_realB*(1-self.mask), reduce=False).sum().div(invmask_deno)
-        
-        return float(self.loss_FFTVisiable), float(self.loss_FFTInvisiable)
 
     def forward(self):
         # conditioned on mask

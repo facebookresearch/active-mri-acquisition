@@ -50,7 +50,7 @@ class BaseOptions():
         parser.add_argument('--eval_full_valid', action='store_true', help='if specified, evaluate the full validation set')
         parser.add_argument('--nz', type=int, default=8, help='dimension of prior/posterior')
         parser.add_argument('--non_strict_state_dict', action='store_true', help='if specified, load dict non-strictly. sometimes needed to avoid the naming issues (not sure why)')
-        parser.add_argument('--n_samples', type=int, default=8, help='for vae models, the number of samples in sampling.py')
+        parser.add_argument('--n_samples', type=int, default=16, help='for vae models, the number of samples in sampling.py')
 
         self.initialized = True
         return parser

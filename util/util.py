@@ -5,13 +5,11 @@ from PIL import Image
 import os
 from . import pytorch_mssim
 
-def ssim_metric(src, tar):
-    score = []
-    for i in range(src.shape[0]):
-        score.append(pytorch_mssim.ssim(src[i:i+1,:1,:,:], tar[i:i+1,:1,:,:]).item())
-    
-    mean_score = np.mean(score)
 
+
+def ssim_metric(src, tar):
+    mean_score = pytorch_mssim.ssim(src[:,:1,:,:], tar[:,:1,:,:]).item()
+    
     return mean_score
 
 def sum_axes(input, axes=[], keepdim=False):
@@ -29,12 +27,11 @@ def sum_axes(input, axes=[], keepdim=False):
     return input
 
         
-def mri_denormalize(input_image):
+def mri_denormalize(input_image, zscore=3):
     if isinstance(input_image, torch.Tensor):
         image_tensor = input_image.data
     else:
         return input_image
-    zscore = 3
     # do normalization first, since we working on fourier space. we need to clamp
     for dat in input_image:
         minv = max(-zscore, dat.min())

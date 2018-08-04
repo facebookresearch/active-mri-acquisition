@@ -69,7 +69,7 @@ def CreateFtTLoader(opt, valid_size=0.1, is_test=False):
                                                     fine_size=opt.fineSize,
                                                     keep_ratio=opt.kspace_keep_ratio,
                                                     shuffle=True,
-                                                    num_workers=4,
+                                                    num_workers=0,
                                                     pin_memory=True,
                                                     normalize=opt.normalize_type,
                                                     which_dataset=opt.dataroot)

@@ -2,13 +2,13 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session'
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
 
-name=knee_pasnetcm_randommask
+name=knee_pasnetcmdeconv_randommask2
 python train.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_recurnn \
-                --which_model_netG stage_resnet_9blocks_residual_condmask \
+                --which_model_netG stage_resnet_9blocks_residual_condmask_deconv \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \

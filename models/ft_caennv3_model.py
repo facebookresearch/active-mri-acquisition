@@ -122,72 +122,23 @@ class FTCAENNV3Model(BaseModel):
 
             self.optimizers.append(self.optimizer_G)
             
-            if self.opt.output_nc == 2:
-                # the imagnary part of reconstrued data
-                self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
-
+        if self.opt.output_nc == 2:
+            # the imagnary part of reconstrued data
+            self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
 
         assert not opt.ctx_gen_det_skip
         if 'random' in self.opt.checkpoints_dir:
             assert 'random' in self.opt.dynamic_mask_type
+            print(self.name() + ' -> use random mask')
         
-    def set_input1(self, input):
-        # output from FT loader
-        # BtoA is used to test if the network is identical
-        img, _, _ = input
-        img = img.to(self.device)
-
-        self.mask = self.gen_random_mask(batchSize=img.shape[0])
-
-        # doing FFT
-        # if has two dimension output, 
-        # we actually want toe imagary part is also supervised, which should be all zero
-        fft_kspace = self.RFFT(img)
-        # TODO: be careful of the normalization [-0.5, 0.5]
-        ifft_img = self.IFFT(fft_kspace * self.mask)
-
-        if not self.opt.no_context_mask_cond:
-            b,c,h,w = fft_kspace.shape
-            mask = self.mask.expand(b,c,h,w)
-            fft_mask = self.RFFT(mask)
-            self.real_A = torch.cat([ifft_img, fft_mask], 1) # has four channels
-        else:
-            self.real_A = ifft_img   
-
-        self.real_B = self.IFFT(fft_kspace)
-
-    def set_input2(self, input):
-        # for MRI data
-        input, target, mask, metadata = input
-        input = input.to(self.device)
-        if len(input.shape) > 4:
-            input = input.squeeze(1).permute(0,3,1,2)
-        target = target.to(self.device)
-        mask = mask.to(self.device)
-        ifft_img = self.IFFT(input, normalized=True) # this has to be normalized IFFT
-
-        if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
-            self.mask = self.gen_random_mask(batchSize=ifft_img.shape[0])
-            fft_kspace = self.RFFT(target)
-            ifft_img = self.IFFT(fft_kspace * self.mask)
-        else:
-            # use masked as provided
-            self.mask = mask[:,:1,:,:1,0] #(b,1,h,1)
-
-        if self.opt.output_nc == 2:
-            if self.imag_gt.shape[0] != target.shape[0]:
-                # imagnary part is all zeros
-                self.imag_gt = torch.zeros_like(target)
-            target = torch.cat([target, self.imag_gt], dim=1)
-
-        self.real_A = ifft_img
-        self.real_B = target
-
     def set_input(self, input):
         if self.mri_data:
+            if len(input) == 4:
+                input = input[1:]
             self.set_input2(input)
         else:
             self.set_input1(input)
+
     def test(self, sampling=False):
         with torch.no_grad():
             self.forward(sampling=sampling)
@@ -210,12 +161,12 @@ class FTCAENNV3Model(BaseModel):
         sample_from = 'prior' if sampling else 'posterior'
 
         if not self.isTrain and self.opt.force_use_posterior:
-            real_B = self.fake_B_G 
+            real_B = self.fake_B_G[:,:1,:,:] 
         else:
-            real_B = self.real_B
+            real_B = self.real_B[:,:1,:,:]
 
-        '''Setup input'''
-        X = torch.cat([real_B[:,:1,:,:], mask_embed], 1) # inference network input
+        '''Setup input of cvae model'''
+        X = torch.cat([real_B, mask_embed], 1) # inference network input
         ctx = torch.cat([fake_B_G3, mask_embed, self.real_A], 1)  # context network input
 
         # added at output
@@ -290,8 +241,7 @@ class FTCAENNV3Model(BaseModel):
         max_display = min(max_display, n_samples)
         # data points [N,2,H,W] for multiple sampling and observe sample difference
         data = data_list[0]
-        if len(data.shape) > 4:
-            data = data.squeeze(1).permute(0,3,1,2)
+            
         assert(data.shape[0] >= max_display)
         data = data[:max_display]
         b,c,h,w = data.shape
@@ -304,20 +254,22 @@ class FTCAENNV3Model(BaseModel):
             self.set_input(repeated_data_list)
             self.test(sampling=sampling)
             sample_x = self.fake_B.cpu()[:,:1,:,:] # bxn_samples
+            input_x = self.real_A.cpu()[:,:1,:,:] # bxn_samples
         else:
             # for larger samples, do batch forward
             print(f'> sampling {n_samples} times of {b} input ...')
             repeated_data = replicate_tensor(data, n_samples, expand=True) # five dimension
             sample_x = []
+            input_x = []
             for rdata in repeated_data.transpose(0,1):
                 repeated_data_list = [rdata] + data_list[1:] # concat extra useless input
                 self.set_input(repeated_data_list)
                 self.test(sampling=sampling)
                 sample_x.append(self.fake_B.cpu()[:,:1,:,:])
+                input_x.append(self.real_A.cpu()[:,:1,:,:])
             sample_x = torch.stack(sample_x, 1)
-
-        input_imgs = repeated_data.cpu()[:,:1,:,:]
-        c = 1
+            input_x = torch.stack(input_x, 1)
+        input_imgs = repeated_data.cpu()
         # compute sample mean std
         all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w)).abs()
         pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
@@ -329,10 +281,12 @@ class FTCAENNV3Model(BaseModel):
             # return 
             mean_samples_x = sample_x.view(b,n_samples,c,h,w).mean(dim=1)
             sample_x = sample_x.view(b,n_samples,c,h,w)[:,:max_display,:,:,:].contiguous()
-            sample_x[:,0,:,:] = data[:,:1,:,:] # GT
+            sample_x[:,0,:,:] = input_x[:,0,:1,:,:] # Input
+            sample_x[:,1,:,:] = data[:,:1,:,:] # GT
+            sample_x[:,2,:,:] = mean_samples_x # E[x]
             # sample_x[:,-1,:,:] = pixel_diff_mean.div(pixel_diff_mean.max()).mul_(2).add_(-1) # MEAN
             sample_x[:,-1,:,:] = pixel_diff_std.div(pixel_diff_std.max()).mul_(2).add_(-1) # STD
-            sample_x[:,1,:,:] = mean_samples_x # E[x]
+            
 
             sample_x = sample_x.view(b*max_display,c,h,w)
         

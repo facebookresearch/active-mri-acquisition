@@ -3,6 +3,15 @@ import torch
 from torch import nn
 import numpy as np
 
+def roll_n(X, axis, n):
+    f_idx = tuple(slice(None, None, None) if i != axis else slice(0,n,None) 
+                  for i in range(X.dim()))
+    b_idx = tuple(slice(None, None, None) if i != axis else slice(n,None,None)
+                  for i in range(X.dim()))
+#     import pdb; pdb.set_trace()
+    front = X[f_idx]
+    back = X[b_idx]
+    return torch.cat([back, front],axis)
 # note that for IFFT we do not use irfft
 # this function returns two channels where the first one (real part) is in image space
 class IFFT(nn.Module):
