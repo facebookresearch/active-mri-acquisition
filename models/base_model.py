@@ -37,6 +37,14 @@ class BaseModel():
         self.validation_phase = False
         self.mri_data = self.opt.dataroot in ('KNEE')
 
+        # condition on metadata scan_type
+        self.meta2label = {
+            'sag':0 ,
+            'ax': 1,
+            'cor': 2
+        }
+
+
     def set_input(self, input):
         self.input = input
 
@@ -78,8 +86,6 @@ class BaseModel():
             scheduler.step()
         lr = self.optimizers[0].param_groups[0]['lr']
         print('learning rate = %.7f' % lr)
-
-        # if self.opt.KL_w_decay:
 
     # return visualization images. train.py will display these images, and save the images to a html
     def get_current_visuals(self):
@@ -205,6 +211,10 @@ class BaseModel():
             losses['sampling_loss'] = []
             losses['sampling_ssim'] = []
 
+        if hasattr(self,'forward_D'):
+            losses['visible_disc'] = []
+            losses['invisible_disc'] = []
+
         netG = getattr(self, 'netG')
         
         # turn on the validation sign
@@ -226,13 +236,16 @@ class BaseModel():
             self.set_input(data)
             self.test() # Weird. using forward will cause a mem leak
             c = min(self.fake_B.shape[0], how_many_to_display)
+            ## visualize input, output, gt
             real_A, fake_B, real_B, = self.real_A[:c,...].cpu(), self.fake_B[:c,...].cpu(), self.real_B[:c,...].cpu() # save mem
             if not hasattr(self, 'logvars'):
                 val_data.append([real_A[:c,:1,...], fake_B[:c,:1,...], real_B[:c,:1,...]])            
             else:
+                ## visualize uncertainty map
                 if type(self.logvars) is not list:
                     self.logvars = [self.logvars]
-                # apply the same normalization for the (3) logvars maps for each image 
+
+                ## apply the same normalization for the (3) logvars maps for each image 
                 b = self.logvars[0].shape[0]
                 self.logvars = torch.stack(self.logvars,1).exp_()
 
@@ -242,10 +255,10 @@ class BaseModel():
                 else:
                     maxv = self.logvars.max(1)[0].max(1)[0].max(1)[0].max(1)[0]
                     maxv = maxv.view(maxv.shape[0],1,1,1,1)
-                
                 self.logvars = self.logvars / maxv
-                # organize it to visable format, each line shows [vnd] samples and 
-                # the following lines are logvar maps of the same image
+
+                ## organize it to visable format, each line shows [vnd] u.map and 
+                ## the following len(self.logvars) lines show u.maps of the same image at different stages
                 vnd = int(np.sqrt(how_many_to_display)) 
                 log_var_vis = []
                 self.logvars = self.logvars.transpose(0,1)
@@ -255,7 +268,6 @@ class BaseModel():
                     logvars = torch.cat(logvars, 0)
                     log_var_vis.append(logvars)
                 log_var_vis = torch.cat(log_var_vis, 0)
-                # log_var_vis = torch.exp(log_var_vis) 
                 val_data.append([real_A[:c,:1,...], fake_B[:c,:1,...], real_B[:c,:1,...], log_var_vis])
 
         if self.mri_data:
@@ -320,6 +332,12 @@ class BaseModel():
             fft_vis, fft_inv = self.compute_special_losses()
             losses['FFTVisiable_loss'].append(fft_vis)
             losses['FFTInvisiable_loss'].append(fft_inv)
+
+            # for GAN based method we track disc score of visible and invisible part
+            if hasattr(self,'forward_D'):
+                vs, ivs = self.forward_D()
+                losses['visible_disc'].append(vs)
+                losses['invisible_disc'].append(ivs)
             
             sys.stdout.write('\r validation [rec loss: %.5f smp loss: %.5f]' % (np.mean(losses['reconst_loss']), np.mean(losses['sampling_loss'])))
             sys.stdout.flush()
@@ -396,11 +414,25 @@ class BaseModel():
         self.real_A = self.IFFT(fft_kspace * self.mask)
         self.real_B = img
 
+        # condition on metadata scan_type
+        self.meta2label = {
+            'sag':0 ,
+            'ax': 1,
+            'cor': 2
+        }
+
+    def metadata2onehot(self, metadata, dtype):
+                
+        inds = [self.meta2label[a] for a in metadata['scan_type']]
+        onehot = dtype(len(inds), 3).fill_(0)
+        onehot[np.arange(len(inds)), inds] = 1
+        return onehot
+
     def set_input2(self, input, zscore=3):
         # for MRI data Slice loader
         target, mask, metadata = input
         target = target.to(self.device)
-        
+        self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
         target.clamp_(-zscore, zscore)
 
         if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:

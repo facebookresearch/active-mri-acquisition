@@ -15,12 +15,21 @@ from torch import nn
 from torch.nn.parameter import Parameter
 
 class AUTOPARAM(nn.Module):
-    def __init__(self, length=3):
+    def __init__(self, length=3, fixed_ws=None):
         super(AUTOPARAM, self).__init__()
-        self.weight = Parameter(torch.FloatTensor(length).fill_(1))
+        self.use_fixed_w = fixed_ws is not None
+        if fixed_ws is None:
+            print('[AUTOPARAM] -> use trainable weight')
+            self.weight = Parameter(torch.FloatTensor(length).fill_(1))
+        else:
+            print('[AUTOPARAM] -> use fixed weight',fixed_ws)
+            self.register_buffer('weight', torch.FloatTensor(fixed_ws))
 
     def forward(self):
-        weight = F.softmax(self.weight) * self.weight.shape[0] # sum to be one
+        if self.use_fixed_w:
+            weight = self.weight
+        else:
+            weight = F.softmax(self.weight) * self.weight.shape[0] # sum to be one
 
         return weight
 
@@ -46,10 +55,13 @@ class FTRECURNNV2Model(BaseModel):
         if is_train:
             parser.add_argument('--lambda', type=float, default=100.0, help='weight for rec loss')
         parser.add_argument('--loss_type', type=str, default='MSE', choices=['MSE','L1'], help=' loss type')
-        parser.add_argument('--betas', type=str, default='0,0.5,1', help=' beta of sparsity loss')
+        parser.add_argument('--betas', type=str, default='0,0,0', help=' beta of sparsity loss')
         parser.add_argument('--sparsity_norm', type=float, default=0, help='norm of sparsity loss. It should be smaller than 1')
-        parser.add_argument('--use_learnable_W', type=str, choices=['full','logvar'], default='full', help='the type of learnable W to apply to')
+        parser.add_argument('--where_loss_weight', type=str, choices=['full','logvar','None'], default='full', help='the type of learnable W to apply to')
         parser.add_argument('--scale_logvar_each', action='store_true', help='scale logvar map each')
+        parser.add_argument('--clip_weight', type=float, default=0, help='clip loss weight to prevent it to too small value')
+        parser.add_argument('--use_fixed_weight', type=str, default='1,1,1', help='do *not* use embed of kspace embedding')
+        # parser.add_argument('--large_var_limit', action='store_true', help='use a large variance limit')
 
         return parser
 
@@ -65,11 +77,18 @@ class FTRECURNNV2Model(BaseModel):
             self.model_names = ['G']
         else:  # during test time, only load Gs
             self.model_names = ['G']
+        
         assert(opt.output_nc == 3)
+        if opt.use_fixed_weight != 'None': 
+            assert opt.clip_weight == 0
+            opt.use_fixed_weight = [float(a) for a in opt.use_fixed_weight.split(',')]
+        else:
+            opt.use_fixed_weight = None
+        self.num_stage = 3 # number fo stage in pasnet
         # load/define networks
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
                                     opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
-        self.netP = AUTOPARAM(length=3).to(self.device)
+        self.netP = AUTOPARAM(length=self.num_stage, fixed_ws=opt.use_fixed_weight).to(self.device)
         self.mask = create_mask(opt.fineSize, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
         self.RFFT = RFFT().to(self.device)
         self.IFFT = IFFT().to(self.device)
@@ -83,7 +102,8 @@ class FTRECURNNV2Model(BaseModel):
                 self.criterion = torch.nn.L1Loss(reduce=False) 
             # initialize optimizers
             self.optimizers = []
-            self.optimizer_G = torch.optim.Adam(list(self.netG.parameters()) + list(self.netP.parameters()),
+            self.optimizer_G = torch.optim.Adam(list(self.netG.parameters()) \
+                                                + list(self.netP.parameters()) ,
                                                 lr=opt.lr, betas=(opt.beta1, 0.999))
 
             self.optimizers.append(self.optimizer_G)
@@ -98,22 +118,27 @@ class FTRECURNNV2Model(BaseModel):
     def certainty_loss(self, fake_B, real_B, logvar, beta, stage, weight_logvar, weight_all):
         
         o = int(np.floor(self.opt.output_nc/2))
-        # l2 reconstruction loss
+        # gaussian nll loss
         l2 = self.criterion(fake_B[:,:o,:,:], real_B[:,:o,:,:]) 
+        
+        # to be numercial stable we clip logvar to make variance in [0.01, 5]
+        logvar = logvar.clamp(-4.605, 1.609)
+
         one_over_var = torch.exp(-logvar)
         # uncertainty loss
         assert len(l2) == len(logvar)
         loss = 0.5 * (one_over_var * l2 + logvar * weight_logvar)
         loss = loss.mean()
-
+        
         # l0 sparsity distance
         if beta != 0:
             b,c,h,w = logvar.shape
             k = b*c*h*w
-            sparsity = logvar.norm(self.opt.sparsity_norm).div(k) * beta 
+            var = logvar.exp()
+            sparsity = var.norm(self.opt.sparsity_norm).div(k) * beta 
         else:
             sparsity = 0
-
+        
         full_loss = loss + sparsity
         # record for plot
         if stage == 0: 
@@ -145,23 +170,23 @@ class FTRECURNNV2Model(BaseModel):
         # conditioned on mask
         h, b = self.mask.shape[2], self.real_A.shape[0]
         mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
-        self.fake_Bs, self.logvars, mask_cond = self.netG(self.real_A, mask)
+        self.fake_Bs, self.logvars, mask_cond = self.netG(self.real_A, mask, self.metadata)
 
         self.fake_B = self.fake_Bs[-1]
 
     def backward_G(self):
         # First, G(A) should fake the discriminator
         weights = self.netP()
+        if self.opt.clip_weight > 0:
+            weights.clamp_(self.opt.clip_weight, float('inf'))
         self.loss_G = 0
         for stage, (fake_B, logvar, beta) in enumerate(zip(self.fake_Bs, self.logvars, self.betas)):
-            if self.opt.use_learnable_W == 'full':
+            if self.opt.where_loss_weight == 'full':
                 w_full = weights[stage]
                 w_lv = 1
-            elif self.opt.use_learnable_W == 'logvar':
+            elif self.opt.where_loss_weight == 'logvar':
                 w_lv = weights[stage]
                 w_full = 1
-            else:
-                w_full = w_lv = 1
             self.loss_G += self.certainty_loss(fake_B, self.real_B, logvar, beta, stage, 
                                                 weight_logvar=w_lv, weight_all=w_full) 
                             

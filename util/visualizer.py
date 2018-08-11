@@ -50,6 +50,7 @@ class Visualizer():
     def __init__(self, opt, use_html=False):
         self.use_html = use_html
         self.win_size = 256
+        self.no_tb = opt.debug
         # self.name = name
         # self.opt = opt
         self.saved = False
@@ -64,18 +65,20 @@ class Visualizer():
             util.mkdir(self.img_dir)
 
         self.ncols = 4
-        # remove existing 
-        if not opt.continue_train:
-            for filename in glob.glob(self.checkpoints_dir+"/events*"):
-                os.remove(filename)
-        self.writer = SummaryWriter(self.checkpoints_dir)
-
+        if not self.no_tb:
+            # remove existing 
+            if not opt.continue_train:
+                for filename in glob.glob(self.checkpoints_dir+"/events*"):
+                    os.remove(filename)
+            self.writer = SummaryWriter(self.checkpoints_dir)
+        else:
+            print('[Visualizer] -> do not create visualizer in debug mode')
     def reset(self):
         self.saved = False
 
     # |visuals|: dictionary of images to display or save
     def display_current_results(self, visuals, epoch, mode='train'):
-
+        if self.no_tb: return
         for label, image in visuals.items():
             image_numpy = util.tensor2im(image) 
             self.writer.add_image('{}/{}'.format(mode, label), image_numpy, epoch)
@@ -103,12 +106,14 @@ class Visualizer():
 
     # losses: dictionary of error labels and values
     def plot_current_losses(self, mode, n_iter, **args):
+        if self.no_tb: return
         for k, v in args.items():
             self.writer.add_scalar('{}/{}'.format(mode, k), v, n_iter)
 
         self.writer.export_scalars_to_json("{}/tensorboard_all_scalars.json".format(self.checkpoints_dir))
 
     def display_current_histograms(self, mode, n_iter, **args):
+        if self.no_tb: return
         for k, v in args.items():
             self.writer.add_histogram('{}/{}'.format(mode, k), v, n_iter)
 
@@ -116,8 +121,8 @@ class Visualizer():
     def print_current_losses(self, epoch, i, iter_epoch, t, losses, t_data):
         message = '(epoch: %d, iters: %d/%d, time: %.3f, data: %.3f) ' % (epoch, i, iter_epoch, t, t_data)
         for k, v in losses.items():
-            message += '%s: %.6f ' % (k, v)
-            # message += '%s: %.3f ' % (k, v)
+            # message += '%s: %.6f ' % (k, v)
+            message += '%s: %.3f ' % (k, v)
 
         print(message)
         with open(self.log_name, "a") as log_file:

@@ -82,7 +82,7 @@ class FTRECURNNModel(BaseModel):
         h, b = self.mask.shape[2], self.real_A.shape[0]
         mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
 
-        fake_Bs, _ = self.netG(self.real_A, mask)
+        fake_Bs, _ = self.netG(self.real_A, mask, self.metadata)
 
         # the condition depends on the network output
         self.fake_Bs = fake_Bs

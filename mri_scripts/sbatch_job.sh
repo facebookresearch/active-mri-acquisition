@@ -12,7 +12,7 @@
 #SBATCH --error=/checkpoint/%u/jobs/%j-sample.err
 
 ## partition name
-#SBATCH --partition=uninterrupted
+#SBATCH --partition=priority
 ## number of nodes
 #SBATCH --nodes=1
 
@@ -47,6 +47,4 @@ source activate zzfair
 ### task seeing all the GPUs on each node. However I am using
 ### the wrapper.sh example I showed before so that each task only
 ### sees one GPU
-## srun --label sh scripts/train_ftcvaenn.sh
-# srun --label sh mri_scripts/train_ftcvaennv3.sh
-srun --label sh mri_scripts/train_ftrecurnnv2.sh
+srun --label sh mri_scripts/train_ftpasnet_att.sh

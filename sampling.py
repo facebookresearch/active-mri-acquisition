@@ -34,10 +34,11 @@ if __name__ == '__main__':
     else:
         tensor2im = util.tensor2im
 
-    for it in range(3):
+    for it in range(5):
+        
         model.display_data = None
         # do validation and compute metrics
-        visuals, losses = model.validation(test_data_loader, how_many_to_display=36, how_many_to_valid=0, n_samples=opt.n_samples)    
+        visuals, losses = model.validation(test_data_loader, how_many_to_display=36, how_many_to_valid=10, n_samples=opt.n_samples)    
         if hasattr(model, 'sampling'):
             # sampling from prior multiple times
             sample_x = model.sampling(model.display_data[0], n_samples=opt.n_samples, max_display=16, return_all=True)
@@ -64,5 +65,7 @@ if __name__ == '__main__':
             visuals['rec_gif'] = visuals_gif_seq
 
         save_images(webpage, visuals, f'sampling ({opt.n_samples} samples) iter {it}', aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
+        sys.stdout.write(f'\r --> iter {it}')
+        sys.stdout.flush()
 
     webpage.save()
