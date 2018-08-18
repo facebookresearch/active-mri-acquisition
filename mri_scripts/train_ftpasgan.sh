@@ -4,7 +4,7 @@ echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
 checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
 
-name=knee_pasgan_uncertainty_wfull_allgendisc
+name=knee_energypasnetplus_w113_1gan
 python train.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_recurgan \
@@ -13,5 +13,27 @@ python train.py --dataroot 'KNEE' \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
                 --print_freq 50 \
                 --lambda_gan 1 \
-                --use_fixed_weight 'None' \
-                --use_allgen_for_disc  
+                --mask_cond \
+                --where_loss_weight 'logvar' \
+                --use_fixed_weight '1,1,3' \
+                --lr 0.0006 \
+                --use_mse_as_disc_energy \
+                --which_model_netG 'pasnetplus' \
+                --grad_ctx
+
+# name=knee_paslocalgan_w111_10gan
+# python train.py --dataroot 'KNEE' \
+#                 --name $name \
+#                 --model ft_recurgan \
+#                 --checkpoints_dir $checkpoints_dir \
+#                 --batchSize 48 \
+#                 --gpu_ids $CUDA_VISIBLE_DEVICES \
+#                 --print_freq 50 \
+#                 --lambda_gan 10 \
+#                 --mask_cond \
+#                 --where_loss_weight 'logvar' \
+#                 --use_fixed_weight '1,1,1' \
+#                 --lr 0.0006 \
+#                 --which_model_netD 'n_layers' \
+#                 --n_layers_D 3 \
+#                 --ndf 64 

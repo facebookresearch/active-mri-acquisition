@@ -9,8 +9,8 @@ from scipy.misc import imresize
 from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
 
-def gray2heatmap(grayimg):
-    cmap = plt.get_cmap('jet')
+def gray2heatmap(grayimg, cmap='jet'):
+    cmap = plt.get_cmap(cmap)
     rgba_img = cmap(grayimg)
     rgb_img = np.delete(rgba_img, 3, 2) * 255.0
     rgb_img = rgb_img.astype(np.uint8)

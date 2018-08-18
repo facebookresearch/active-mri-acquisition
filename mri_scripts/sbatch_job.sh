@@ -18,7 +18,7 @@
 
 ## number of tasks per node
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:6
 
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-user=zizhao@fb.com
@@ -47,4 +47,4 @@ source activate zzfair
 ### task seeing all the GPUs on each node. However I am using
 ### the wrapper.sh example I showed before so that each task only
 ### sees one GPU
-srun --label sh mri_scripts/train_ftpasnet_att.sh
+srun --label sh mri_scripts/train_ftpasgan.sh

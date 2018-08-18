@@ -7,10 +7,8 @@ from . import pytorch_mssim
 
 
 
-def ssim_metric(src, tar):
-    mean_score = pytorch_mssim.ssim(src[:,:1,:,:], tar[:,:1,:,:]).item()
-    
-    return mean_score
+def ssim_metric(src, tar, full=False):
+    return pytorch_mssim.ssim(src[:,:1,:,:], tar[:,:1,:,:], full=full)
 
 def sum_axes(input, axes=[], keepdim=False):
     # mu2, logvar2 are prior

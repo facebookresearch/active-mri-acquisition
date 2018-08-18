@@ -12,6 +12,7 @@ from .fft_utils import *
 from torch.autograd import Variable
 import inspect
 from torch import nn
+import warnings
 from torch.nn.parameter import Parameter
 
 from .ft_recurnnv2_model import AUTOPARAM
@@ -53,8 +54,7 @@ class kspaceMap(nn.Module):
         # we assume the input only has real part of images (if they are obtained from IFFT)
         bz = input.shape[0]
         x = input[:,:1,:,:]
-        
-        if x.shape[1] > 1:
+        if input.shape[1] > 1:
             others = input[:,1:,:,:]
         kspace = self.RFFT(x)
         
@@ -66,7 +66,7 @@ class kspaceMap(nn.Module):
         if not self.no_embed:
             seperate_imgs = self.embed(seperate_imgs)
 
-        if x.shape[1] > 1:
+        if input.shape[1] > 1:
             output = torch.cat([seperate_imgs, others], 1)
         else:
             output = seperate_imgs
@@ -131,11 +131,17 @@ class FTRECURGANModel(BaseModel):
         
         parser.add_argument('--no_init_kspacemap_embed', action='store_true', help='do *not* init the weight of kspacemap module')
         parser.add_argument('--no_kspacemap_embed', action='store_true', help='do *not* use embed of kspace embedding')
-        parser.add_argument('--use_fixed_weight', type=str, default='1,1,1', help='do *not* use embed of kspace embedding')
+        parser.add_argument('--use_fixed_weight', type=str, default='1,1,1', help='use fixed weight for all loss')
+        parser.add_argument('--mask_cond', action='store_true', help='condition on mask')
+        parser.add_argument('--use_mse_as_disc_energy', action='store_true', help='use mse as disc energy')
 
         if not is_train:
             parser.add_argument('--no_lsgan', action='store_true', help='do *not* use least square GAN, if false, use vanilla GAN')
-            
+        
+        parser.add_argument('--set_sampling_at_stage', type=int, default=None, help='sampling from the model')
+        parser.add_argument('--grad_ctx', action='store_true', help='gan criterion has loss signal at provided')
+        parser.add_argument('--no_zscore_clamp', action='store_true', help='clamp data using z_score')
+
         parser.set_defaults(pool_size=0)
         parser.set_defaults(which_model_netG='pasnet')
         parser.set_defaults(input_nc=2)
@@ -153,6 +159,7 @@ class FTRECURGANModel(BaseModel):
         parser.set_defaults(ndf=256)
         parser.set_defaults(no_lsgan=False)
         parser.set_defaults(no_kspacemap_embed=True)
+        parser.set_defaults(mask_cond=True)
 
         return parser
 
@@ -189,22 +196,33 @@ class FTRECURGANModel(BaseModel):
 
         if self.isTrain or 'D' in self.model_names:
             use_sigmoid = opt.no_lsgan
-            pre_process = kspaceMap(imSize=opt.fineSize, no_embed=opt.no_kspacemap_embed).to(self.device)
-            self.netD = networks.define_D(opt.fineSize, opt.ndf,
-                                          opt.which_model_netD, opt.n_layers_D, opt.norm, use_sigmoid, 
-                                          opt.init_type, self.gpu_ids, preprocess_module=pre_process)
+            self.cond_input_D = False
+            if opt.which_model_netD == 'n_layers_channel':
+                pre_process = kspaceMap(imSize=opt.fineSize, no_embed=opt.no_kspacemap_embed).to(self.device)
+                d_in_nc = opt.fineSize + (6 if self.opt.mask_cond else 0)
+                self.netD = networks.define_D(d_in_nc, opt.ndf,
+                                            opt.which_model_netD, opt.n_layers_D, opt.norm, use_sigmoid, 
+                                            opt.init_type, self.gpu_ids, preprocess_module=pre_process)
+            else:
+                d_in_nc = 2 + (6 if self.opt.mask_cond else 0)
+                self.netD = networks.define_D(d_in_nc, opt.ndf,
+                                            opt.which_model_netD, opt.n_layers_D, opt.norm, use_sigmoid, 
+                                            opt.init_type, self.gpu_ids)
+                self.cond_input_D = True # conditional GAN
             # initlize the netD first layer parameter to be the sum of all channels
             if not opt.no_kspacemap_embed and not opt.no_init_kspacemap_embed:
                 pre_process.init_weight()
-
+            
         if self.isTrain:
-            self.fake_AB_pool = ImagePool(opt.pool_size)
+            # self.fake_AB_pool = ImagePool(opt.pool_size)
             # define loss functions
             if 'aux' in opt.which_model_netD:
                 self.criterionGAN = networks.GANLossKspaceAux(use_lsgan=not opt.no_lsgan).to(self.device)
             else:
-                self.criterionGAN = networks.GANLossKspace(use_lsgan=not opt.no_lsgan).to(self.device)
-
+                if opt.which_model_netD == 'n_layers_channel':
+                    self.criterionGAN = networks.GANLossKspace(use_lsgan=not opt.no_lsgan, use_mse_as_energy=opt.use_mse_as_disc_energy, grad_ctx=self.opt.grad_ctx).to(self.device)
+                else:
+                    self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan).to(self.device)
             # define loss functions
             if opt.loss_type == 'MSE':
                 self.criterion = torch.nn.MSELoss(reduce=False) 
@@ -223,17 +241,22 @@ class FTRECURGANModel(BaseModel):
         if self.opt.output_nc >= 2:
             # the imagnary part of reconstrued data
             self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
-        
+
+        self.zscore = 3 if not opt.no_zscore_clamp else 0
+
         self.betas = [float(a) for a in self.opt.betas.split(',')]
         assert len(self.betas) == self.num_stage, 'beta length is euqal to the module #'
         
     def certainty_loss(self, fake_B, real_B, logvar, beta, stage, weight_logvar, weight_all):
         
         o = int(np.floor(self.opt.output_nc/2))
-        # l2 reconstruction loss
+        # gaussian nll loss
         l2 = self.criterion(fake_B[:,:o,:,:], real_B[:,:o,:,:]) 
-        # uncertainty simplified gaussian nll
+        # to be numercial stable we clip logvar to make variance in [0.01, 5]
+        logvar = logvar.clamp(-4.605, 1.609)
+
         one_over_var = torch.exp(-logvar)
+        # uncertainty loss
         assert len(l2) == len(logvar)
         loss = 0.5 * (one_over_var * l2 + logvar * weight_logvar)
         loss = loss.mean()
@@ -243,7 +266,6 @@ class FTRECURGANModel(BaseModel):
             b,c,h,w = logvar.shape
             k = b*c*h*w
             var = logvar.exp()
-            # var[var < 0.1] = 0
             sparsity = var.norm(self.opt.sparsity_norm).div(k) * beta 
         else:
             sparsity = 0
@@ -258,6 +280,7 @@ class FTRECURGANModel(BaseModel):
         self.loss_sparsity += sparsity
 
         full_loss = full_loss * weight_all
+
         return full_loss
 
     def get_current_histograms(self):
@@ -270,17 +293,37 @@ class FTRECURGANModel(BaseModel):
         if self.mri_data:
             if len(input) == 4:
                 input = input[1:]
-            self.set_input2(input)
+            self.set_input2(input, zscore=self.zscore)
         else:
             self.set_input1(input)
 
-    def forward(self):
+    def forward(self, sampling=False):
         # conditioned on mask
         h, b = self.mask.shape[2], self.real_A.shape[0]
         mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
-        self.fake_Bs, self.logvars, mask_cond = self.netG(self.real_A, mask)
+        if sampling:
+            # may not useful
+            assert not sampling 
+            self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.metadata, self.opt.set_sampling_at_stage)
+        else:    
+            self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.metadata)
 
         self.fake_B = self.fake_Bs[-1]
+
+    def test(self, sampling=False):
+        with torch.no_grad():
+            self.forward(sampling)
+
+    def create_D_input(self, fake_B):
+        fake_B = fake_B[:,:1,:,:] # discard imaginary part
+        fake_B = self._clamp(fake_B)
+        if self.opt.mask_cond:
+            fake = torch.cat([fake_B, self.mask_cond.detach()], dim=1)
+        else:
+            fake = fake_B
+        if self.cond_input_D:
+            fake = torch.cat([fake, self.real_A[:,:1,:,:]], dim=1)
+        return fake
 
     def backward_G(self):
         # First, G(A) should fake the discriminator
@@ -298,22 +341,23 @@ class FTRECURGANModel(BaseModel):
                 w_full = 1
             self.loss_G += self.certainty_loss(fake_B, self.real_B, logvar, beta, stage, 
                                                 weight_logvar=w_lv, weight_all=w_full) 
-        # gan loss
-        fake_AB = self._clamp(self.fake_B) 
+
         # track norm of gradient
+        fake_B = self.fake_B.mul(1)
         gradnorm_fakeAB = torch.cuda.FloatTensor(1)
         def extract(grad):
-            global gradnorm_fakeAB
-            gradnorm_fakeAB = torch.abs(grad).norm(2)
-        fake_AB.register_hook(extract)
-        
-        pred_fake = self.netD(fake_AB, self.mask)
-        self.loss_G_GAN = self.criterionGAN(pred_fake, True, self.mask, degree=1, updateG=True) * self.opt.lambda_gan
+            global set_input2
+            gradnorm_fakeAB = grad.norm(2)
+        fake_B.register_hook(extract)
+
+        fake = self.create_D_input(fake_B)
+        pred_fake = self.netD(fake, self.mask)
+        self.loss_G_GAN = self.criterionGAN(pred_fake, True, self.mask, degree=1, updateG=True, pred_gt=(fake[:,:1,:,:],self.real_B)) * self.opt.lambda_gan
 
         self.loss_G_all = self.loss_G_GAN + self.loss_G
         self.loss_G_all.backward()
 
-        # compute multiple loss
+        # compute multiple loss for visualization
         self.compute_special_losses()
         self.loss_gradOutputD = float(gradnorm_fakeAB.item())
         for i in range(weights.shape[0]):
@@ -321,11 +365,10 @@ class FTRECURGANModel(BaseModel):
 
     def _clamp(self, data):
         # process data for D input
-        data = data[:,:1,:,:] # discard imaginary part
         # make consistent range with real_B for inputs of D
         if self.mri_data:
-            zscore = 3
-            data = data.clamp(-zscore, zscore) 
+            if self.zscore != 0:
+                data = data.clamp(-self.zscore, self.zscore) 
         else:
             data = data.clamp(-1, 1) 
         return data
@@ -333,43 +376,47 @@ class FTRECURGANModel(BaseModel):
     def forward_D(self):
         # to get the disc score of visiable and invisiable parts during testing
         with torch.no_grad():
-            fake_AB = self._clamp(self.fake_B)
-            pred_fake = self.netD(fake_AB, self.mask) 
-        return self.mask_disc_score(pred_fake, self.mask.squeeze())
+            fake = self.create_D_input(self.fake_B)
+            pred_fake = self.netD(fake, self.mask) 
+        return self.mask_disc_score(pred_fake, self.mask.squeeze()), pred_fake
 
     def mask_disc_score(self, pred, mask):
+        if len(pred.shape) > 2:
+            return 0, 0
         mask = mask.mul(1) # copy mask
         if isinstance(pred, tuple): 
             pred = pred[1]
         # pred, mask [B,H]
         self.loss_invisiable_disc = (pred * (1-mask)).sum().div_((1-mask).sum())
-        # the lowfreq part is always zero we do not want to monitor it and affact the average
+        # the lowfreq part is always zero 
+        # we do not want to monitor it and affact the average
         mask[:,:3] = 0
         mask[:,-3:] = 0
         self.loss_visible_disc = (pred * mask).sum().div_(mask.sum())
-        
         return float(self.loss_visible_disc.item()), float(self.loss_invisiable_disc.item())
 
     def backward_D(self):
         # Fake
         # stop backprop to the generator by detaching fake_B
-        fake_AB = self.fake_AB_pool.query(self._clamp(self.fake_B))
-        pred_fake = self.netD(fake_AB.detach(), self.mask) 
+        fake = self.create_D_input(self.fake_B.detach())
+        pred_fake = self.netD(fake, self.mask) 
+
         degree = 0 if not self.opt.use_allgen_for_disc else 0.2
-        self.loss_D_fake = self.criterionGAN(pred_fake, False, self.mask, degree=degree)
+        self.loss_D_fake = self.criterionGAN(pred_fake, False, self.mask, degree=degree, pred_gt=(fake[:,:1,:,:],self.real_B))
         self.mask_disc_score(pred_fake, self.mask.squeeze())
 
         if self.opt.use_allgen_for_disc:
-            pred_fake = self.netD(self._clamp(self.fake_Bs[-2]).detach(), self.mask) 
-            self.loss_D_fake += self.criterionGAN(pred_fake, False, self.mask, degree=0.1)
-            pred_fake = self.netD(self._clamp(self.fake_Bs[-3]).detach(), self.mask) 
-            self.loss_D_fake += self.criterionGAN(pred_fake, False, self.mask, degree=0.0)
+            for p, deg in zip([-2, -3], [0.1, 0.0]):
+                pred_fake = self.create_D_input(self.fake_Bs[p].detach())
+                pred_fake = self.netD(pred_fake, self.mask) 
+                self.loss_D_fake += self.criterionGAN(pred_fake, False, self.mask, degree=deg, pred_gt=(fake[:,:1,:,:],self.real_B))
+            
             self.loss_D_fake = self.loss_D_fake / self.num_stage
 
         # Real
-        real_AB = self._clamp(self.real_B)
-        pred_real = self.netD(real_AB, self.mask)
-        self.loss_D_real = self.criterionGAN(pred_real, True, self.mask, degree=1)
+        real = self.create_D_input(self.real_B)
+        pred_real = self.netD(real, self.mask)
+        self.loss_D_real = self.criterionGAN(pred_real, True, self.mask, degree=1, pred_gt=(fake[:,:1,:,:],self.real_B))
 
         # Combined loss
         self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
@@ -391,3 +438,106 @@ class FTRECURGANModel(BaseModel):
         self.backward_G()
         self.optimizer_G.step()
 
+    # change to sampling() when want to use it
+    def _sampling(self, data_list, n_samples=8, max_display=8, return_all=False, sampling=True):
+        
+        
+        def replicate_tensor(data, times, expand=False):
+            ks = list(data.shape)
+            data = data.view(ks[0], 1, *ks[1:])
+            data = data.repeat(1, times, *[1 for _ in range(len(ks[1:]))]) # repeat will copy memories which we do not need here
+            if not expand:
+                data = data.view(ks[0]*times, *ks[1:])
+            return data
+        
+        if not sampling:
+            warnings.warn('sampling is set to False', UserWarning)
+        assert self.mri_data, 'not working for non mri data loader now'
+        max_display = min(max_display, n_samples)
+        # data points [N,2,H,W] for multiple sampling and observe sample difference
+        data = data_list[0] # target
+        mask = data_list[1]
+        metadata = data_list[2]
+
+        assert(data.shape[0] >= max_display)
+        data = data[:max_display]
+        mask = mask[:max_display]
+
+        # if n_samples*b < 128:
+        repeated_data = replicate_tensor(data, n_samples)
+        repeated_mask = replicate_tensor(mask, n_samples)
+        scan_type = metadata['scan_type'][:max_display]
+        scan_type = np.tile(np.array(scan_type)[:,np.newaxis],(1,n_samples))
+        metadata['scan_type'] = list(scan_type.reshape(-1))
+        repeated_metadata = metadata
+
+        b,c,h,w = data.shape
+        # all_pixel_diff = []
+        # all_pixel_avg = []
+
+        repeated_data_list = [repeated_data, repeated_mask, repeated_metadata] # concat extra useless input
+        self.set_input(repeated_data_list)
+        self.test(sampling=True)
+        sample_x = self.fake_B.cpu()[:,:1,:,:] # bxn_samples
+        input_x = self.real_A.cpu()[:,:1,:,:] # bxn_samples
+        # else:
+        #     # for larger samples, do batch forward
+        #     print(f'> sampling {n_samples} times of {b} input ...')
+        #     repeated_data = replicate_tensor(data, n_samples, expand=True) # five dimension
+        #     sample_x = []
+        #     input_x = []
+        #     for rdata in repeated_data.transpose(0,1):
+        #         repeated_data_list = [rdata] + data_list[1:] # concat extra useless input
+        #         self.set_input(repeated_data_list)
+        #         self.test(sampling=sampling)
+        #         sample_x.append(self.fake_B.cpu()[:,:1,:,:])
+        #         input_x.append(self.real_A.cpu()[:,:1,:,:])
+        #     sample_x = torch.stack(sample_x, 1)
+        #     input_x = torch.stack(input_x, 1)
+
+        input_imgs = repeated_data.cpu()
+        # compute sample mean std
+        all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w)).abs()
+        pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
+        pixel_diff_std = torch.std(all_pixel_diff, dim=1) # n_samples
+
+        if return_all:# return all samples
+            return sample_x.view(b,n_samples,c,h,w)
+        else:    
+            # return 
+            mean_samples_x = sample_x.view(b,n_samples,c,h,w).mean(dim=1)
+            sample_x = sample_x.view(b,n_samples,c,h,w)[:,:max_display,:,:,:].contiguous()
+            input_x = input_x.view(b,n_samples,c,h,w)
+            sample_x[:,0,:,:] = input_x[:,0,:1,:,:] # Input
+            sample_x[:,1,:,:] = data[:,:1,:,:] # GT
+            sample_x[:,2,:,:] = mean_samples_x # E[x]
+            # sample_x[:,-1,:,:] = pixel_diff_mean.div(pixel_diff_mean.max()).mul_(2).add_(-1) # MEAN
+            sample_x[:,-1,:,:] = pixel_diff_std.div(pixel_diff_std.max()).mul_(2).add_(-1) # STD
+            
+            sample_x = sample_x.view(b*max_display,c,h,w)
+        
+        # self.netG.module.set_sampling_at_stage(None)
+
+        return sample_x, pixel_diff_mean, pixel_diff_std
+
+    
+    def set_input_exp(self, input, mask, zscore=3):
+        # for MRI data Slice loader
+        target, _, metadata = input
+        target = target.to(self.device)
+        self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
+        target = self._clamp(target).detach()
+
+        self.mask = mask
+
+        fft_kspace = self.RFFT(target)
+        ifft_img = self.IFFT(fft_kspace * self.mask)
+
+        if self.opt.output_nc >= 2:
+            if self.imag_gt.shape[0] != target.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(target)
+            target = torch.cat([target, self.imag_gt], dim=1)
+
+        self.real_A = ifft_img
+        self.real_B = target

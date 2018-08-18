@@ -1,4 +1,7 @@
 
+## Modifed by ZZ
+## Bugs when return full=True is fixed
+## 8.16
 
 import torch
 import torch.nn.functional as F
@@ -31,7 +34,11 @@ def ssim(img1, img2, window_size=11, window=None, size_average=True, full=False,
         # else:
         #     min_val = 0
         # L = max_val - min_val
-        L = img2.max() - img2.min()
+        # L = img2.max() - img2.min()
+        # For MRI data, it is fair to used a fixed L. 
+        # We assume it is in the zscore range [-3,3] since slices are approximately 0-1 normalized 
+        z_score = 3
+        L = z_score - (-z_score)
     else:
         L = val_range
 
@@ -60,6 +67,7 @@ def ssim(img1, img2, window_size=11, window=None, size_average=True, full=False,
     cs = torch.mean(v1 / v2)  # contrast sensitivity
 
     ssim_map = ((2 * mu1_mu2 + C1) * v1) / ((mu1_sq + mu2_sq + C1) * v2)
+    S = ssim_map
 
     if size_average:
         ret = ssim_map.mean()
@@ -67,7 +75,8 @@ def ssim(img1, img2, window_size=11, window=None, size_average=True, full=False,
         ret = ssim_map.mean(1).mean(1).mean(1)
 
     if full:
-        return ret, cs
+        return ret, S
+
     return ret
 
 

@@ -52,14 +52,14 @@ if __name__ == '__main__':
         tensor2im = util.tensor2im
 
     def imagenet_loss(src, tar):
-         
         if not model.mri_data:
-            
             src.clamp_(-1,1)
             src = src.add(1).div_(2).add_(-0.43).div_(0.23)
             tar = tar.add(1).div_(2).add_(-0.43).div_(0.23)
-        
-        err = float(F.mse_loss(src[:,:1,:,:], tar[:,:1,:,:], size_average=True)) 
+        src = src[:,:1,:,:]
+        tar = tar[:,:1,:,:]
+
+        err = float(F.mse_loss(src, tar, size_average=True)) 
         return err 
     
     def compute_percentile(loss_array, none=None):
@@ -69,20 +69,10 @@ if __name__ == '__main__':
         pct_50 = np.percentile(loss_array, 90, axis=1).mean()
 
         return pct_10, pct_90, pct_50
-
-    def _compute_percentile2(loss_array, samples):
-            # loss_array is in [N, n_samples]
-        def get_expt_loss(ratio):
-            pct = np.percentile(loss_array, ratio, axis=1)
-            pct = np.tile(np.expand_dims(pct,1), (1,loss_array.shape[1]))
-            ids = np.where(loss_array > pct)
-
-
-        pct_10 = np.percentile(loss_array, 10, axis=1).mean()
-        pct_90 = np.percentile(loss_array, 90, axis=1).mean()
-        pct_50 = np.percentile(loss_array, 90, axis=1).mean()
-
-        return pct_10, pct_90, pct_50 
+    
+    ## mask is used to inspect the error from bg
+    # background_mask = torch.zeros(1,1,128,128).cuda()
+    # background_mask[:,:,32:96, 32:96] = 1
 
     for i, data in enumerate(test_data_loader):
         s_loss, r_loss = [], []
@@ -92,6 +82,12 @@ if __name__ == '__main__':
             model.set_input(data)
             model.test()
             
+            # tensity_mask = model.real_B > -0.1
+            # mask = tensity_mask.float() * background_mask
+            # # import pdb ; pdb.set_trace()
+            # model.fake_B *= mask
+            # model.real_B *= mask
+
             r_sample.append(model.fake_B.cpu())
             r_loss.append(imagenet_loss(model.fake_B.cpu(), model.real_B.cpu()))
             r_ssim.append(ssim_metric(model.fake_B.cpu(), model.real_B.cpu()))
@@ -133,7 +129,7 @@ if __name__ == '__main__':
         sample_pct10, sample_pct90, _ = compute_percentile(sample_loss, s_sample)
         rec_pct10, rec_pct90, _ = compute_percentile(reconst_loss, r_sample)
         
-        sys.stdout.write('\r processing %d / %d image MSE[q] = %.3f (%.3f, %.3f, %5f) MSE[p](%d) = %.3f (%.3f, %.3f, %.3f) MSE[vis/inv] = %.3f/%.3f S1 = %.3f SSIM[q]/[p] = %.3f/%.3f' % 
+        sys.stdout.write('\r processing %d / %d image MSE[q] = %.3f (%.3f, %.3f, %3f) MSE[p](%d) = %.3f (%.3f, %.3f, %.3f) MSE[vis/inv] = %.3f/%.3f S1 = %.3f SSIM[q]/[p] = %.3f/%.3f' % 
                             (val_count, total_test_n, 
                             mean_expt(expt_r_loss), rec_pct10, rec_pct90, mean_expt(reconst_loss),
                             opt.n_samples, 

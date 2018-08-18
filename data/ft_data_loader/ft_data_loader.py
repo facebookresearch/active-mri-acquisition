@@ -115,7 +115,8 @@ def get_train_valid_loader(batch_size,
 
     train_idx, valid_idx = indices[split:], indices[:split]
     train_sampler = SubsetRandomSampler(train_idx)
-    valid_sampler = SubsetRandomSampler(valid_idx)
+    valid_sampler = SequentialSampler2(valid_idx)
+    
     train_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, sampler=train_sampler,
         num_workers=num_workers, pin_memory=pin_memory

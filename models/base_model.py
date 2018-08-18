@@ -256,7 +256,6 @@ class BaseModel():
                     maxv = self.logvars.max(1)[0].max(1)[0].max(1)[0].max(1)[0]
                     maxv = maxv.view(maxv.shape[0],1,1,1,1)
                 self.logvars = self.logvars / maxv
-
                 ## organize it to visable format, each line shows [vnd] u.map and 
                 ## the following len(self.logvars) lines show u.maps of the same image at different stages
                 vnd = int(np.sqrt(how_many_to_display)) 
@@ -274,19 +273,49 @@ class BaseModel():
             for i in range(3): # do not normalize variance only the first three
                 for a in val_data: 
                     util.mri_denormalize(a[i])
-                    
-        visuals = {}
-        visuals['inputs'] = tensor2im(tvutil.make_grid(torch.cat([a[0] for a in val_data], dim=0)[:how_many_to_display], nrow=int(np.sqrt(how_many_to_display)) ))
-        visuals['reconstructions'] = tensor2im(tvutil.make_grid(torch.cat([a[1] for a in val_data], dim=0)[:how_many_to_display], nrow=int(np.sqrt(how_many_to_display)) ))
-        visuals['groundtruths'] = tensor2im(tvutil.make_grid(torch.cat([a[2] for a in val_data], dim=0)[:how_many_to_display], nrow=int(np.sqrt(how_many_to_display)) ))  
 
-        # show variance images
+        ### save a pickle for inspection
+        # import pickle
+        # pickle_file = {}
+        # pickle_file['var'] = val_data[0][3][12:18].cpu().numpy()
+        # pickle_file['gt'] = val_data[0][2][:6].cpu().numpy()
+        # pickle_file['rec'] = val_data[0][1][:6].cpu().numpy()
+        # pickle_file['input'] = val_data[0][0][:6].cpu().numpy()
+        # pickle_file['residual'] = np.abs(pickle_file['gt'] - pickle_file['rec'])
+        # pickle_file['mask'] = self.mask[:6,:,:,:].repeat(1,1,1,128).cpu().numpy()
+
+        # pickle.dump(pickle_file, open('ipython_notebook/pickle_mri_results.pickle','wb'))
+
+        visuals = {}
+        input_tensor = torch.cat([a[0] for a in val_data], dim=0)[:how_many_to_display]
+        recon_tensor = torch.cat([a[1] for a in val_data], dim=0)[:how_many_to_display]
+        gt_tensor = torch.cat([a[2] for a in val_data], dim=0)[:how_many_to_display]
+        visuals['inputs'] = tensor2im(tvutil.make_grid(input_tensor, nrow=int(np.sqrt(how_many_to_display)) ))
+        visuals['reconstructions'] = tensor2im(tvutil.make_grid(recon_tensor, nrow=int(np.sqrt(how_many_to_display)) ))
+        visuals['groundtruths'] = tensor2im(tvutil.make_grid(gt_tensor, nrow=int(np.sqrt(how_many_to_display)) ))  
+        # residual map comparison
+        diff_rec = np.abs(gt_tensor - recon_tensor)
+        diff_input = np.abs(gt_tensor - input_tensor)
+        imsize = val_data[0][0].shape[2]
+        n = diff_rec.shape[0] # how many samples
+        diff = torch.zeros_like(diff_rec)
+        diff[range(1,n,2),...] = diff_rec[:n//2,...] # show side by side
+        diff[range(0,n,2),...] = diff_input[:n//2,...] # show side by side
+        visuals['differences']= tensor2im(tvutil.make_grid(diff, nrow=int(np.sqrt(how_many_to_display))), renormalize=False) 
+        visuals['differences'] = visualizer.gray2heatmap(visuals['differences'][:,:,0], cmap='gray') # view as heat map
+
+        # show uncertainty_map images
         if hasattr(self, 'logvars'):
-            _tmp = tvutil.make_grid(torch.cat([a[3] for a in val_data], dim=0), normalize=False, scale_each=False, nrow=vnd)
+            _tmp = tvutil.make_grid(torch.cat([a[3] for a in val_data], dim=0)[:how_many_to_display], normalize=False, scale_each=False, nrow=vnd)
             # conver to rgb heat map
             _tmp = util.tensor2im(_tmp, renormalize=False)
-            _tmp = visualizer.gray2heatmap(_tmp[:,:,0])
+            _tmp = visualizer.gray2heatmap(_tmp[:,:,0]) # view as heat map
+            # _tmp = np.tile(_tmp[:,:,:1], (1,1,3)) # view as gray map
             visuals['certainty_map'] = _tmp
+
+        ## show ssim map
+        _, ssim_map = util.ssim_metric(recon_tensor[:,:1,:,:], gt_tensor[:,:1,:,:], full=True)
+        visuals['ssim_map'] = tensor2im(tvutil.make_grid(ssim_map[:how_many_to_display], nrow=int(np.sqrt(how_many_to_display))), renormalize=False) 
 
         if need_sampling:
             # we need to do sampling
@@ -302,7 +331,7 @@ class BaseModel():
             losses['pixel_diff_std'] = np.array(torch.mean(pixel_diff_mean).item())
             losses['pixel_diff_mean'] = np.array(torch.mean(pixel_diff_std).item())
 
-        # evaluation
+        # evaluation the full set
         val_count = 0
         
         for it, data in enumerate(val_data_loader):
@@ -315,10 +344,11 @@ class BaseModel():
             losses['reconst_ssim'].append(float(util.ssim_metric(self.fake_B[:,:1,...], self.real_B[:,:1,...])))
 
             if need_sampling:
-                # compute at posterior
-                bits_per_dim = self.compute_logistic()
-                losses['bits_per_dim'] = bits_per_dim
-                losses['div'] = self.compute_KL()
+                if hasattr(self, 'compute_logistic'):
+                    # compute at posterior
+                    bits_per_dim = self.compute_logistic()
+                    losses['bits_per_dim'] = bits_per_dim
+                    losses['div'] = self.compute_KL()
             # prior
             if need_sampling:
                 self.set_input(data)
@@ -335,7 +365,7 @@ class BaseModel():
 
             # for GAN based method we track disc score of visible and invisible part
             if hasattr(self,'forward_D'):
-                vs, ivs = self.forward_D()
+                (vs, ivs), _ = self.forward_D()
                 losses['visible_disc'].append(vs)
                 losses['invisible_disc'].append(ivs)
             
@@ -374,7 +404,6 @@ class BaseModel():
     def compute_special_losses(self):
         # compute losses between fourier spaces of fake_B and real_B
         # if output one dimension
-        # import pdb ; pdb.set_trace()
         if self.fake_B.shape[1] == 1:
             _k_fakeB = self.RFFT(self.fake_B)
             _k_realB = self.RFFT(self.real_B)
@@ -433,7 +462,7 @@ class BaseModel():
         target, mask, metadata = input
         target = target.to(self.device)
         self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
-        target.clamp_(-zscore, zscore)
+        target = self._clamp(target).detach()
 
         if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
             self.mask = self.gen_random_mask(batchSize=target.shape[0])
