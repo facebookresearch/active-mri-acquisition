@@ -4,14 +4,16 @@ echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
 checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
 
-name=knee_pasgan_uncertainty_w113_logvar_maskmetacond_0.5gan_mseenergy_lr6e-4
+name=knee_energypasnetplus_w113logvar_0.5gan_gradctx_pxlm
 python sampling.py --dataroot 'KNEE' \
                 --name $name \
-                --model ft_recurgan \
+                --model ft_pasgan \
                 --checkpoints_dir $checkpoints_dir \
                 --batchSize 128 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
-                --how_many 256 
+                --which_model_netG 'pasnetplus' \
+                --how_many 256 \
+                --n_samples 100
 
 # name=knee_paslocalgan_w113_1gan
 # python sampling.py --dataroot 'KNEE' \

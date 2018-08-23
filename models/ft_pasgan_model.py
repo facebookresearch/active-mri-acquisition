@@ -111,9 +111,9 @@ class kspaceMap(nn.Module):
         return output
 
 
-class FTRECURGANModel(BaseModel):
+class FTPASGANModel(BaseModel):
     def name(self):
-        return 'FTRECURGANModel'
+        return 'FTPASGANModel'
 
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
@@ -141,6 +141,7 @@ class FTRECURGANModel(BaseModel):
         parser.add_argument('--set_sampling_at_stage', type=int, default=None, help='sampling from the model')
         parser.add_argument('--grad_ctx', action='store_true', help='gan criterion has loss signal at provided')
         parser.add_argument('--no_zscore_clamp', action='store_true', help='clamp data using z_score')
+        parser.add_argument('--pixelwise_loss_merge', action='store_true', help='no uncertainty analysis')
 
         parser.set_defaults(pool_size=0)
         parser.set_defaults(which_model_netG='pasnet')
@@ -160,6 +161,9 @@ class FTRECURGANModel(BaseModel):
         parser.set_defaults(no_lsgan=False)
         parser.set_defaults(no_kspacemap_embed=True)
         parser.set_defaults(mask_cond=True)
+        parser.set_defaults(grad_ctx=True)
+        parser.set_defaults(pixelwise_loss_merge=True)
+        
 
         return parser
 
@@ -301,7 +305,7 @@ class FTRECURGANModel(BaseModel):
         # conditioned on mask
         h, b = self.mask.shape[2], self.real_A.shape[0]
         mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
-        if sampling:
+        if sampling and False:
             # may not useful
             assert not sampling 
             self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.metadata, self.opt.set_sampling_at_stage)
@@ -521,16 +525,22 @@ class FTRECURGANModel(BaseModel):
         return sample_x, pixel_diff_mean, pixel_diff_std
 
     
-    def set_input_exp(self, input, mask, zscore=3):
-        # for MRI data Slice loader
+    def set_input_exp(self, input, mask, zscore=3, add_kspace_noise=False):
+        # used for test kspace scanning line recommentation
         target, _, metadata = input
         target = target.to(self.device)
         self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
         target = self._clamp(target).detach()
 
+        if len(mask.shape) == 5:
+            mask = mask[:1,:1,:,:1,0].to(self.device).repeat(target.shape[0],1,1,1)
         self.mask = mask
-
+            
         fft_kspace = self.RFFT(target)
+        if add_kspace_noise:
+            noises = torch.zeros_like(fft_kspace).normal_()
+            fft_kspace = fft_kspace + noises
+
         ifft_img = self.IFFT(fft_kspace * self.mask)
 
         if self.opt.output_nc >= 2:
@@ -541,3 +551,66 @@ class FTRECURGANModel(BaseModel):
 
         self.real_A = ifft_img
         self.real_B = target
+
+    # change to sampling() when want to use it
+    def __sampling(self, data_list, n_samples=8, max_display=8, return_all=False, sampling=True):
+        # to test the effect of adding kpsace noises \sigma and evaluate std
+        import copy
+        def replicate_tensor(data, times, expand=False):
+            ks = list(data.shape)
+            data = data.view(ks[0], 1, *ks[1:])
+            data = data.repeat(1, times, *[1 for _ in range(len(ks[1:]))]) # repeat will copy memories which we do not need here
+            if not expand:
+                data = data.view(ks[0]*times, *ks[1:])
+            return data
+        
+        if not sampling:
+            warnings.warn('sampling is set to False', UserWarning)
+        assert self.mri_data, 'not working for non mri data loader now'
+        max_display = min(max_display, n_samples)
+        # data points [N,2,H,W] for multiple sampling and observe sample difference
+        data = data_list[0] # target
+        mask = data_list[1]
+        metadata = copy.deepcopy(data_list[2])
+
+        assert(data.shape[0] >= max_display)
+        data = data[:max_display]
+        mask = mask[:max_display]
+        scan_type = np.array(metadata['scan_type'][:max_display])
+        metadata['scan_type'] = list(scan_type.reshape(-1))
+        repeated_data = replicate_tensor(data, n_samples)
+        b,c,h,w = data.shape
+        sample_x, input_x = [], []
+        for i in range(n_samples):
+            if len(data) != max_display or len(mask) != max_display or len(mask) != max_display:
+                import pdb; pdb.set_trace()
+            data_list = [data, mask, metadata]
+            self.set_input_exp(data_list, mask, add_kspace_noise=True)
+            self.test()
+            sample_x.append(self.fake_B.cpu()[:,:1,:,:])
+            input_x.append(self.real_A.cpu()[:,:1,:,:])
+        sample_x = torch.stack(sample_x, 1)
+        input_x = torch.stack(input_x, 1)
+
+        input_imgs = repeated_data.cpu()
+        # compute sample mean std
+        all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w)).abs()
+        pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
+        pixel_diff_std = torch.std(all_pixel_diff, dim=1) # n_samples
+
+        if return_all:# return all samples
+            return sample_x.view(b,n_samples,c,h,w)
+        else:    
+            # return 
+            mean_samples_x = sample_x.view(b,n_samples,c,h,w).mean(dim=1)
+            sample_x = sample_x.view(b,n_samples,c,h,w)[:,:max_display,:,:,:].contiguous()
+            input_x = input_x.view(b,n_samples,c,h,w)
+            sample_x[:,0,:,:] = input_x[:,0,:1,:,:] # Input
+            sample_x[:,1,:,:] = data[:,:1,:,:] # GT
+            sample_x[:,2,:,:] = mean_samples_x # E[x]
+            # sample_x[:,-1,:,:] = pixel_diff_mean.div(pixel_diff_mean.max()).mul_(2).add_(-1) # MEAN
+            sample_x[:,-1,:,:] = pixel_diff_std.div(pixel_diff_std.max()).mul_(2).add_(-1) # STD
+            
+            sample_x = sample_x.view(b*max_display,c,h,w)
+        
+        return sample_x, pixel_diff_mean, pixel_diff_std

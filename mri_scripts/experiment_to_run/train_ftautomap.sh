@@ -2,21 +2,23 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session'
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_exp'
 
-name=knee_resnet_9blocks_attention_residual
-python sampling.py --dataroot 'KNEE' \
+name=knee_baseline_automap
+python train.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_attcnn \
-                --which_model_netG resnet_9blocks_attention_residual \
+                --which_model_netG automap \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
                 --checkpoints_dir $checkpoints_dir \
-                --batchSize 128 \
+                --batchSize 32 \
+                --niter_decay 50 \
+                --niter 50 \
                 --input_nc 2 \
-                --output_nc 2 \
-                --how_many 512 \
-                --which_epoch 100 \
+                --output_nc 1 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
-                --no_dropout 
+                --dynamic_mask_type 'random' \
+                --no_dropout \
+                --verbose 

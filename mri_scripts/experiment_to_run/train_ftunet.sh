@@ -2,13 +2,13 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session'
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_exp'
 
-name=knee_masking_gan_l100
+name=knee_baseline_unet
 python train.py --dataroot 'KNEE' \
                 --name $name \
-                --model ft_attgan \
-                --which_model_netG resnet_9blocks_zz \
+                --model ft_attcnn \
+                --which_model_netG jure_unet_residual \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
@@ -17,9 +17,8 @@ python train.py --dataroot 'KNEE' \
                 --niter_decay 50 \
                 --niter 50 \
                 --input_nc 2 \
-                --output_nc 2 \
-                --print_freq 100 \
-                --lambda_L1 100 \
+                --output_nc 1 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
-                --no_dropout  
+                --dynamic_mask_type 'random' \
+                --no_dropout 
 

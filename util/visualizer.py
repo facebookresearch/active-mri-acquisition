@@ -26,7 +26,11 @@ def save_images(webpage, visuals, name, aspect_ratio=1.0, width=256):
 
     for label, im_data in visuals.items():
         
-        if type(im_data) is not list:
+        if isinstance(im_data, str):
+            # already saved outside, lets link it 
+            image_name = im_data
+            
+        elif type(im_data) is not list:
             image_name = '%s_%s.png' % (name, label)
             im = util.tensor2im(im_data)
             save_path = os.path.join(image_dir, image_name)
@@ -44,7 +48,8 @@ def save_images(webpage, visuals, name, aspect_ratio=1.0, width=256):
         ims.append(image_name)
         txts.append(label)
         links.append(image_name)
-    webpage.add_images(ims, txts, links, width=width)
+    # webpage.add_images(ims, txts, links, width=width)
+    webpage.add_images_videos_files(ims, txts, links, width=width)
 
 class Visualizer():
     def __init__(self, opt, use_html=False):

@@ -40,7 +40,7 @@ class FTRECURNNV2Model(BaseModel):
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
 
-        parser.set_defaults(which_model_netG='pasnet')
+        parser.set_defaults(which_model_netG='pasnetplus')
         parser.set_defaults(input_nc=2)
         parser.set_defaults(output_nc=3)
         parser.set_defaults(niter=50)
@@ -62,6 +62,7 @@ class FTRECURNNV2Model(BaseModel):
         parser.add_argument('--clip_weight', type=float, default=0, help='clip loss weight to prevent it to too small value')
         parser.add_argument('--use_fixed_weight', type=str, default='1,1,1', help='do *not* use embed of kspace embedding')
         # parser.add_argument('--large_var_limit', action='store_true', help='use a large variance limit')
+        parser.add_argument('--no_uncertanity', action='store_true', help='no uncertainty analysis')
 
         return parser
 
@@ -120,14 +121,16 @@ class FTRECURNNV2Model(BaseModel):
         o = int(np.floor(self.opt.output_nc/2))
         # gaussian nll loss
         l2 = self.criterion(fake_B[:,:o,:,:], real_B[:,:o,:,:]) 
-        
-        # to be numercial stable we clip logvar to make variance in [0.01, 5]
-        logvar = logvar.clamp(-4.605, 1.609)
+        if self.opt.no_uncertanity:
+            loss = l2
+        else:
+            # to be numercial stable we clip logvar to make variance in [0.01, 5]
+            logvar = logvar.clamp(-4.605, 1.609)
+            one_over_var = torch.exp(-logvar)
+            # uncertainty loss
+            assert len(l2) == len(logvar)
+            loss = 0.5 * (one_over_var * l2 + logvar * weight_logvar)
 
-        one_over_var = torch.exp(-logvar)
-        # uncertainty loss
-        assert len(l2) == len(logvar)
-        loss = 0.5 * (one_over_var * l2 + logvar * weight_logvar)
         loss = loss.mean()
         
         # l0 sparsity distance

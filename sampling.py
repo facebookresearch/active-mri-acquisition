@@ -25,6 +25,7 @@ if __name__ == '__main__':
 
     # create website
     web_dir = os.path.join(opt.results_dir, opt.name, 'sampling_%s' % (opt.which_epoch))
+    # web_dir = os.path.join(opt.results_dir, opt.name, 'kspace_noises_sampling_%s' % (opt.which_epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
     if model.mri_data:
         tensor2im = functools.partial(util.tensor2im, renormalize=False)

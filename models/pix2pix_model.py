@@ -6,6 +6,7 @@ from util import util
 import torchvision.utils as tvutil
 import torch
 import torch.nn.functional as F
+from .fft_utils import *
 
 class Pix2PixModel(BaseModel):
     def name(self):
@@ -18,12 +19,11 @@ class Pix2PixModel(BaseModel):
         # (https://phillipi.github.io/pix2pix/)
         parser.set_defaults(pool_size=0)
         parser.set_defaults(no_lsgan=True)
-        parser.set_defaults(norm='batch')
         parser.set_defaults(dataset_mode='aligned')
-        parser.set_defaults(which_model_netG='unet_256')
+        parser.set_defaults(which_model_netG='unet_128')
         if is_train:
             parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
-
+        
         return parser
 
     def initialize(self, opt):
@@ -40,13 +40,18 @@ class Pix2PixModel(BaseModel):
             self.model_names = ['G']
         # load/define networks
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
-                                      opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
-
+                                      opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids, no_last_tanh=True)
         if self.isTrain:
             use_sigmoid = opt.no_lsgan
-            self.netD = networks.define_D(opt.input_nc + opt.output_nc if not self.opt.no_cond_gan else opt.output_nc, opt.ndf,
+            input_nc_D = 2
+            self.netD = networks.define_D(input_nc_D, opt.ndf,
                                           opt.which_model_netD,
                                           opt.n_layers_D, opt.norm, use_sigmoid, opt.init_type, self.gpu_ids)
+        self.RFFT = RFFT().to(self.device)
+        self.mask = create_mask(opt.fineSize, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+        self.IFFT = IFFT().to(self.device)
+        # for evaluation
+        self.FFT = FFT().to(self.device)
 
         if self.isTrain:
             self.fake_AB_pool = ImagePool(opt.pool_size)
@@ -67,38 +72,37 @@ class Pix2PixModel(BaseModel):
                 #TODO VGG actually expect normalization (see torchvision) but we did not do here
                 self.criterionPerceptualLoss = networks.VGGLoss(opt.gpu_ids, input_channel=opt.input_nc)
 
-    def set_input(self, input):
-        # output from FT loader
-        AtoB = self.opt.which_direction == 'AtoB'
-        img, _, context = input
-        context = context[:, :1,:,:]
-        if AtoB:
-            self.real_A = context.to(self.device)
-            self.real_B = img.to(self.device)
-        else:
-            self.real_A = img.to(self.device)
-            self.real_B = context.to(self.device)
-        
+        self.zscore = 3
+        if self.opt.output_nc == 2:
+            # the imagnary part of reconstrued data
+            self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
 
+    def set_input(self, input):
+        if self.mri_data:
+            if len(input) == 4:
+                input = input[1:]
+            self.set_input2(input)
+        else:
+            self.set_input1(input)
+        
     def forward(self):
-        self.fake_B = self.netG(self.real_A)
-    
+        h, b = self.mask.shape[2], self.real_A.shape[0]
+        mask = self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1)
+        
+        if 'residual' in self.opt.which_model_netG:
+            self.fake_B = self.netG(self.real_A, mask)
+        else:
+            self.fake_B = self.netG(self.real_A)
+
     def backward_D(self):
         # Fake
         # stop backprop to the generator by detaching fake_B
-        if self.opt.no_cond_gan:
-            fake_AB = self.fake_AB_pool.query(self.fake_B)
-        else:
-            fake_AB = self.fake_AB_pool.query(torch.cat((self.real_A, self.fake_B), 1))
+        fake_AB = self.create_D_input(self.fake_B)
         pred_fake = self.netD(fake_AB.detach()) # 14x14 for 128x128
         self.loss_D_fake = self.criterionGAN(pred_fake, False)
 
         # Real
-        if self.opt.no_cond_gan:
-            real_AB = self.real_B
-        else:
-            real_AB = torch.cat((self.real_A, self.real_B), 1)
-            
+        real_AB = self.create_D_input(self.real_B) 
         pred_real = self.netD(real_AB)
         self.loss_D_real = self.criterionGAN(pred_real, True)
 
@@ -107,13 +111,26 @@ class Pix2PixModel(BaseModel):
 
         self.loss_D.backward()
 
+    def create_D_input(self, fake_B):
+        fake_B = fake_B[:,:1,:,:] # discard imaginary part
+        fake_B = self._clamp(fake_B)
+        fake = torch.cat([fake_B, self.real_A[:,:1,:,:]], dim=1)
+        return fake
+
+    def _clamp(self, data):
+        # process data for D input
+        # make consistent range with real_B for inputs of D
+        assert self.mri_data
+        if self.mri_data:
+            if self.zscore != 0:
+                data = data.clamp(-self.zscore, self.zscore) 
+        else:
+            data = data.clamp(-1, 1) 
+        return data
+
     def backward_G(self):
         # First, G(A) should fake the discriminator
-        if self.opt.no_cond_gan:
-            fake_AB = self.fake_B
-        else:
-            fake_AB = torch.cat((self.real_A, self.fake_B), 1)
-
+        fake_AB = self.create_D_input(self.fake_B)
         pred_fake = self.netD(fake_AB)
         self.loss_G_GAN = self.criterionGAN(pred_fake, True)
 
@@ -142,7 +159,3 @@ class Pix2PixModel(BaseModel):
         self.optimizer_G.zero_grad()
         self.backward_G()
         self.optimizer_G.step()
-
-    def validation(self, val_data_loader, how_many_to_display=64, how_many_to_valid=4096):
-        super().validation(val_data_loader, how_many_to_display, how_many_to_valid)
-        

@@ -2,25 +2,25 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_exp'
 
-name=knee_gausian_masking_resnet
+name=knee_baseline_denset103
 python train.py --dataroot 'KNEE' \
                 --name $name \
-                --model ft_gauscnn \
-                --which_model_netG resnet_9blocks_zz \
+                --model ft_attcnn \
+                --which_model_netG densenet \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
                 --checkpoints_dir $checkpoints_dir \
-                --batchSize 64 \
-                --niter_decay 100 \
-                --niter 100 \
+                --batchSize 24 \
+                --niter_decay 50 \
+                --niter 50 \
                 --input_nc 2 \
-                --output_nc 3 \
+                --output_nc 1 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
-                --no_dropout \
-                --print_freq 50 \
                 --dynamic_mask_type 'random' \
-                --debug
-
+                --no_dropout \
+                --verbose 
+                
+# may need to use instance normalization

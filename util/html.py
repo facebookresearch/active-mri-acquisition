@@ -52,6 +52,23 @@ class HTML:
                             br()
                             p(txt)
 
+    def add_images_videos_files(self, ims, txts, links, width=200):
+        self.add_table()
+        with self.t:
+            with tr():
+                for im, txt, link in zip(ims, txts, links):
+                    with td(style="word-wrap: break-word;", halign="center", valign="top"):
+                        with p():
+                            with a(href=os.path.join('images', link)):
+                                if 'mp4' in im:
+                                    video(style="width:%dpx" % width, src=os.path.join('images', im))
+                                elif 'png' in im or 'gif' in im:
+                                    img(style="width:%dpx" % width, src=os.path.join('images', im))
+                                else:
+                                    a(im.title(), href=os.path.join('images', im))
+                            br()
+                            p(txt)
+
     def save(self):
         html_file = '%s/index.html' % self.web_dir
         f = open(html_file, 'wt')

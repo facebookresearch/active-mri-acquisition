@@ -2,27 +2,26 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-name=knee_kspace_vsrnet_randommask_dilated
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session'
-mkdir -p -v $checkpoints_dir/$name
-cp $checkpoints_dir'/knee_pasnetcm_randommask/100_net_G.pth' $checkpoints_dir/$name/'0_net_G_basis.pth'
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_exp'
 
-
+name=knee_baseline_resnetzz
 python train.py --dataroot 'KNEE' \
                 --name $name \
-                --model ft_kspace \
-                --which_model_netG stage_resnet_9blocks_residual_condmask \
+                --model ft_attcnn \
+                --which_model_netG densenet \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \
                 --checkpoints_dir $checkpoints_dir \
                 --batchSize 64 \
-                --niter_decay 20 \
-                --niter 10 \
+                --niter_decay 50 \
+                --niter 50 \
                 --input_nc 2 \
                 --output_nc 2 \
-                --print_freq 10 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
                 --dynamic_mask_type 'random' \
+                --which_model_netG 'resnet_residual' \
                 --no_dropout \
-                --use_dilation
+                --verbose 
+                
+# may need to use instance normalization
