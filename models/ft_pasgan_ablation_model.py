@@ -51,6 +51,8 @@ class FTPASGANABLATIONModel(BaseModel):
         parser.add_argument('--no_zscore_clamp', action='store_true', help='clamp data using z_score')
         parser.add_argument('--no_uncertanity', action='store_true', help='no uncertainty analysis')
         parser.add_argument('--pixelwise_loss_merge', action='store_true', help='no uncertainty analysis')
+        parser.add_argument('--no_uncertanity_at_middle', action='store_true', help='no uncertainty analysis')
+        parser.add_argument('--single_stage', action='store_true', help='no uncertainty analysis')
 
         parser.set_defaults(pool_size=0)
         parser.set_defaults(which_model_netG='pasnet')
@@ -70,7 +72,9 @@ class FTPASGANABLATIONModel(BaseModel):
         parser.set_defaults(no_lsgan=False)
         parser.set_defaults(no_kspacemap_embed=True)
         parser.set_defaults(mask_cond=True)
-
+        parser.set_defaults(grad_ctx=True)
+        parser.set_defaults(pixelwise_loss_merge=True)
+        
         return parser
 
     def initialize(self, opt):
@@ -132,7 +136,8 @@ class FTPASGANABLATIONModel(BaseModel):
                 self.criterionGAN = networks.GANLossKspaceAux(use_lsgan=not opt.no_lsgan, use_mse_as_energy=opt.use_mse_as_disc_energy).to(self.device)
             else:
                 if opt.which_model_netD == 'n_layers_channel':
-                    self.criterionGAN = networks.GANLossKspace(use_lsgan=not opt.no_lsgan, use_mse_as_energy=opt.use_mse_as_disc_energy, grad_ctx=self.opt.grad_ctx).to(self.device)
+                    self.criterionGAN = networks.GANLossKspace(use_lsgan=not opt.no_lsgan, 
+                                use_mse_as_energy=opt.use_mse_as_disc_energy, grad_ctx=self.opt.grad_ctx).to(self.device)
                 else:
                     self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan).to(self.device)
             # define loss functions
@@ -164,7 +169,7 @@ class FTPASGANABLATIONModel(BaseModel):
         o = int(np.floor(self.opt.output_nc/2))
         # gaussian nll loss
         l2 = self.criterion(fake_B[:,:o,:,:], real_B[:,:o,:,:]) 
-        if self.opt.no_uncertanity:
+        if self.opt.no_uncertanity or (self.opt.no_uncertanity_at_middle and stage < 2):
             loss = l2
         else:
             # to be numercial stable we clip logvar to make variance in [0.01, 5]
@@ -175,7 +180,7 @@ class FTPASGANABLATIONModel(BaseModel):
             loss = 0.5 * (one_over_var * l2 + logvar * weight_logvar)
         if not self.opt.pixelwise_loss_merge:
             loss = loss.mean()
-        
+                    
         # l0 sparsity distance
         if beta != 0:
             b,c,h,w = logvar.shape
@@ -441,14 +446,37 @@ class FTPASGANABLATIONModel(BaseModel):
 
         return sample_x, pixel_diff_mean, pixel_diff_std
 
-    
     def set_input_exp(self, input, mask, zscore=3):
+        assert self.mri_data
         # used for test kspace scanning line recommentation
         target, _, metadata = input
         target = target.to(self.device)
         self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
         target = self._clamp(target).detach()
 
+        self.mask = mask
+
+        fft_kspace = self.RFFT(target)
+        ifft_img = self.IFFT(fft_kspace * self.mask)
+
+        if self.opt.output_nc >= 2:
+            if self.imag_gt.shape[0] != target.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(target)
+            target = torch.cat([target, self.imag_gt], dim=1)
+
+        self.real_A = ifft_img
+        self.real_B = target
+
+    def set_input_exp2(self, input, mask, zscore=3):
+        # for natural image data
+        assert not self.mri_data
+        # used for test kspace scanning line recommentation
+        target, label = input
+        target = target.to(self.device)
+        self.metadata = None
+        target = self._clamp(target).detach()
+        self.img_labels = label
         self.mask = mask
 
         fft_kspace = self.RFFT(target)

@@ -148,21 +148,29 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=False)
     elif which_model_netG == 'stage_resnet_9blocks_residual_condmask_plus':
         netG = StageResnetGeneratorResidualPlus(input_nc, output_nc, ngf, norm_layer=norm_layer, 
-                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=False)
+                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)
     elif which_model_netG == 'pasnet':
         netG = PasNet(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)
     elif which_model_netG == 'pasnetplus':
         netG = PasNetPlus(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)
+    elif which_model_netG == 'pasnetplus_nomaskcond':
+        netG = PasNetPlus(input_nc, output_nc, ngf, norm_layer=norm_layer, 
+                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, 
+                        mask_cond=True, use_deconv=True, no_meta=True)
+    elif which_model_netG == 'pasnetplus_nomaskcond_320':
+        netG = PasNetPlus(input_nc, output_nc, ngf, norm_layer=norm_layer, 
+                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=320, 
+                        mask_cond=True, use_deconv=True, no_meta=True)
     elif which_model_netG == 'pasnet_att':
         netG = PasNetAtt(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)       
-    elif which_model_netG == 'pasnet_huct':
-            # reuse uncertainty
-        netG = PasNet_huct(input_nc, output_nc, ngf, norm_layer=norm_layer, 
-                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, 
-                        mask_cond=True, use_deconv=True)        
+    # elif which_model_netG == 'pasnet_huct':
+    #         # reuse uncertainty
+    #     netG = PasNet_huct(input_nc, output_nc, ngf, norm_layer=norm_layer, 
+    #                     use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, 
+    #                     mask_cond=True, use_deconv=True)        
     
     
     # for baseline evaluation
@@ -182,6 +190,9 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
     elif which_model_netG == 'resnet_residual':
         # used to compared to resnet_9blocks_attention_residual to see if softattention is useful
         netG = ResnetGeneratorMaskingResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
+                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, use_deconv=True)
+    elif which_model_netG == 'resnetplus':
+        netG = ResnetGeneratorMaskingResidualPlus(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, use_deconv=True)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % which_model_netG)
@@ -211,6 +222,8 @@ def define_D(input_nc, ndf, which_model_netD,
     # for kspace
     elif which_model_netD == 'n_layers_channel':
         netD = NLayerDiscriminatorChannel(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
+    elif which_model_netD == 'n_layers_channel_320':
+        netD = NLayerDiscriminatorChannel(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid, imSize=320)
     elif which_model_netD == 'n_layers_channel_group':
         netD = NLayerDiscriminatorChannelGroup(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
     elif which_model_netD == 'n_layers_channel_aux':
@@ -454,7 +467,7 @@ class GANLoss(nn.Module):
         return self.loss(input, target_tensor)
 
 class GANLossKspace(nn.Module):
-    def __init__(self, use_lsgan=True, target_real_label=1.0, target_fake_label=0.0, use_mse_as_energy=False, grad_ctx=False):
+    def __init__(self, use_lsgan=True, target_real_label=1.0, target_fake_label=0.0, use_mse_as_energy=False, grad_ctx=False, gamma=100):
         super(GANLossKspace, self).__init__()
         # self.register_buffer('real_label', torch.ones(imSize, imSize))
         # self.register_buffer('fake_label', torch.zeros(imSize, imSize))
@@ -466,7 +479,7 @@ class GANLossKspace(nn.Module):
         self.use_mse_as_energy = use_mse_as_energy
         if use_mse_as_energy:
             self.RFFT = RFFT()
-            self.gamma = 100
+            self.gamma = gamma
             self.bin = 5
 
     def get_target_tensor(self, input, target_is_real, degree, mask, pred_gt=None):
@@ -1433,14 +1446,13 @@ class NLayerDiscriminatorChannel(nn.Module):
 class NLayerDiscriminatorChannelClassfierAux(nn.Module):
     
     def __init__(self, input_nc, ndf, n_layers, norm_layer, use_sigmoid):
-
+        super(NLayerDiscriminatorChannelClassfierAux, self).__init__()
         self.netD = NLayerDiscriminator(input_nc, ndf, 3, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
         self.netC = NLayerDiscriminatorChannel(input_nc, ndf, n_layers, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
 
     def forward(self, input, mask):
-        
         disc = self.netD(input)
-        label = self.netC(input)
+        label = self.netC(input, mask)
         
         return (disc, label)
 
@@ -1765,9 +1777,6 @@ class StageResnetGeneratorResidual(nn.Module):
 
         self.IFFT = IFFT()
         self.FFT = FFT()
-
-    def __repr__(self):
-            return 'StageResnetGeneratorResidual'
 
     def kspace_fuse(self, x, input, mask):
 
@@ -2263,7 +2272,7 @@ class PasNetPlus(nn.Module):
     
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 
                 n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128, 
-                mask_cond=True, use_deconv=True):
+                mask_cond=True, use_deconv=True, no_meta=False):
         assert(n_blocks >= 0)
         super(PasNetPlus, self).__init__()
         self.input_nc = input_nc
@@ -2271,6 +2280,7 @@ class PasNetPlus(nn.Module):
         self.ngf = ngf
         self.no_last_tanh = no_last_tanh
         self.use_deconv = use_deconv
+        self.no_meta = no_meta
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
@@ -2333,7 +2343,8 @@ class PasNetPlus(nn.Module):
             setattr(self, 'model_decode'+str(iii), nn.Sequential(*model))
                                                 
         if mask_cond:
-            self.mask_embed = nn.Sequential(nn.Conv2d(imgSize+3, mask_embed_dim, 1, 1))
+            mask_inc = imgSize if no_meta else imgSize+3
+            self.mask_embed = nn.Sequential(nn.Conv2d(mask_inc, mask_embed_dim, 1, 1))
             
         self.IFFT = IFFT()
         self.FFT = FFT()
@@ -2348,8 +2359,12 @@ class PasNetPlus(nn.Module):
     def embed_condtions(self, mask, meta):
         b,c,h,w = mask.shape
         mask = mask.view(b,h,1,1)
-        meta = meta.unsqueeze(2).unsqueeze(3)
-        cond = torch.cat([mask, meta], 1)
+        
+        if self.no_meta:
+            cond = mask
+        else:
+            meta = meta.unsqueeze(2).unsqueeze(3)
+            cond = torch.cat([mask, meta], 1)
 
         cond_embed = self.mask_embed(cond)
         cond_embed = cond_embed.repeat(1,1,h,h)
@@ -2555,3 +2570,115 @@ class StageResnetGeneratorResidualPlus(nn.Module):
         out3 = self.kspace_fuse(out3, input, mask)
 
         return (out1, out2, out3), mask_embed 
+
+
+
+class ResnetGeneratorMaskingResidualPlus(nn.Module):
+    
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 
+                n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128, use_psp=False, use_deconv=False, mask_cond=True):
+        assert(n_blocks >= 0)
+        super(ResnetGeneratorMaskingResidualPlus, self).__init__()
+        self.input_nc = input_nc
+        self.output_nc = output_nc
+        self.ngf = ngf
+        self.no_last_tanh = no_last_tanh
+        self.mask_cond = mask_cond
+        if type(norm_layer) == functools.partial:
+            use_bias = norm_layer.func == nn.InstanceNorm2d
+        else:
+            use_bias = norm_layer == nn.InstanceNorm2d
+        
+        if mask_cond:
+            mask_embed_dim = 6
+            input_nc += mask_embed_dim 
+            print('[ResnetGeneratorMaskingResidualPlus] -> use masked embedding condition')
+
+        model = [nn.ReflectionPad2d(1),
+                    nn.Conv2d(input_nc, ngf*2, kernel_size=3,
+                            stride=2, padding=0, bias=use_bias),
+                    norm_layer(ngf*2),
+                    nn.ReLU(True)]
+
+        for i in range(1, n_downsampling):
+            mult = 2**i
+            model += [nn.ReflectionPad2d(1),
+                     nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3,
+                                stride=2, padding=0, bias=use_bias),
+                      norm_layer(ngf * mult * 2),
+                      nn.ReLU(True)]
+
+        mult = 2**n_downsampling
+        for i in range(n_blocks):
+            model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
+
+        self.model = nn.Sequential(*model)
+        attention_ngf = ngf * mult + imgSize # conditioned on mask. imgSize is the mask row dimension
+
+        model = []
+        for i in range(n_downsampling):
+            mult = 2**(n_downsampling - i)
+            if use_deconv:
+                model += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2),
+                                        kernel_size=4, stride=2,
+                                        padding=1, 
+                                        bias=use_bias),
+                            norm_layer(int(ngf * mult / 2)),
+                            nn.ReLU(True)] 
+            else:
+                model += [nn.Upsample(scale_factor=2),
+                        nn.ReflectionPad2d(1)] + \
+                        [nn.Conv2d(ngf * mult, int(ngf * mult / 2),
+                                            kernel_size=3, stride=1,
+                                            padding=0,
+                                            bias=use_bias),
+                        norm_layer(int(ngf * mult / 2)),
+                        nn.ReLU(True)] 
+        if use_psp:
+            model += [PSPModule(ngf, output_nc, norm_layer)]
+        else:
+            model += [nn.Conv2d(ngf, output_nc, kernel_size=1, padding=0)]
+
+        if not self.no_last_tanh:
+            model += [nn.Tanh()]
+
+        if mask_cond:
+           
+            self.mask_embed = nn.Sequential(nn.Conv2d(imgSize+3, mask_embed_dim, 1, 1))
+
+        self.model_decode = nn.Sequential(*model)
+
+        self.IFFT = IFFT()
+        self.FFT = FFT()
+        self.RFFT = RFFT()
+    def embed_condtions(self, mask, meta):
+        b,c,h,w = mask.shape
+        mask = mask.view(b,h,1,1)
+        meta = meta.unsqueeze(2).unsqueeze(3)
+        cond = torch.cat([mask, meta], 1)
+
+        cond_embed = self.mask_embed(cond)
+        cond_embed = cond_embed.repeat(1,1,h,h)
+        
+        return cond_embed
+    def forward(self, input, mask, meta):
+
+        mask_embed = None
+        assert mask.shape[2] != 1
+        if self.mask_cond:
+            mask_embed = self.embed_condtions(mask, meta)
+            input_ = torch.cat([input, mask_embed], 1)
+        else:
+            input_ = input
+
+        # mask_vector [B, imSize, 1, 1]
+        hidden = self.model(input_)
+        out_ = self.model_decode(hidden)
+
+        logvar = out_[:,2:,:,:]
+        res = out_[:,:2,:,:]
+        
+        ft_x = self.FFT(res)
+        fuse = self.IFFT((1 - mask) * ft_x) + input
+
+        return [fuse], [logvar],  mask_embed 

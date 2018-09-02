@@ -62,7 +62,7 @@ class FTRECURNNV2Model(BaseModel):
         parser.add_argument('--clip_weight', type=float, default=0, help='clip loss weight to prevent it to too small value')
         parser.add_argument('--use_fixed_weight', type=str, default='1,1,1', help='do *not* use embed of kspace embedding')
         # parser.add_argument('--large_var_limit', action='store_true', help='use a large variance limit')
-        parser.add_argument('--no_uncertanity', action='store_true', help='no uncertainty analysis')
+        parser.add_argument('--no_uncertainty', action='store_true', help='no uncertainty analysis')
 
         return parser
 
@@ -115,13 +115,15 @@ class FTRECURNNV2Model(BaseModel):
 
         self.betas = [float(a) for a in self.opt.betas.split(',')]
         assert len(self.betas) == 3, 'beta length is euqal to the module #'
+        self.zscore = 3 
+
 
     def certainty_loss(self, fake_B, real_B, logvar, beta, stage, weight_logvar, weight_all):
         
         o = int(np.floor(self.opt.output_nc/2))
         # gaussian nll loss
         l2 = self.criterion(fake_B[:,:o,:,:], real_B[:,:o,:,:]) 
-        if self.opt.no_uncertanity:
+        if self.opt.no_uncertainty:
             loss = l2
         else:
             # to be numercial stable we clip logvar to make variance in [0.01, 5]
@@ -154,6 +156,16 @@ class FTRECURNNV2Model(BaseModel):
         full_loss = full_loss * weight_all
 
         return full_loss
+
+    def _clamp(self, data):
+        # process data for D input
+        # make consistent range with real_B for inputs of D
+        if self.mri_data:
+            if self.zscore != 0:
+                data = data.clamp(-self.zscore, self.zscore) 
+        else:
+            data = data.clamp(-1, 1) 
+        return data
 
     def get_current_histograms(self):
         histogarms = {}
@@ -208,3 +220,24 @@ class FTRECURNNV2Model(BaseModel):
         self.backward_G()
         self.optimizer_G.step()
 
+    def set_input_exp(self, input, mask, zscore=3):
+        assert self.mri_data
+        # used for test kspace scanning line recommentation
+        target, _, metadata = input
+        target = target.to(self.device)
+        self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
+        target = self._clamp(target).detach()
+
+        self.mask = mask
+
+        fft_kspace = self.RFFT(target)
+        ifft_img = self.IFFT(fft_kspace * self.mask)
+
+        if self.opt.output_nc >= 2:
+            if self.imag_gt.shape[0] != target.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(target)
+            target = torch.cat([target, self.imag_gt], dim=1)
+
+        self.real_A = ifft_img
+        self.real_B = target

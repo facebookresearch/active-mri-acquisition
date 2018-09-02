@@ -76,7 +76,7 @@ class FFT(nn.Module):
 #     return mask_fft
 
 def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42, random_frac=False):
-    
+    assert random_frac <= 1
     if type(n) is int:
         b = 1
     else:

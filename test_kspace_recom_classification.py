@@ -25,7 +25,7 @@ from pylab import *
 rc('axes', linewidth=2)
 import copy
 import pickle
-from util import util
+from sklearn.metrics import accuracy_score
 
 rfft = RFFT()
 ifft = IFFT()
@@ -55,9 +55,9 @@ def __draw_curve4(Pscore):
             ax2.plot(uncertainty[:,i], color=colors[j], label=key_name, linewidth=5, linestyle=linestyles[i])
 
     ax1.set_ylabel('MSE', fontsize=40)
-    ax1.set_xlabel('kMA', fontsize=40)
+    ax1.set_xlabel('kMA+', fontsize=40)
     ax2.set_ylabel('Uncertainty', fontsize=40)
-    ax2.set_xlabel('kMA', fontsize=40)
+    ax2.set_xlabel('kMA+', fontsize=40)
     ax1.legend(fontsize=15)
     ax2.legend(fontsize=15)
     plt.tick_params(labelsize=25)
@@ -91,9 +91,9 @@ def draw_curve4(Pscore):
                         linewidth=5, linestyle=linestyles[i], yerr=uncertainty[:,1])
 
     ax1.set_ylabel('MSE', fontsize=40)
-    ax1.set_xlabel('kMA', fontsize=40)
+    ax1.set_xlabel('kMA+', fontsize=40)
     ax2.set_ylabel('Uncertainty', fontsize=40)
-    ax2.set_xlabel('kMA', fontsize=40)
+    ax2.set_xlabel('kMA+', fontsize=40)
     ax1.legend(fontsize=15)
     ax2.legend(fontsize=15)
     plt.tick_params(labelsize=25)
@@ -105,15 +105,15 @@ def draw_curve4(Pscore):
     data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     
     return data
-def draw_curve3(uncertainty, pdfsavepath=None):
+def draw_curve3(uncertainty):
     global Percentage
     # uncertanity is a dict each value is a list a a[1] is var
     colors = matplotlib.cm.rainbow(np.linspace(0, 1, 5))
     fig = plt.figure(figsize=(10,10))
     plt.tick_params(labelsize=25)
     for i, (key, values) in enumerate(uncertainty.items()):
-        color = 'black' if 'ours' in key else colors[i]
-        ls = '-' if 'ours' in key else "--"
+        color = 'black' if 'algorithm' in key else colors[i]
+        ls = '-' if 'algorithm' in key else "--"
         data = [u[-1] for u in values] # -1 is var mean value
         key_name = key.replace('_', '+')
         xval = [float(a)/len(data) * Percentage[-1] for a in range(1, len(data)+1)]
@@ -121,11 +121,8 @@ def draw_curve3(uncertainty, pdfsavepath=None):
 
     plt.legend(fontsize=25)
     plt.ylabel('Uncertainty score', fontsize=40)
-    plt.xlabel('kMA (%)', fontsize=40)
+    plt.xlabel('kMA+ (%)', fontsize=40)
 
-    
-    if pdfsavepath is not None:
-        plt.savefig(pdfsavepath)
     fig.tight_layout()
     fig.canvas.draw()
 
@@ -134,7 +131,7 @@ def draw_curve3(uncertainty, pdfsavepath=None):
     data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     
     return data
-def draw_curve2(data, pdfsavepath=None):
+def draw_curve2(data):
     global Percentage
     # for discriminator score
     fig = plt.figure(figsize=(20,10))
@@ -142,17 +139,14 @@ def draw_curve2(data, pdfsavepath=None):
     fig.add_subplot(111)
     # x = np.arange(data.shape[0])
     xval = [float(a)/data.shape[0] * Percentage[-1] for a in range(1, data.shape[0]+1)]
-    plt.plot(xval, data[:,0], 'k', label='ours', linewidth=10)
+    plt.plot(xval, data[:,0], 'k', label='algorithm', linewidth=10)
     plt.fill_between(xval, data[:,0]-data[:,1], data[:,0]+data[:,1],
                     alpha=0.2, edgecolor='#FFFFFF', facecolor='#c2d5db')
     plt.ylabel('Discriminator score', fontsize=40)
-    plt.xlabel('kMA (%)', fontsize=40)
+    plt.xlabel('kMA+ (%)', fontsize=40)
     # plt.title('avgerage reconstruced k-space D-score', fontsize=30)
     plt.legend(fontsize=25)
 
-    
-    if pdfsavepath is not None:
-        plt.savefig(pdfsavepath)
     fig.tight_layout()
     fig.canvas.draw()
 
@@ -161,7 +155,8 @@ def draw_curve2(data, pdfsavepath=None):
     data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     
     return data
-def draw_curve(data, logscale=False, pdfsavepath=None):
+
+def draw_curve(data):
     # for MSE and SSIM
     global Percentage
     colors = matplotlib.cm.rainbow(np.linspace(0, 1, 5))
@@ -171,38 +166,56 @@ def draw_curve(data, logscale=False, pdfsavepath=None):
     fig.add_subplot(121)
 
     for i, (key, values) in enumerate(data.items()):
-        color = 'black' if 'ours' in key else colors[i]
-        ls = '-' if 'ours' in key else "--"
+        color = 'black' if 'algorithm' in key else colors[i]
+        ls = '-' if 'algorithm' in key else "--"
         key_name = key.replace('_', '+')
         xval = [float(a)/values.shape[0] * Percentage[-1] for a in range(1, values.shape[0]+1)]
-        if logscale:
-            yval = np.exp(values[:,0])
-        else:
-            yval = values[:,0]
-        plt.plot(xval, yval, color=color, label=key_name, linewidth=5, linestyle=ls)
-    if logscale:
-        plt.ylabel('exp MSE', fontsize=40)
-    else:
-        plt.ylabel('MSE', fontsize=40)
-    plt.xlabel('kMA (%)', fontsize=40)
+        plt.plot(xval, values[:,0], color=color, label=key_name, linewidth=5, linestyle=ls)
+    plt.ylabel('MSE', fontsize=40)
+    plt.xlabel('kMA+ (%)', fontsize=40)
     plt.legend(fontsize=25)
     plt.tick_params(labelsize=25)
 
     fig.add_subplot(122)
     for i, (key, values) in enumerate(data.items()):
-        color = 'black' if 'ours' in key else colors[i]
-        ls = '-' if 'ours' in key else "--"
+        color = 'black' if 'algorithm' in key else colors[i]
+        ls = '-' if 'algorithm' in key else "--"
         key_name = key.replace('_', '+')
         xval = [float(a)/values.shape[0] * Percentage[-1] for a in range(1, values.shape[0]+1)]
         plt.plot(xval, values[:,1], color=color, label=key_name, linewidth=5, linestyle=ls)
     plt.ylabel('SSIM', fontsize=40)
-    plt.xlabel('kMA (%)', fontsize=40)
+    plt.xlabel('kMA+ (%)', fontsize=40)
     plt.legend(fontsize=25)
     
     plt.tick_params(labelsize=25)
+    fig.tight_layout()
+    fig.canvas.draw()
+
+    # Now we can save it to a numpy array.
+    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     
-    if pdfsavepath is not None:
-        plt.savefig(pdfsavepath)
+    return data
+
+def draw_curve5(data):
+    # for Acc
+    global Percentage
+    colors = matplotlib.cm.rainbow(np.linspace(0, 1, 5))
+
+    fig = plt.figure(figsize=(10,10))
+    n = len(data)
+
+    for i, (key, values) in enumerate(data.items()):
+        color = 'black' if 'algorithm' in key else colors[i]
+        ls = '-' if 'algorithm' in key else "--"
+        key_name = key.replace('_', '+')
+        xval = [float(a)/values.shape[0] * Percentage[-1] for a in range(1, values.shape[0]+1)]
+        plt.plot(xval, values, color=color, label=key_name, linewidth=5, linestyle=ls)
+    plt.ylabel('MSE', fontsize=40)
+    plt.xlabel('kMA+ (%)', fontsize=40)
+    plt.legend(fontsize=25)
+    plt.tick_params(labelsize=25)
+    
     fig.tight_layout()
     fig.canvas.draw()
 
@@ -328,7 +341,7 @@ def compute_D_score(score, mask):
 
 def compute_uncertainty(logvars, ngrid=4):
     var = [logvar.exp().mean().item() for logvar in logvars]
-    var_map = logvars[-1][:ngrid].exp()
+    var_map = logvars[1][:ngrid].exp()
     # var_map = var_map.div(var_map.max())
     uncertainty_map = util.tensor2im(tvutil.make_grid(var_map, nrow=int(np.sqrt(ngrid)), padding=10), renormalize=False)
     uncertainty_map = visualizer.gray2heatmap(uncertainty_map[:,:,0])
@@ -336,18 +349,6 @@ def compute_uncertainty(logvars, ngrid=4):
     get_mse_percentile_for_uncertainty(logvars[-1])
 
     return [uncertainty_map, var[-1]]
-
-def compute_recontruct_uncertainty(reconstruction, uncertainty, ngrid=4):
-    reconstruction = reconstruction[:ngrid,:1].cpu()
-    uncertainty = uncertainty[:ngrid].cpu()
-
-    uncertainty_map = util.tensor2im(tvutil.make_grid(uncertainty, nrow=int(np.sqrt(ngrid)), padding=10), renormalize=False)
-    uncertainty_map = visualizer.gray2heatmap(uncertainty_map[:,:,0])
-
-    reconstruction = util.mri_denormalize(reconstruction)
-    reconstruction = util.tensor2im(tvutil.make_grid(reconstruction, nrow=int(np.sqrt(ngrid)), padding=10), renormalize=False)
-
-    return [reconstruction, uncertainty_map]
 
 def compute_errormap(fake, real, ngrid=4):
     error = (real - fake)[:ngrid,:1]**2
@@ -364,71 +365,9 @@ def compute_mask(masks, ngrid=4):
     masks = util.tensor2im(tvutil.make_grid(masks, nrow=int(np.sqrt(ngrid)), padding=10, pad_value=0.6), renormalize=False)
     return masks
 
-def animate2(images, error_map, iter, start_line=33, tot_line=128):
-    ''' animate the uncertainty maps as # of lines increase '''
-    # images[0] includes [reconstruction, uncertainty]
-    def normalize(data):
-        maxv = 0
-        for i in range(len(data)):
-            # clamp use a small value (<1) so the init visualization is more shaper
-            maxv = max(data[i].clamp_(0,0.6).max().item(), maxv)
-        for i in range(len(data)):
-            data[i].div_(maxv)
-
-    ims = []
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1,4, figsize=(5*3+1,5), gridspec_kw={'width_ratios':[5, 5, 5, 1]})
-    plt.tight_layout()
-
-    # plt.title(f'# of measurement acquired: {i}')
-    ax1.set_title('Reconstruction', fontsize=16)
-    ax2.set_title('Error Map', fontsize=16)
-    ax3.set_title('Uncertainty Map', fontsize=16)
-    ax4.set_title('kMA (%)', fontsize=16)
-    tot = len(images)
-    
-    global Percentage
-    xval = [int(float(a)/tot * Percentage[-1]) for a in range(1, tot+1)]
-
-    normalize([a[1] for a in images])
-
-    # import pdb; pdb.set_trace()
-    for i, n in enumerate(range(start_line, tot+start_line)):
-        
-        rec, unc = compute_recontruct_uncertainty(images[i][0], images[i][1])
-        kMA = xval[i]
-        ax1.axis('off')
-        im = ax1.imshow(rec, animated=True)
-
-        ## Mask 
-        ax2.axis('off')
-        im2 = ax2.imshow(error_map[i], animated=True)
-        
-        ax3.axis('off')
-        im3 = ax3.imshow(unc, animated=True)
-
-        im4, = ax4.plot(np.ones(i+1), np.array(xval[:i+1]), animated=True, lw=20, color='darkred')
-        ax4.xaxis.set_visible(False) # same for y axis.
-
-        ims.append([im, im2, im3, im4])
-
-    plt.tight_layout()
-    ani = animation.ArtistAnimation(fig, ims, interval=100, blit=True,
-                                    repeat_delay=1000)
-    global opt
-    global save_dir
-    name = f"demo_uncertainty{iter}.mp4"
-    save_path = os.path.join(save_dir, name)
-    ani.save(save_path)
-    print('\n -> video saved at', save_path)
-
-    gif_name = f'gif_demo_uncertainty{iter}.gif'
-    if save_gif:
-        ani.save(os.path.join(save_dir, gif_name), writer='imagemagick', fps=10)
-    return name, gif_name
 
 def animate(images, masks, eval_scores, uncertainty, D_score, iter,
             comp_score=None, start_line=33, tot_line=128):
-    ''' animate the acqusition planning process '''
     # scores[0][0] is mse and [0][1] is ssim
     # images[0] is a image grid for error map
     # animate images with scires
@@ -449,10 +388,10 @@ def animate(images, masks, eval_scores, uncertainty, D_score, iter,
 
     # plt.title(f'# of measurement acquired: {i}')
     ax1.set_title('Error Map', fontsize=16)
-    ax2.set_title('Cartesian Subsampling Mask', fontsize=16)
+    ax2.set_title('Cartesian subsampling Mask', fontsize=16)
     ax3.set_title('MSE', fontsize=16)
     ax4.set_title('Uncertainty', fontsize=16)
-    ax5.set_title('k-space Score', fontsize=16)
+    ax5.set_title('Discriminator Score', fontsize=16)
 
     # normalize([u[0] for u in uncertainty])
     # normalize(images)
@@ -487,7 +426,7 @@ def animate(images, masks, eval_scores, uncertainty, D_score, iter,
         ax1.axis('off')
         im = ax1.imshow(images[i], animated=True)
 
-        ## Mask 
+        ## Uncertainty map
         ax2.axis('off')
         im2 = ax2.imshow(masks[i], animated=True)
 
@@ -550,35 +489,95 @@ def animate(images, masks, eval_scores, uncertainty, D_score, iter,
         ani.save(os.path.join(save_dir, gif_name), writer='imagemagick', fps=10)
     return name, gif_name
 
+def accuracy(output, target, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    with torch.no_grad():
+        maxk = max(topk)
+        batch_size = target.size(0)
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+        res = []
+        for k in topk:
+            correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+            res.append(correct_k.mul_(100.0 / batch_size))
+        return res
+        
+def compute_accuracy(imgs, labels):
+    imagnet_classifier.eval()
+    # import pdb; pdb.set_trace()
+    imgs = imgs[:,:1,:,:].repeat(1,3,1,1)
+    imgs = imgs.add(1).div(2)
+    # imgs = (imgs - imgs.min()) / (imgs.max() - imgs.min())
+    # imgs = F.upsample(imgs, size=(224,224), mode='bilinear')
+    inputs = (imgs - classifier_mean) / classifier_std
+    
+    with torch.no_grad():
+        acc = accuracy(imagnet_classifier(inputs).cpu(), labels, topk=(1,5))
+        acc = [a.item() for a in acc]
+
+    print(f'\n img min {imgs.min().item()} max {imgs.max().item()} acc {acc}')
+
+    # import pdb; pdb.set_trace()
+
+    return acc
+
+import torchvision.models as models
+from torchvision import transforms
+
+from util.train_128gray_resnet import resnet128
+imagnet_classifier = resnet128.resnet50().to(0)
+checkpoint_path = '/private/home/zizhao/work/checkpoint_fmri/resnset128_scratch/model_best.pth.tar'
+checkpoint = torch.load(checkpoint_path)
+print('checkpoint prec', checkpoint['best_prec1'])
+imagnet_classifier = torch.nn.DataParallel(imagnet_classifier, device_ids=[0]).cuda()
+imagnet_classifier.load_state_dict(checkpoint['state_dict'])
+imagnet_classifier.eval()
+classifier_mean = torch.cuda.FloatTensor([0.43, 0.43, 0.43]).view(1,3,1,1)
+classifier_std = torch.cuda.FloatTensor([0.23, 0.23, 0.23]).view(1,3,1,1)
+
 opt = None
 save_dir = None
-"---------Parameter settings--------"
-debug = False
-## if conjudge_symmetric is True. We select a line and this conjudge symmetric one is automatically selected
+"-----------------------------------------"
+## conjudge_symmetric is True. We select lines only on the top 65 lines and the bottom conjudge symmetric lines are filled automatically
 # The code will adapt automatically for that 
 conjudge_symmetric=True
 ## How many lines we observed at init. If it is euqal to 0, we use the LF 10 lines
 ## If = 25, we use the default 25% subsampling pattern
 observed_line_n = 0
 ## If n_forward is None, it will calculate automatically. For debug, set it to a small value
-n_forward = None if not debug else 10
-tot_iter = 2
+n_forward = None
+tot_iter = 1
 # for displaying the xval of plot, the percentage of oberved lines
 Percentage = [] 
-save_metadata = True
-save_gif = True
-"------------------------------------" 
+save_metadata = False
+save_gif = False
+"-----------------------------------------"
+
 if __name__ == '__main__':
-    if debug:
-        print('-'*100)
-        print('Warning in debug mode')
+    
     opt = TestOptions().parse()
     assert (opt.no_dropout)
 
     opt.results_dir = opt.checkpoints_dir
-    test_data_loader = CreateFtTLoader(opt, is_test=True)
+    # test_data_loader = CreateFtTLoader(opt, is_test=True)
     model = create_model(opt)
     model.setup(opt)
+    
+    import torchvision.datasets as datasets
+    valdir = os.path.join('/datasets01/imagenet_resized_144px/060718/061417', 'val')
+    test_data_loader = torch.utils.data.DataLoader(
+        datasets.ImageFolder(valdir, transforms.Compose([
+            transforms.Grayscale(num_output_channels=1), # zz
+            transforms.Resize(144),
+            # transforms.Resize(224),
+            transforms.CenterCrop(128),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5,0.5])
+        ])),
+        batch_size=opt.batchSize, shuffle=False,
+        num_workers=4, pin_memory=True)
 
     val_count = 0
     # saved = False
@@ -586,10 +585,7 @@ if __name__ == '__main__':
     use_forward = True
 
     # create website
-    if conjudge_symmetric:
-        web_dir = os.path.join(opt.results_dir, opt.name, 'test_recommend_%s' % (opt.which_epoch) if not debug else 'test_recommend_%s_debug' % (opt.which_epoch))
-    else:
-        web_dir = os.path.join(opt.results_dir, opt.name, 'test_recommend_%s_noconjectsymmetric' % (opt.which_epoch))
+    web_dir = os.path.join(opt.results_dir, opt.name, 'test_recommend_%s' % (opt.which_epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
     save_dir = webpage.get_image_dir()
     # test
@@ -631,16 +627,20 @@ if __name__ == '__main__':
     for i, data in enumerate(test_data_loader):
         
         print('\n Conduct iteration', i)
+        # data = data[:-1]
+        data[0] = data[0][:,:1,:,:]
+        img_labels = data[1].mul(1)
         score_list = OrderedDict()
         visual_list = OrderedDict()
+        acc_list = OrderedDict()
         uncertainty_list = OrderedDict()
         score_D = []
         visuals = {}
-
+        
         if observed_line_n != 32:
             if init_mask.shape[0] == 1:
                 init_mask = init_mask.repeat(data[0].shape[0],1,1,1)
-            model.set_input_exp(data[1:], init_mask)
+            model.set_input_exp2(data, init_mask)
         else:
             model.set_input(data)
 
@@ -657,11 +657,12 @@ if __name__ == '__main__':
         score_list['algorithm'] = [compute_scores(fakeB, realB, mask)]
         visual_list['algorithm_errormap'] = [compute_errormap(fakeB, realB)]
         score_list['algorithm_mask'] = [ compute_mask(mask) ]
+
+        acc_list['algorithm'] = [compute_accuracy(realB, img_labels)] # TODO change to fakeB
+        
         uncertainty_list['algorithm']= [compute_uncertainty(init_logvars)]
         
         score_D.append(compute_D_score(pred_kspace_score, mask))
-        reconstruction_list = [ [fakeB.cpu(), model.logvars[-1].cpu().exp()] ] # for visualize video of reconstruction and uncertainty
-        
 
         PScore = {} # Pertentile score
         InfoPScore = {} # Information Percentile score
@@ -684,7 +685,7 @@ if __name__ == '__main__':
 
             if use_forward:
                 #do another forward
-                model.set_input_exp(data[1:], new_mask)
+                model.set_input_exp2(data, new_mask)
                 model.test()
                 (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
                 old_fakeB = model.fake_B
@@ -694,18 +695,21 @@ if __name__ == '__main__':
             old_mask = new_mask
             old_mask_count = old_mask.squeeze().sum(1).mean()
 
-            reconstruction_list.append([old_fakeB.cpu(), model.logvars[-1].cpu().exp()])
+            acc_list['algorithm'].append(compute_accuracy(fakeB, img_labels))
+
             score_list['algorithm'].append(compute_scores(old_fakeB, realB, old_mask))
+
             uncertainty_list['algorithm'].append(compute_uncertainty(model.logvars))
             visual_list['algorithm_errormap'].append(compute_errormap(old_fakeB, realB))
             score_list['algorithm_mask'].append(compute_mask(old_mask))
-            Percentage.append(old_mask[0].sum().item() / opt.fineSize)
 
+            Percentage.append(old_mask[0].sum().item() / opt.fineSize)
             if nf < (n_forward-1) and old_mask[1].sum() == opt.fineSize:
                 print ('>> reach the all lines earlier. break')
                 break
-        TOT_SEEN_LINE = old_mask[1].sum()
 
+        TOT_SEEN_LINE = old_mask[1].sum()
+        import pdb; pdb.set_trace()
         score_D = score_D[:-1] # the last one has no meaning 
         score_D.append(score_D[-1])
         Percentage = [int(np.around(xval * 100)) for xval in Percentage]
@@ -714,15 +718,13 @@ if __name__ == '__main__':
         # InfoPScore['algorithm'] = [copy.deepcopy(InfoPerc)]
         MSE, Uncertainty, InfoPScore = [], [], []
 
-        ## generate video demo
-        video_path2, gif_path2 = animate2(reconstruction_list, visual_list['algorithm_errormap'], start_line=observed_line_n, iter=i)
         video_path, gif_path = animate(visual_list['algorithm_errormap'], score_list['algorithm_mask'], score_list['algorithm'], uncertainty_list['algorithm'], 
                         score_D, start_line=observed_line_n, iter=i)
-        
-        
+
         ''' Start to random select lines '''
         score_list['random'] = [compute_scores(fakeB, realB, mask)]
-        
+        acc_list['random'] = [compute_accuracy(fakeB, model.img_labels)]
+
         # random some lines order
         bz = mask.shape[0]
         tmp_mask = mask.mul(1)
@@ -746,6 +748,8 @@ if __name__ == '__main__':
             old_fakeB = new_fakeB
             old_mask = new_mask
             score_list['random'].append(compute_scores(old_fakeB, realB, old_mask))
+            acc_list['random'].append(compute_accuracy(fakeB, model.img_labels))
+
             if old_mask[1].sum() == opt.fineSize:
                 break
         assert old_mask[1].sum() == TOT_SEEN_LINE
@@ -756,6 +760,8 @@ if __name__ == '__main__':
             print('\n step 3 random + reconstruction: ')
             score_list['random_reconstruction'] = [compute_scores(fakeB, realB, mask)]
             uncertainty_list['random_reconstruction']= [compute_uncertainty(init_logvars)]
+            acc_list['random_reconstruction'] = [compute_accuracy(fakeB, model.img_labels)]
+
             old_fakeB = fakeB
             old_mask = mask
                         
@@ -765,13 +771,14 @@ if __name__ == '__main__':
                 new_fakeB, new_mask = replace_kspace_lines(old_fakeB, realB, old_mask, n_recom_each, None, random=cand_line)
 
                 #do another forward
-                model.set_input_exp(data[1:], new_mask)
+                model.set_input_exp2(data, new_mask)
                 model.test()
                 (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
                 old_fakeB = model.fake_B
                 old_mask = new_mask
                 score_list['random_reconstruction'].append(compute_scores(old_fakeB, realB, old_mask))
                 uncertainty_list['random_reconstruction'].append(compute_uncertainty(model.logvars))
+                acc_list['random_reconstruction'].append(compute_accuracy(fakeB, model.img_labels))
                 if old_mask[1].sum() == opt.fineSize:
                     break
             assert old_mask[1].sum() == TOT_SEEN_LINE
@@ -785,6 +792,7 @@ if __name__ == '__main__':
 
         print('\n step 4 order: ')
         score_list['order'] = [compute_scores(fakeB, realB, mask)]
+        acc_list['order'] = [compute_accuracy(fakeB, model.img_labels)]
 
         mask_zero_idx = np.nonzero(1-mask[0].squeeze())
         if not conjudge_symmetric:
@@ -804,6 +812,7 @@ if __name__ == '__main__':
             old_fakeB = new_fakeB
             old_mask = new_mask
             score_list['order'].append(compute_scores(old_fakeB, realB, old_mask))
+            acc_list['order'].append(compute_accuracy(fakeB, model.img_labels))
             if old_mask[1].sum() == opt.fineSize:
                 break
 
@@ -812,20 +821,21 @@ if __name__ == '__main__':
         old_mask = mask
         score_list['order_reconstruction'] = [compute_scores(fakeB, realB, mask)]
         uncertainty_list['order_reconstruction']= [compute_uncertainty(init_logvars)]
-
+        acc_list['order_reconstruction'] = [compute_accuracy(fakeB, model.img_labels)]
         for s in range(n_forward):
             cand_line = cand_lines[:,s*n_recom_each:(s+1)*n_recom_each]
             # calcuate which line to replace and replace it
             new_fakeB, new_mask = replace_kspace_lines(old_fakeB, realB, old_mask, n_recom_each, None, random=cand_line)
 
             # do another forward
-            model.set_input_exp(data[1:], new_mask)
+            model.set_input_exp2(data, new_mask)
             model.test()
             (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
             old_fakeB = model.fake_B
             old_mask = new_mask
             score_list['order_reconstruction'].append(compute_scores(old_fakeB, realB, old_mask))
             uncertainty_list['order_reconstruction'].append(compute_uncertainty(model.logvars))
+            acc_list['order_reconstruction'].append(compute_accuracy(fakeB, model.img_labels))
             if old_mask[1].sum() == opt.fineSize:
                 break
         assert old_mask[1].sum() == TOT_SEEN_LINE
@@ -833,50 +843,50 @@ if __name__ == '__main__':
         MSE, Uncertainty, InfoPScore = [], [], []
 
 
-        "record everthing thing"
+        "record all thing"
         score = OrderedDict()
-        score_D = np.array(score_D)
-        score_uncetainty = OrderedDict()
 
         score['random_C'] = np.array(score_list['random'])
         if use_forward:
             score['random_C_R'] = np.array(score_list['random_reconstruction'])
         score['order_C'] = np.array(score_list['order'])
         score['order_C_R'] = np.array(score_list['order_reconstruction'])
-        score['ours_C_R'] = np.array(score_list['algorithm'])
+        score['algorithm_C_R'] = np.array(score_list['algorithm'])
         
+        acc = OrderedDict()
+        score_D = np.array(score_D)
+        for k, v in acc_list.items():
+            acc[k] = np.array(v)
+
         # curves of uncertainty
+        score_uncetainty = OrderedDict()
         score_uncetainty['random_C_R'] = uncertainty_list['random_reconstruction']
         score_uncetainty['order_C_R'] = uncertainty_list['order_reconstruction']     
-        score_uncetainty['ours_C_R'] = uncertainty_list['algorithm']   
+        score_uncetainty['algorithm_C_R'] = uncertainty_list['algorithm']   
 
         ## draw curves 
-        save_dir = webpage.get_image_dir()
-        visuals['performance'] = draw_curve(score, pdfsavepath=os.path.join(save_dir, 'performance.pdf'))
-        # visuals['performance_log'] = draw_curve(score,logscale=True)
-        visuals['D-score'] = draw_curve2(score_D, pdfsavepath=os.path.join(save_dir, 'D-score.pdf'))
-        visuals['uncertainty'] = draw_curve3(score_uncetainty, pdfsavepath=os.path.join(save_dir, 'uncertainty.pdf'))
+        visuals['performance'] = draw_curve(score)
+        visuals['D-score'] = draw_curve2(score_D)
+        visuals['uncertainty'] = draw_curve3(score_uncetainty)
+        visuals['acc'] = draw_curve5(acc)
+
         visuals['demo'] = video_path
-        visuals['demo_uncertainty'] = video_path2
         visuals['groundtruth'] = visual_list['groundtruth'] 
         visuals['input'] = visual_list['input'] 
         
         if save_gif:
             visuals['gif'] = gif_path
-            visuals['gif_uncertainty'] = gif_path2
+
         # save data
         if save_metadata:
             MetaData = {}
-            MetaData['Percentage'] = Percentage
-            MetaData['data'] = data
             MetaData['score'] = score
             MetaData['score_D'] = score_D
-            MetaData['uncetainty'] = score_uncetainty
-            
+            MetaData['data'] = data
             meta_name = f'metadata{i}.pickle'
             with open(os.path.join(save_dir, meta_name),'wb') as f:
                 pickle.dump(MetaData, f)
-                print('save metadata at', os.path.join(save_dir, meta_name))
+                print('save at', os.path.join(save_dir, meta_name))
 
             visuals['metadata'] = meta_name
 

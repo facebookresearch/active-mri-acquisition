@@ -64,14 +64,18 @@ def get_train_valid_loader(batch_size,
 
     normalize_tf = get_norm_transform(normalize)
     # define transforms
-    valid_transform = transforms.Compose([
+    valid_transform = transforms.Compose(
+        ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) + \
+        [
             transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
             transforms.CenterCrop(fine_size),
             transforms.ToTensor(),
             normalize_tf,
-    ])
+        ])
     if augment:
-        train_transform = transforms.Compose([
+        train_transform = transforms.Compose(
+            ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) + \
+            [
             transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
             transforms.RandomCrop(fine_size),
             transforms.RandomHorizontalFlip(),
@@ -89,6 +93,17 @@ def get_train_valid_loader(batch_size,
         args = args.Args().parse_args(args=[])
         mask_func = subsample.Mask(reuse_mask=True)
         dataset = dicom_dataset.Slice(mask_func, args)
+    elif which_dataset == 'KNEE_RAW':
+        from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
+        sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
+        mask_func = Mask(reuse_mask=False, subsampling_ratio=keep_ratio, random=True)
+        root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
+        dataset = PCASingleCoilSlice(mask_func, root, which='train')
+        print(f'{which_dataset} train has {len(dataset)} samples')
+        num_workers = 8
+    elif which_dataset == 'TinyImageNet':
+        train_dir = '/datasets01/tinyimagenet/081318/train'
+        dataset = datasets.ImageFolder(train_dir, transform=train_transform)
     else:
         if which_dataset == 'CIFAR10':
             dataset = FT_CIFAR10
@@ -119,12 +134,12 @@ def get_train_valid_loader(batch_size,
     
     train_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, sampler=train_sampler,
-        num_workers=num_workers, pin_memory=pin_memory
+        num_workers=num_workers, pin_memory=pin_memory, drop_last=True
         )
 
     valid_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, sampler=valid_sampler, shuffle=False,
-        num_workers=num_workers, pin_memory=pin_memory
+        num_workers=num_workers, pin_memory=pin_memory, drop_last=True
     )
     
     return (train_loader, valid_loader)
@@ -160,12 +175,14 @@ def get_test_loader(batch_size,
     random_seed = 1234
     normalize_tf = get_norm_transform(normalize)
     # define transform
-    transform = transforms.Compose([
+    transform = transforms.Compose(
+        ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) + \
+        [
             transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
             transforms.CenterCrop(fine_size),
             transforms.ToTensor(),
             normalize_tf,
-    ])
+        ])
 
     print('load {} test dataset'.format(which_dataset))
 
@@ -176,6 +193,17 @@ def get_test_loader(batch_size,
         args = args.Args().parse_args(args=[])
         mask_func = subsample.Mask(reuse_mask=True)
         dataset = dicom_dataset.Slice(mask_func, args, which='val')
+    elif which_dataset == 'KNEE_RAW':
+        from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
+        sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
+        mask_func = Mask(reuse_mask=True, subsampling_ratio=keep_ratio, random=False)
+        root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
+        dataset = PCASingleCoilSlice(mask_func, root, which='val')
+        print(f'{which_dataset} val has {len(dataset)} samples')
+        num_workers = 8
+    elif which_dataset == 'TinyImageNet':
+        test_dir = '/datasets01/tinyimagenet/081318/test'
+        dataset = datasets.ImageFolder(test_dir, transform=transform)
     else:  
         if which_dataset == 'CIFAR10':
             dataset = FT_CIFAR10
@@ -203,12 +231,12 @@ def get_test_loader(batch_size,
         test_sampler = SequentialSampler2(indices)
         data_loader = torch.utils.data.DataLoader(
             dataset, batch_size=batch_size, shuffle=False,
-            num_workers=num_workers, pin_memory=pin_memory, sampler=test_sampler
+            num_workers=num_workers, pin_memory=pin_memory, sampler=test_sampler, drop_last=True
         )
     else:
         data_loader = torch.utils.data.DataLoader(
             dataset, batch_size=batch_size, shuffle=False,
-            num_workers=num_workers, pin_memory=pin_memory
+            num_workers=num_workers, pin_memory=pin_memory, drop_last=True
         )
 
     return data_loader

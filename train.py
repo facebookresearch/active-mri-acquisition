@@ -56,7 +56,7 @@ if __name__ == '__main__':
         print('-> evaluating model {} ... '.format(opt.name))
         # TODO should we use evaluation mode? Not necessary
         if opt.eval_full_valid:
-            visuals, losses = model.validation(val_data_loader, how_many_to_valid=float('inf'))
+            visuals, losses = model.validation(val_data_loader, how_many_to_valid=4096)
         elif opt.debug:
             visuals, losses = model.validation(val_data_loader, how_many_to_valid=4096)
         else:

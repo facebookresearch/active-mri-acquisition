@@ -159,3 +159,25 @@ class Pix2PixModel(BaseModel):
         self.optimizer_G.zero_grad()
         self.backward_G()
         self.optimizer_G.step()
+        
+    def set_input_exp(self, input, mask, zscore=3):
+        assert self.mri_data
+        # used for test kspace scanning line recommentation
+        target, _, metadata = input
+        target = target.to(self.device)
+        self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
+        target = self._clamp(target).detach()
+
+        self.mask = mask
+
+        fft_kspace = self.RFFT(target)
+        ifft_img = self.IFFT(fft_kspace * self.mask)
+
+        if self.opt.output_nc >= 2:
+            if self.imag_gt.shape[0] != target.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(target)
+            target = torch.cat([target, self.imag_gt], dim=1)
+
+        self.real_A = ifft_img
+        self.real_B = target

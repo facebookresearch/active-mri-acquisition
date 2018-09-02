@@ -8,7 +8,6 @@ name=knee_baseline_resnetzz
 python train.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_attcnn \
-                --which_model_netG densenet \
                 --loadSize 144 \
                 --fineSize 128 \
                 --norm instance \

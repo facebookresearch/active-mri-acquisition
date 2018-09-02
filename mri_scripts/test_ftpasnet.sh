@@ -2,10 +2,10 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_exp'
 
-name=knee_pasnet_uncertainty_w111
-python test.py --dataroot 'KNEE' \
+name=knee_pasnetplus_uncertainty_w111
+python sampling.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_recurnnv2 \
                 --checkpoints_dir $checkpoints_dir \

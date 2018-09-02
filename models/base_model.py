@@ -35,7 +35,7 @@ class BaseModel():
         self.image_paths = []
 
         self.validation_phase = False
-        self.mri_data = self.opt.dataroot in ('KNEE')
+        self.mri_data = self.opt.dataroot in ('KNEE','KNEE_RAW')
 
         # condition on metadata scan_type
         self.meta2label = {
@@ -191,7 +191,7 @@ class BaseModel():
                     param.requires_grad = requires_grad
 
 
-    def validation(self, val_data_loader, how_many_to_display=64, how_many_to_valid=4096*4, n_samples=8):
+    def validation(self, val_data_loader, how_many_to_display=64, how_many_to_valid=4096*4, n_samples=8, metasavepath=None):
         
         if self.mri_data:
             tensor2im = functools.partial(util.tensor2im, renormalize=False)
@@ -274,17 +274,17 @@ class BaseModel():
                 for a in val_data: 
                     util.mri_denormalize(a[i])
 
-        ### save a pickle for inspection
-        # import pickle
-        # pickle_file = {}
-        # pickle_file['var'] = val_data[0][3][12:18].cpu().numpy()
-        # pickle_file['gt'] = val_data[0][2][:6].cpu().numpy()
-        # pickle_file['rec'] = val_data[0][1][:6].cpu().numpy()
-        # pickle_file['input'] = val_data[0][0][:6].cpu().numpy()
-        # pickle_file['residual'] = np.abs(pickle_file['gt'] - pickle_file['rec'])
-        # pickle_file['mask'] = self.mask[:6,:,:,:].repeat(1,1,1,128).cpu().numpy()
-
-        # pickle.dump(pickle_file, open('ipython_notebook/pickle_mri_results.pickle','wb'))
+        if metasavepath is not None:
+            ## save a pickle for inspection
+            import pickle
+            pickle_file = {}
+            pickle_file['var'] = val_data[0][3].cpu().numpy()
+            pickle_file['gt'] = val_data[0][2].cpu().numpy()
+            pickle_file['rec'] = val_data[0][1].cpu().numpy()
+            pickle_file['input'] = val_data[0][0].cpu().numpy()
+            pickle_file['residual'] = np.abs(pickle_file['gt'] - pickle_file['rec'])
+            pickle_file['mask'] = self.mask.repeat(1,1,1,128).cpu().numpy()
+            pickle.dump(pickle_file, open(metasavepath,'wb'))
 
         visuals = {}
         input_tensor = torch.cat([a[0] for a in val_data], dim=0)[:how_many_to_display]
@@ -397,7 +397,7 @@ class BaseModel():
                 seed = np.random.randint(10000)
                 mask = create_mask((batchSize, self.opt.fineSize), random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
         else:
-            mask = create_mask(self.opt.fineSize, random_frac=False, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+            mask = create_mask((batchSize, self.opt.fineSize), random_frac=False, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
             
         return mask
     
@@ -424,7 +424,8 @@ class BaseModel():
 
     def set_input1(self, input):
         # output from FT loader
-        img, _, _ = input
+        
+        img= input[0]
         img = img.to(self.device)
 
         self.mask = self.gen_random_mask(batchSize=img.shape[0])
@@ -434,7 +435,7 @@ class BaseModel():
         # we actually want the imagary part is also supervised, which should be all zero
         fft_kspace = self.RFFT(img)
         
-        if self.opt.output_nc == 2:
+        if self.opt.output_nc >= 2:
             if self.imag_gt.shape[0] != img.shape[0]:
                 # imagnary part is all zeros
                 self.imag_gt = torch.zeros_like(img)
@@ -442,13 +443,7 @@ class BaseModel():
 
         self.real_A = self.IFFT(fft_kspace * self.mask)
         self.real_B = img
-
-        # condition on metadata scan_type
-        self.meta2label = {
-            'sag':0 ,
-            'ax': 1,
-            'cor': 2
-        }
+        self.metadata = None
 
     def metadata2onehot(self, metadata, dtype):
                 

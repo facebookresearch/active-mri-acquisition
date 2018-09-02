@@ -12,6 +12,8 @@ import torch.nn.functional as F
 import numpy as np
 from PIL import Image
 import functools
+from util.draw_figure import draw_histogram
+from models.fft_utils import create_mask
 
 if __name__ == '__main__':
     opt = TestOptions().parse()
@@ -32,11 +34,13 @@ if __name__ == '__main__':
     else:
         tensor2im = util.tensor2im
 
-    for it in range(5):
-        
+    for it in range(10):
+        visuals = {}
         model.display_data = None
         # do validation and compute metrics
-        visuals, losses = model.validation(test_data_loader, how_many_to_display=36, how_many_to_valid=10, n_samples=opt.n_samples)    
+        metasavepath = os.path.join(webpage.get_image_dir(), f'validation_metadata{it}.pickle')
+        visuals, losses = model.validation(test_data_loader, how_many_to_display=36, how_many_to_valid=10, 
+                                            n_samples=opt.n_samples, metasavepath=metasavepath)    
         if hasattr(model, 'sampling'):
             # sampling from prior multiple times
             sample_x = model.sampling(model.display_data[0], n_samples=opt.n_samples, max_display=16, return_all=True)
@@ -62,8 +66,22 @@ if __name__ == '__main__':
             #     visuals_gif_seq.append(Image.fromarray(visuals_gif))
             # visuals['rec_gif'] = visuals_gif_seq
 
+        ''' show histogram of uncertainty '''
+        uncertainty = []
+        for j, data in enumerate(test_data_loader):
+            if j > 1: break
+            model.set_input(data)
+            model.test()
+            uncertainty.append(np.stack([logvar.exp().cpu().numpy() for logvar in model.logvars],0))
+
+        uncertainty = np.concatenate(uncertainty, 1) #[3,B*J,1,H,W]
+        visuals['uncertainty'] = draw_histogram(uncertainty.reshape(uncertainty.shape[0],-1), os.path.join(webpage.get_image_dir(), f'uncertainty_{it}.pdf'))
+        visuals['validation_metadata'] = os.path.basename(metasavepath)
+
+
         save_images(webpage, visuals, f'sampling ({opt.n_samples} samples) iter {it}', aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
         sys.stdout.write(f'\r --> iter {it}')
         sys.stdout.flush()
+        webpage.save()
 
-    webpage.save()
+

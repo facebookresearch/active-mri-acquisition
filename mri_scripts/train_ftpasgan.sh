@@ -4,7 +4,7 @@ echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
 checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
 
-name=knee_energypasnetplus_w111logvar_0.01gan_gradctx_pxlm
+name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_full
 python train.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_pasgan \
@@ -12,7 +12,7 @@ python train.py --dataroot 'KNEE' \
                 --batchSize 48 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
                 --print_freq 50 \
-                --lambda_gan 0.01 \
+                --lambda_gan 0.1 \
                 --mask_cond \
                 --where_loss_weight 'logvar' \
                 --use_fixed_weight '1,1,1' \
@@ -20,7 +20,10 @@ python train.py --dataroot 'KNEE' \
                 --use_mse_as_disc_energy \
                 --which_model_netG 'pasnetplus' \
                 --pixelwise_loss_merge \
-                --grad_ctx
+                --grad_ctx \
+                --niter 30 \
+                --niter 30 \
+                --eval_full_valid
 
 # name=knee_paslocalgan_w111_10gan
 # python train.py --dataroot 'KNEE' \

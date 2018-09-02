@@ -13,6 +13,6 @@
 
 
 ## TODO
-- ~~Checkout the https://github.com/facebookexternal/fast_mri/common code for evaluation and loader of MRI datasets~~
-- ~~Save optimizer parameters also to better support continuous training~~
+test_moving_ratio:
 
+test_kspace_recom:
