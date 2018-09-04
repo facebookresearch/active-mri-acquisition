@@ -40,12 +40,12 @@ if __name__ == '__main__':
 
     model = create_model(opt)
     model.setup(opt)
-    import pdb; pdb.set_trace()
+
     reconst_ssim, reconst_loss, error_uncertainty_list, reconst_loss_sample = [], [], [], []
     visuals = {}
 
     conjudge_symmetric = True
-    opt.how_many = 512
+    opt.how_many = 1024 * 5
     # # create website
     web_dir = os.path.join(opt.results_dir, opt.name, 'moving_ratio_experiment_%s_%s' % (opt.phase, opt.which_epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
@@ -68,8 +68,8 @@ if __name__ == '__main__':
             err = err.numpy()
         return err 
     
-    # ratios = np.arange(0.02, 0.25, 0.02) # [0.02,0.05,0.1,0.15,0.2,0.25]
-    ratios = np.arange(0.02, 0.8, 0.01) # only for draw box plot MSEVAR
+    ratios = np.arange(0.02, 0.25, 0.02) # [0.02,0.05,0.1,0.15,0.2,0.25]
+    # ratios = np.arange(0.02, 0.8, 0.01) # only for draw box plot MSEVAR
     masks = []
     kMA = []
     for ratio in ratios:
@@ -153,11 +153,11 @@ if __name__ == '__main__':
     reconst_loss_sample = reconst_loss_sample[:,:,0,:,:,0] 
     metadat = {'mse': mse_sample, 'samples': reconst_loss_sample, 'kMA': kMA}
     pickle.dump(metadat, open('experiments/kspace_line_var/metadata512.pickle','wb'), protocol=4)
-    figmsevar = draw_figure.draw_curve_msevar(kMA, mse_sample, ylabel='MSE', pdfsavepath=os.path.join(saveroot,'msevar.pdf'))
+    # figmsevar = draw_figure.draw_curve_msevar(kMA, mse_sample, ylabel='MSE', pdfsavepath=os.path.join(saveroot,'msevar.pdf'))
 
     visuals['SSIM'] = figssim
     visuals['MSE'] = figmse
-    visuals['MSEVAR'] = figmsevar
+    # visuals['MSEVAR'] = figmsevar
 
     metadata = {}
     metadata['kMA'] = kMA

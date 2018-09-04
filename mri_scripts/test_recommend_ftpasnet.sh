@@ -7,8 +7,9 @@ checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
 ## general one
 # name=knee_pasgan_uncertainty_w113_logvar_maskmetacond_0.5gan_mseenergy_lr6e-4
 # name=knee_energypasnetplus_w113logvar_0.5gan_gradctx_pxlm
-name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm # current best
+# name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm # current best
 # name=knee_energypasnetplus_w111logvar_0.01gan_gradctx_pxlm # also fine
+name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_randomfull
 python test_kspace_recom.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_pasgan \

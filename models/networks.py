@@ -187,6 +187,10 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         from .tiramisu import FCDenseNet57, FCDenseNet103
         # netG = FCDenseNet57(input_nc, output_nc)
         netG = FCDenseNet103(input_nc, output_nc)
+    elif which_model_netG == 'densenet_residual':
+        from .tiramisu import FCDenseNet57, FCDenseNet103
+        _netG = FCDenseNet103(input_nc, output_nc)
+        netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
     elif which_model_netG == 'resnet_residual':
         # used to compared to resnet_9blocks_attention_residual to see if softattention is useful
         netG = ResnetGeneratorMaskingResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 

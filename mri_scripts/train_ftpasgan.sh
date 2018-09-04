@@ -4,7 +4,7 @@ echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
 checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
 
-name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_full
+name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_full_randomfull
 python train.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_pasgan \
@@ -23,7 +23,8 @@ python train.py --dataroot 'KNEE' \
                 --grad_ctx \
                 --niter 30 \
                 --niter 30 \
-                --eval_full_valid
+                --eval_full_valid \
+                --dynamic_mask_type 'random_full' 
 
 # name=knee_paslocalgan_w111_10gan
 # python train.py --dataroot 'KNEE' \

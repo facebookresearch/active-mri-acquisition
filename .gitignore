@@ -10,3 +10,8 @@ data/__pycache__
 data/ft_data_loader/__pycache__
 util/pytorch_mssim/__pycache__
 experiments/
+ipython_notebook/*.gif
+ipython_notebook/*.pickle
+ipython_notebook/*.png
+options/__pycache__/
+.DS_Store

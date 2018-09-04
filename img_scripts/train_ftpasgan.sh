@@ -4,7 +4,7 @@ echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
 checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_exp'
 
-name=imagenet_energyresnetplus_w111logvar_0.1gan_0.1ratio
+name=imagenet_energyresnetplus_w111logvar_0.1gan_0.2ratio_randomfull
 python train.py --dataroot 'ImageNet' \
                 --name $name \
                 --model ft_pasgan_ablation \
@@ -20,4 +20,5 @@ python train.py --dataroot 'ImageNet' \
                 --which_model_netG 'pasnetplus_nomaskcond' \
                 --pixelwise_loss_merge \
                 --grad_ctx \
-                --kspace_keep_ratio 0.1 
+                --kspace_keep_ratio 0.2 \
+                --dynamic_mask_type 'random_full'

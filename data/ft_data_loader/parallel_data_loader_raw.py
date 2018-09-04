@@ -103,6 +103,7 @@ class Mask:
             return self.mask
         else:
             self.mask = create_mask(shape, random_frac=self.random, mask_fraction=self.subsampling_ratio)
+            # self.mask = create_mask(shape, random_frac=self.random, mask_fraction=self.subsampling_ratio, random_full=True)
             return self.mask
 
 class PCASingleCoilSlice(data.Dataset):

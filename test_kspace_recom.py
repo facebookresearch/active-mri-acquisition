@@ -13,7 +13,7 @@ import numpy as np
 from collections import OrderedDict
 import functools
 from util.util import ssim_metric
-from models.fft_utils import RFFT, IFFT
+from models.fft_utils import RFFT, IFFT, FFT
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -29,7 +29,7 @@ from util import util
 
 rfft = RFFT()
 ifft = IFFT()
-
+fft = FFT()
 
 def __draw_curve4(Pscore):
     # for percentile
@@ -80,7 +80,6 @@ def draw_curve4(Pscore):
     names = ['top10', 'median', 'bottom10']
     linestyles = ['-',':','--']
     for j, k in enumerate(Pscore.keys()):
-        # import pdb; pdb.set_trace()
         # two method comparison
         mse = np.array(Pscore[k][0])
         uncertainty = np.array(Pscore[k][1])
@@ -137,7 +136,7 @@ def draw_curve3(uncertainty, pdfsavepath=None):
 def draw_curve2(data, pdfsavepath=None):
     global Percentage
     # for discriminator score
-    fig = plt.figure(figsize=(20,10))
+    fig = plt.figure(figsize=(15,10))
     plt.tick_params(labelsize=25)
     fig.add_subplot(111)
     # x = np.arange(data.shape[0])
@@ -213,8 +212,12 @@ def draw_curve(data, logscale=False, pdfsavepath=None):
     return data
 
 def merge_kpsace(pred, gt, mask):
-    p_fft = rfft(pred[:,:1,:,:])
-    g_fft = rfft(gt[:,:1,:,:])
+    if is_rawdata:
+        p_fft = fft(pred[:,:2,:,:])
+        g_fft = fft(gt[:,:2,:,:])
+    else:
+        p_fft = rfft(pred[:,:1,:,:])
+        g_fft = rfft(gt[:,:1,:,:])
     assert len(mask.shape) == 4
     assert mask.shape[1] == 1 and mask.shape[3] == 1
     res = g_fft * mask + p_fft * (1-mask)
@@ -231,18 +234,29 @@ def replace_kspace_lines(pred, gt, mask, n_line, mask_score, random=None):
     mask_new = mask.mul(1).squeeze() # copy mem
     
     if random is None:
-        mask_score.masked_fill_(mask_new.byte(), 100) # do not select from real one set it to a large value
-        min_ranked_score, indices = torch.sort(mask_score, 1, descending=False)
-        indices = indices[:,:n_line]
+        if is_rawdata:
+            # Experimental: Add conjudge 
+            mask_score.masked_fill_(mask_new.byte(), 1000000)
+            inver_idx = torch.Tensor(list(np.arange(cs_h//2,cs_h,1)[::-1])).long()
+            mask_score[:,1:cs_h//2+1] = mask_score[:,1:cs_h//2+1] + mask_score[:,inver_idx]
+            min_ranked_score, indices = torch.sort(mask_score[:,:cs_h//2+1], 1, descending=False)
+            indices = indices[:,:n_line]
+        else:
+            mask_score.masked_fill_(mask_new.byte(), 1000000) # do not select from real one set it to a large value
+            min_ranked_score, indices = torch.sort(mask_score, 1, descending=False)
+            indices = indices[:,:n_line]
     else:
         indices = random
 
     for i, ind in enumerate(indices):
-        if mask_new[i, ind] == 1:
-            import pdb; pdb.set_trace()
-        mask_new[i, ind] = 1
-        if conjudge_symmetric:
-            mask_new[i, 128-ind] = 1
+        try:
+            if mask_new[i, ind] == 1:
+                import pdb; pdb.set_trace()
+            mask_new[i, ind] = 1
+            if conjudge_symmetric:
+                mask_new[i, cs_h-ind] = 1
+        except:
+            print(i, ind)
 
     sys.stdout.write(f'\r mask ratio: {mask_new[0].sum()}')
     sys.stdout.flush()
@@ -254,24 +268,28 @@ def replace_kspace_lines(pred, gt, mask, n_line, mask_score, random=None):
 global InfoPerc
 InfoPerc = []
 def compute_scores(fake, real, mask):
-    fake = fake[:,:1,:,:]#.clamp(-3,3)
-    real = real[:,:1,:,:]
+    if is_rawdata:
+        assert fake.shape[1] == 2 and real.shape[1] == 2
+        fake = fake.norm(dim=1, keepdim=True)
+        real = real.norm(dim=1, keepdim=True)
+    else:
+        fake = fake[:,:1,:,:]#.clamp(-3,3)
+        real = real[:,:1,:,:]
     mse = F.mse_loss(fake, real)
     ssim = util.ssim_metric(fake, real)
 
-    get_mse_percentile(fake, real)
-
-    # compute information percentage:
-    assert mask.shape[2] == 128 
-    indices = mask.squeeze().mul(1)
-    h = indices.shape[1]
-    pers = []
-    for index in indices:
-        # 2nd line to 64 are conjudge symmetric to the other part
-        tmp = index.cpu().numpy()[1:64] + np.array(index.tolist()[:64:-1])
-        per = np.nonzero(tmp)[0].size / 65
-        pers.append(per*100//1 /100)
-    InfoPerc.append(array(pers))   
+    # get_mse_percentile(fake, real)
+    # # compute information percentage:
+    # assert mask.shape[2] == 128 
+    # indices = mask.squeeze().mul(1)
+    # h = indices.shape[1]
+    # pers = []
+    # for index in indices:
+    #     # 2nd line to 64 are conjudge symmetric to the other part
+    #     tmp = index.cpu().numpy()[1:64] + np.array(index.tolist()[:64:-1])
+    #     per = np.nonzero(tmp)[0].size / 65
+    #     pers.append(per*100//1 /100)
+    # InfoPerc.append(array(pers))   
     return [mse.item(), ssim.item()]
 
 # to track the MSE per kspace recom and corresponding uncertainty 
@@ -280,7 +298,8 @@ global MSE, Uncertainty
 IndicesP = []
 MSE = []
 Uncertainty = []
-
+## --------------
+# deprecated
 def __get_mse_percentile(fake, real):
     mse = F.mse_loss(fake, real, reduce=False)
     mse = mse.view(mse.shape[0],-1).mean(1)
@@ -296,7 +315,6 @@ def __get_mse_percentile(fake, real):
     for v in IndicesP:
         _tmp.append(mse[v].mean().item())
     MSE.append(_tmp)
-
 def __get_mse_percentile_for_uncertainty(logvar):
     uncertainties = logvar.exp().view(logvar.shape[0],-1).mean(1)
     global IndicesP
@@ -307,16 +325,15 @@ def __get_mse_percentile_for_uncertainty(logvar):
         _tmp.append(uncertainties[v].mean().item())
     Uncertainty.append(_tmp)
     IndicesP = []
-
 def get_mse_percentile(fake, real):
     mse = F.mse_loss(fake, real, reduce=False)
     _tmp = [mse.mean(), mse.std()]
     MSE.append(_tmp)
-
 def get_mse_percentile_for_uncertainty(logvar):
     uncertainties = logvar.exp()
     Uncertainty.append([uncertainties.mean(), uncertainties.std()])
     IndicesP = []
+## --------------
 
 def compute_D_score(score, mask):
     masked_pred_kspace_score = (score * (1-mask.squeeze())).reshape(-1)
@@ -338,25 +355,39 @@ def compute_uncertainty(logvars, ngrid=4):
     return [uncertainty_map, var[-1]]
 
 def compute_recontruct_uncertainty(reconstruction, uncertainty, ngrid=4):
+    if is_rawdata:
+        assert reconstruction.shape[1] == 2
+        reconstruction = reconstruction.norm(dim=1, keepdim=True)
+        zscore = model.zscore
+    else:
+        zscore = 3
     reconstruction = reconstruction[:ngrid,:1].cpu()
     uncertainty = uncertainty[:ngrid].cpu()
 
     uncertainty_map = util.tensor2im(tvutil.make_grid(uncertainty, nrow=int(np.sqrt(ngrid)), padding=10), renormalize=False)
     uncertainty_map = visualizer.gray2heatmap(uncertainty_map[:,:,0])
 
-    reconstruction = util.mri_denormalize(reconstruction)
+    reconstruction = util.mri_denormalize(reconstruction, zscore=zscore)
     reconstruction = util.tensor2im(tvutil.make_grid(reconstruction, nrow=int(np.sqrt(ngrid)), padding=10), renormalize=False)
 
     return [reconstruction, uncertainty_map]
 
-def compute_errormap(fake, real, ngrid=4):
+def compute_errormap(real, fake, ngrid=4):
+    if is_rawdata:
+        fake = fake.norm(dim=1, keepdim=True)
+        real = real.norm(dim=1, keepdim=True)
     error = (real - fake)[:ngrid,:1]**2
     error = error.sqrt()
     errormap = util.tensor2im(tvutil.make_grid(error, nrow=int(np.sqrt(ngrid)), padding=10, pad_value=0.6), renormalize=False)
     return errormap
 
 def tensor2img(data, ngrid=4):
-    data = util.mri_denormalize(data[:ngrid,:1].mul(1))
+    if is_rawdata:
+        data = data.norm(dim=1, keepdim=True)
+        zscore = model.zscore
+    else:
+        zscore = 3
+    data = util.mri_denormalize(data[:ngrid,:1].mul(1), zscore=zscore)
     imgs = util.tensor2im(tvutil.make_grid(data, nrow=int(np.sqrt(ngrid)), padding=10, pad_value=0.6), renormalize=False)
     return imgs
 def compute_mask(masks, ngrid=4):
@@ -364,7 +395,7 @@ def compute_mask(masks, ngrid=4):
     masks = util.tensor2im(tvutil.make_grid(masks, nrow=int(np.sqrt(ngrid)), padding=10, pad_value=0.6), renormalize=False)
     return masks
 
-def animate2(images, error_map, iter, start_line=33, tot_line=128):
+def animate2(images, error_map, iter, start_line=33):
     ''' animate the uncertainty maps as # of lines increase '''
     # images[0] includes [reconstruction, uncertainty]
     def normalize(data):
@@ -427,7 +458,7 @@ def animate2(images, error_map, iter, start_line=33, tot_line=128):
     return name, gif_name
 
 def animate(images, masks, eval_scores, uncertainty, D_score, iter,
-            comp_score=None, start_line=33, tot_line=128):
+            comp_score=None, start_line=33):
     ''' animate the acqusition planning process '''
     # scores[0][0] is mse and [0][1] is ssim
     # images[0] is a image grid for error map
@@ -567,6 +598,7 @@ tot_iter = 2
 Percentage = [] 
 save_metadata = True
 save_gif = True
+is_rawdata = False
 "------------------------------------" 
 if __name__ == '__main__':
     if debug:
@@ -579,6 +611,13 @@ if __name__ == '__main__':
     test_data_loader = CreateFtTLoader(opt, is_test=True)
     model = create_model(opt)
     model.setup(opt)
+    cs_h = 128
+    
+    if 'raw' in opt.name.lower():
+        # conjudge_symmetric = False
+        is_rawdata = True
+        print(f'>> raw data: conjudge_symmetric: {conjudge_symmetric}, is_rawdata: {is_rawdata}')
+        cs_h = 320
 
     val_count = 0
     # saved = False
@@ -608,14 +647,14 @@ if __name__ == '__main__':
     if observed_line_n != 32:
         init_mask = create_mask(opt.fineSize, random_frac=False, mask_fraction=observed_line_n / opt.fineSize).to(model.device)
         observed_line_n = int(init_mask[0].sum().item())
-        print('start observed line: ', observed_line_n)
+        print('>> start observed line: ', observed_line_n)
 
     if conjudge_symmetric:
         print('>> keep conjudge symmetric')
         for jj in range(len(init_mask)):
-            for j in range(1,127):
+            for j in range(1,cs_h-1):
                 if init_mask[jj, 0, j, 0] == 1:
-                    init_mask[jj, 0, 128-j, 0] = 1
+                    init_mask[jj, 0, cs_h-j, 0] = 1
 
     unobsered_line_n = opt.fineSize - observed_line_n
     n_recom_each = 1
@@ -623,7 +662,7 @@ if __name__ == '__main__':
         if conjudge_symmetric:
             n_forward = unobsered_line_n // 2 
         else:
-             unobsered_line_n // n_recom_each
+            n_forward = unobsered_line_n // n_recom_each
     imsize = opt.fineSize
     np.random.seed(1234)
 
@@ -650,6 +689,7 @@ if __name__ == '__main__':
         (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
         realB = model.real_B
         fakeB = model.fake_B
+        fakeB = model.fake_B
         init_logvars = model.logvars
         
         visual_list['groundtruth'] = tensor2img(realB)
@@ -662,7 +702,6 @@ if __name__ == '__main__':
         score_D.append(compute_D_score(pred_kspace_score, mask))
         reconstruction_list = [ [fakeB.cpu(), model.logvars[-1].cpu().exp()] ] # for visualize video of reconstruction and uncertainty
         
-
         PScore = {} # Pertentile score
         InfoPScore = {} # Information Percentile score
         
@@ -727,7 +766,7 @@ if __name__ == '__main__':
         bz = mask.shape[0]
         tmp_mask = mask.mul(1)
         if conjudge_symmetric:
-            tmp_mask[:,:,65:,:] = 1
+            tmp_mask[:,:,cs_h//2+1:,:] = 1
         mask_zero_idx = np.nonzero(1-tmp_mask[0].squeeze())
         if not conjudge_symmetric:
             assert len(mask_zero_idx) == unobsered_line_n
@@ -747,7 +786,9 @@ if __name__ == '__main__':
             old_mask = new_mask
             score_list['random'].append(compute_scores(old_fakeB, realB, old_mask))
             if old_mask[1].sum() == opt.fineSize:
+                print ('>> [random] reach the all lines earlier. break')
                 break
+        # import pdb; pdb.set_trace()
         assert old_mask[1].sum() == TOT_SEEN_LINE
         # InfoPScore['random'] = [copy.deepcopy(InfoPerc)]
         MSE, Uncertainty, InfoPScore = [], [], []
@@ -832,7 +873,6 @@ if __name__ == '__main__':
         # InfoPScore['order_reconstruction'] = [copy.deepcopy(InfoPerc)]
         MSE, Uncertainty, InfoPScore = [], [], []
 
-
         "record everthing thing"
         score = OrderedDict()
         score_D = np.array(score_D)
@@ -886,36 +926,7 @@ if __name__ == '__main__':
         ## save figures and everthing
         save_images(webpage, visuals, 'test_iter{}'.format(i), aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
         webpage.save()
-
         val_count += bz
-
-        # if val_count >= opt.how_many and opt.how_many > 0:
-        #     break
         if i >= tot_iter: break
 
     
-    # save_images(webpage, visuals, 'test_iter{}'.format(i), aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
-    # webpage.save()   
-    #  
-    # import pdb; pdb.set_trace()
-    # if i >= 10: break
-
-        # import pdb; pdb.set_trace()
-
-        # visuals = model.get_current_visuals()
-        # val_count += ngrid
-        # # Only save some. Don't explode the disk
-        # if val_count < 256:
-        #     for k, v in visuals.items():
-        #         v = v[:ngrid,:1,:,:]
-        #         if model.mri_data:
-        #             v = util.mri_denormalize(v)
-        #         visuals[k] = tensor2im(tvutil.make_grid(v, nrow=int(np.sqrt(ngrid))))
-            
-        #     save_images(webpage, visuals, 'test_iter{}'.format(i), aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
-        # elif not saved:
-        #     webpage.save()
-        #     saved = True
-            
-        # if val_count >= opt.how_many and opt.how_many > 0:
-        #     break

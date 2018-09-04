@@ -75,7 +75,8 @@ class FFT(nn.Module):
     
 #     return mask_fft
 
-def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42, random_frac=False):
+def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42, 
+                random_frac=False, random_full=False):
     assert random_frac <= 1
     if type(n) is int:
         b = 1
@@ -84,6 +85,12 @@ def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42, random_fra
     
     mask_fft = np.zeros((b,n)).astype(np.float32)
     for i in range(b):
+        if random_full:
+            # random over all rates
+            if np.random.rand(1) > 0.7:
+                mask_fraction = min(max(0.1, np.random.rand(1)), 0.9)
+            else:
+                mask_fraction = min(max(0.1, np.random.rand(1)), 0.4)
         if random_frac:
             # we sample fraction and mask_low_freqs lines
             ratio = np.random.rand(1) + 0.5

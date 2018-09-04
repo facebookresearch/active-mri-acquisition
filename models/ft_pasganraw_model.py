@@ -53,7 +53,6 @@ class GANLossKspace(nn.Module):
                 ks_gt = self.FFT(gt, normalized=True) 
                 ks_input = self.FFT(pred[:,:2,:,:], normalized=True) 
                 ks_row_mse = F.mse_loss(ks_input, ks_gt, reduce=False).sum(1,keepdim=True).sum(3,keepdim=True).squeeze() / (2*h)
-                
                 energy = torch.exp(-ks_row_mse * self.gamma)
 
                 ## do some bin process
@@ -79,7 +78,6 @@ class GANLossKspace(nn.Module):
             return self.loss(input * (1-mask_), target_tensor * (1-mask_)) / (1-mask_).sum()
         else:
             return self.loss(input, target_tensor) / (b*h)
-
 
 class kspaceMap(nn.Module):
     def __init__(self, imSize=128, no_embed=False):
@@ -275,6 +273,8 @@ class FTPASGANRAWModel(BaseModel):
             # self.optimizer_P = torch.optim.SGD(self.netP.parameters(), momentum=0.9)
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
+            if not opt.debug:
+                assert opt.eval_full_valid 
 
         if self.opt.output_nc >= 2:
             # the imagnary part of reconstrued data
@@ -284,12 +284,11 @@ class FTPASGANRAWModel(BaseModel):
 
         self.betas = [float(a) for a in self.opt.betas.split(',')]
         assert len(self.betas) == self.num_stage, 'beta length is euqal to the module #'
-        if not opt.debug:
-            assert opt.eval_full_valid 
+        
         
     def certainty_loss(self, fake_B, real_B, logvar, beta, stage, weight_logvar, weight_all):
         
-        o = int(np.floor(self.opt.output_nc/2))
+        o = 2
         # gaussian nll loss
         l2 = self.criterion(fake_B[:,:o,:,:], real_B[:,:o,:,:]) 
         # to be numercial stable we clip logvar to make variance in [0.01, 5]
@@ -353,8 +352,10 @@ class FTPASGANRAWModel(BaseModel):
         mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
         self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.metadata)
 
+        # if not self.isTrain:
+        #     self.fake_Bs = [a.norm(dim=1, keepdim=True) for a in self.fake_Bs]
         self.fake_B = self.fake_Bs[-1]
-
+        
     def test(self, sampling=False):
         with torch.no_grad():
             self.forward(sampling)
@@ -481,25 +482,20 @@ class FTPASGANRAWModel(BaseModel):
         # used for test kspace scanning line recommentation
         target, _, metadata = input
         target = target.to(self.device)
-        self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
+        # self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
+        self.metadata = None
         target = self._clamp(target).detach()
 
         if len(mask.shape) == 5:
             mask = mask[:1,:1,:,:1,0].to(self.device).repeat(target.shape[0],1,1,1)
         self.mask = mask
             
-        fft_kspace = self.RFFT(target)
+        fft_kspace = self.FFT(target)
         if add_kspace_noise:
             noises = torch.zeros_like(fft_kspace).normal_()
             fft_kspace = fft_kspace + noises
 
         ifft_img = self.IFFT(fft_kspace * self.mask)
-
-        if self.opt.output_nc >= 2:
-            if self.imag_gt.shape[0] != target.shape[0]:
-                # imagnary part is all zeros
-                self.imag_gt = torch.zeros_like(target)
-            target = torch.cat([target, self.imag_gt], dim=1)
 
         self.real_A = ifft_img
         self.real_B = target

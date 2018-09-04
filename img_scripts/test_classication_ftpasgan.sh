@@ -9,6 +9,6 @@ python test_kspace_recom_classification.py --dataroot 'ImageNet' \
                 --name $name \
                 --model ft_pasgan_ablation \
                 --checkpoints_dir $checkpoints_dir \
-                --batchSize 96 \
+                --batchSize 80 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
                 --which_model_netG 'pasnetplus_nomaskcond' \
