@@ -278,7 +278,8 @@ class BaseModel():
             ## save a pickle for inspection
             import pickle
             pickle_file = {}
-            pickle_file['var'] = val_data[0][3].cpu().numpy()
+            if len(val_data[0]) > 3:
+                pickle_file['var'] = val_data[0][3].cpu().numpy()
             pickle_file['gt'] = val_data[0][2].cpu().numpy()
             pickle_file['rec'] = val_data[0][1].cpu().numpy()
             pickle_file['input'] = val_data[0][0].cpu().numpy()

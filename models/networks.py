@@ -97,7 +97,6 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
     elif which_model_netG == 'jure_unet':
         netG = nn.Sequential(*unet_layers(input_nc, output_nc))
-    
     elif which_model_netG == 'jure_unet_vae_residual':
         nz = 8
         nef = 64
@@ -112,14 +111,6 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         # 3 downsampling is enough
         netG = ResnetGeneratorAttResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True)
-    elif which_model_netG == 'resnet_9blocks_attention_residual_fixedbone':
-        # 3 downsampling is enough
-        netG = ResnetGeneratorAttResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
-                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, fixed_bone=True)
-    elif which_model_netG == 'resnet_9blocks_attention_residual_psp':
-        # 3 downsampling is enough
-        netG = ResnetGeneratorAttResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
-                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, use_psp=True)
     elif which_model_netG == 'resnet_9blocks_pixelattention_residual':
         netG = ResnetGeneratorPixelAttResidual(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128)
@@ -153,6 +144,7 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         netG = PasNet(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)
     elif which_model_netG == 'pasnetplus':
+        # the final CNN model
         netG = PasNetPlus(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)
     elif which_model_netG == 'pasnetplus_nomaskcond':
@@ -160,19 +152,11 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, 
                         mask_cond=True, use_deconv=True, no_meta=True)
     elif which_model_netG == 'pasnetplus_nomaskcond_320':
+        # the final CNN model for raw data
         netG = PasNetPlus(input_nc, output_nc, ngf, norm_layer=norm_layer, 
                         use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=320, 
                         mask_cond=True, use_deconv=True, no_meta=True)
-    elif which_model_netG == 'pasnet_att':
-        netG = PasNetAtt(input_nc, output_nc, ngf, norm_layer=norm_layer, 
-                        use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)       
-    # elif which_model_netG == 'pasnet_huct':
-    #         # reuse uncertainty
-    #     netG = PasNet_huct(input_nc, output_nc, ngf, norm_layer=norm_layer, 
-    #                     use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh, n_downsampling=3, imgSize=128, 
-    #                     mask_cond=True, use_deconv=True)        
-    
-    
+   
     # for baseline evaluation
     elif which_model_netG == 'jure_unet_residual':
         _netG = nn.Sequential(*unet_layers(input_nc, output_nc))
@@ -181,7 +165,7 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         _netG = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout, no_last_tanh=True)
         netG = ResidualNetWrapper(_netG, no_last_tanh=no_last_tanh, output_nc=output_nc)
     elif which_model_netG == 'automap':
-        netG = AUTOMAP()
+        netG = AUTOMAP(output_nc=output_nc)
     elif which_model_netG == 'densenet':
         # from here https://github.com/bfortuner/pytorch_tiramisu
         from .tiramisu import FCDenseNet57, FCDenseNet103
@@ -336,7 +320,26 @@ class View(nn.Module):
 
 # the implementation from Zhu Bo's Nature paper
 # Conv is perform on 64x64 feature maps. Otherwise, memorgy will break
-def AUTOMAP():
+class AUTOMAP(nn.Module):
+    def __init__(self, output_nc):
+        super(AUTOMAP, self).__init__()
+        self.model = AUTOMAP_(output_nc)
+        self.FFT = FFT()
+        self.IFFT = IFFT()
+
+    def forward(self, x, mask):
+        input = self.FFT(x, normalized=True)
+        input = input * mask
+        output = self.model(input)
+
+        ft_x = self.FFT(output)
+        output = self.IFFT((1 - mask) * ft_x) + x
+        
+        return output
+        
+        # import pdb; pdb.set_trace()
+        # return y.permute(0, 3, 1, 2) * mask
+def AUTOMAP_(output_nc):
     n = 128
     n2 = 64
     use_bias = False
@@ -353,7 +356,7 @@ def AUTOMAP():
         nn.Conv2d(64, 64, kernel_size=5,
                         stride=1, padding=0, bias=use_bias),
         nn.ReLU(True),
-        nn.ConvTranspose2d(64, 1, kernel_size=4,
+        nn.ConvTranspose2d(64, output_nc, kernel_size=4,
                         stride=2, padding=1, bias=use_bias),
     )
     return model
@@ -1532,6 +1535,7 @@ class PixelDiscriminator(nn.Module):
     def forward(self, input):
         return self.net(input)
 
+## for perceptional loss
 class VGGLoss(nn.Module):
     def __init__(self, gpu_ids, input_channel, loss_for_input=False):
         super(VGGLoss, self).__init__()        
@@ -2100,7 +2104,6 @@ class ResnetGeneratorFourier(nn.Module):
 
         return output, resnet_fuse_out
 
-## Currently the best Aug 10
 class PasNet(nn.Module):
     
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 
@@ -2436,8 +2439,6 @@ class PasNetPlus(nn.Module):
 
         return [out1, out2, out3], [logvar1, logvar2, logvar3],  mask_embed 
 
-
-
 class StageResnetGeneratorResidualPlus(nn.Module):
     
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 
@@ -2574,8 +2575,6 @@ class StageResnetGeneratorResidualPlus(nn.Module):
         out3 = self.kspace_fuse(out3, input, mask)
 
         return (out1, out2, out3), mask_embed 
-
-
 
 class ResnetGeneratorMaskingResidualPlus(nn.Module):
     

@@ -42,3 +42,4 @@ python train.py --dataroot 'KNEE' \
 #                 --which_model_netD 'n_layers' \
 #                 --n_layers_D 3 \
 #                 --ndf 64 
+

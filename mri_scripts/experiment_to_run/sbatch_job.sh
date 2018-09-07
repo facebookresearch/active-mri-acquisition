@@ -22,6 +22,7 @@
 
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-user=zizhao@fb.com
+#SBATCH --time 4000
 
 ### Section 2: Setting environment variables for the job
 ### Remember that all the module command does is set environment
@@ -47,4 +48,4 @@ source activate zzfair
 ### task seeing all the GPUs on each node. However I am using
 ### the wrapper.sh example I showed before so that each task only
 ### sees one GPU
-srun --label sh mri_scripts/experiment_to_run/test_moving_ratio.sh
+srun --label sh mri_scripts/experiment_to_run/test_baseline_nets.sh

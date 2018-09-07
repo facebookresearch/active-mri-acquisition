@@ -82,7 +82,8 @@ class FTATTCNNModel(BaseModel):
     def forward(self):
         # conditioned on mask
         if self.opt.output_nc == 1:
-            self.fake_B = self.netG(self.real_A)
+            # self.fake_B = self.netG(self.real_A)
+            self.fake_B = self.netG(self.real_A, self.mask)
         else:
             h, b = self.mask.shape[2], self.real_A.shape[0]
             # mask = Variable(self.mask.view(self.mask.shape[0],h,1,1).expand(b,h,1,1))

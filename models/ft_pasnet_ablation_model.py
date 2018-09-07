@@ -17,109 +17,16 @@ from torch.nn.parameter import Parameter
 
 from .ft_recurnnv2_model import AUTOPARAM
 import math
+from .ft_pasgan_model import kspaceMap
 
-class kspaceMap(nn.Module):
-    def __init__(self, imSize=128, no_embed=False):
-        super(kspaceMap, self).__init__()
-        
-        self.RFFT = RFFT()
-        self.IFFT = IFFT()
-        self.imSize = imSize
-        # seperate image to spectral maps
-        self.register_buffer('seperate_mask', torch.FloatTensor(1,imSize,1,imSize,1))
-        self.seperate_mask.fill_(0)
-        for i in range(imSize):
-            self.seperate_mask[0,i,0,i,0] = 1
-
-        self.no_embed = no_embed
-        if not no_embed:
-            self.embed = nn.Sequential(
-                            nn.Conv2d(imSize, imSize, 1, 1, padding=0, bias=False),
-                            nn.LeakyReLU(0.2,True)
-            )
-        else:
-            print(f'[kspaceMap] -> do not use kspace embedding')
-
-    def init_weight(self, p=0.2):
-        # init the weight of embed to be Bernoulli distribuion of all 1.
-        # so just like a dropout, so the each filter output approximate the sum of all spectral maps
-        print(f'[kspaceMap] -> init weight as Bernoulli distribuion ({p})')
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                m.weight.data[:] = 1
-                seed = torch.zeros_like(m.weight.data).normal_()
-                m.weight.data[seed < p] = 0
-
-    def forward(self, input, mask):
-        # we assume the input only has real part of images (if they are obtained from IFFT)
-        bz = input.shape[0]
-        x = input[:,:1,:,:]
-        if input.shape[1] > 1:
-            others = input[:,1:,:,:]
-        kspace = self.RFFT(x)
-        
-        kspace = kspace.unsqueeze(1).repeat(1,self.imSize,1,1,1) # [B,imsize,2,imsize,imsize]
-        masked_kspace = self.seperate_mask * kspace
-        masked_kspace = masked_kspace.view(bz*self.imSize, 2, self.imSize, self.imSize)
-        seperate_imgs = self.IFFT(masked_kspace)[:,0,:,:].view(bz, self.imSize, self.imSize, self.imSize) # discard the imaginary part [B,imsize,imsize, imsize]
-
-        if not self.no_embed:
-            seperate_imgs = self.embed(seperate_imgs)
-
-        if input.shape[1] > 1:
-            output = torch.cat([seperate_imgs, others], 1)
-        else:
-            output = seperate_imgs
-
-        return output
-
-    def _deprecated_forward(self, input, mask):
-        # mask [B,1,imsize,1]
-        x = input[:,:1,:,:]
-        
-        if x.shape[1] > 1:
-            others = input[:,1:,:,:]
-        kspace = self.RFFT(x)
-        
-        bz = mask.shape[0]
-
-        if not hasattr(self, 'seperate_mask') or self.seperate_mask.shape[0] != bz:
-            self.seperate_mask = torch.zeros_like(mask).unsqueeze(1).expand(bz,self.imSize,1,self.imSize,1)
-            
-        ## seperate an image to N images N, each for a kspace line
-        if mask is None:
-            self.seperate_mask.fill_(1)
-        else:
-            self.seperate_mask.fill_(0)
-            for i in range(bz):
-                idx = torch.nonzero(mask[i,0,:,0])
-                self.seperate_mask[i,idx,:,idx,:] = 1 # [1,imsize,1,imsize,1]
-
-        kspace = kspace.view(bz,1,2,self.imSize,self.imSize).repeat(1,self.imSize,1,1,1) # [B,imsize,2,imsize,imsize]
-        masked_kspace = self.seperate_mask * kspace
-        masked_kspace = masked_kspace.view(bz*self.imSize, 2, self.imSize, self.imSize)
-        seperate_imgs = self.IFFT(masked_kspace)[:,0,:,:].view(bz, self.imSize, self.imSize, self.imSize) #[B,imsize,imsize, imsize]
-
-        if not self.no_embed:
-            seperate_imgs = self.embed(seperate_imgs)
-
-        if x.shape[1] > 1:
-            output = torch.cat([seperate_imgs, others], 1)
-        else:
-            output = seperate_imgs
-
-        return output
-
-
-class FTPASGANModel(BaseModel):
+class FTPASNETABLATIONModel(BaseModel):
     def name(self):
-        return 'FTPASGANModel'
+        return 'FTPASNETABLATIONModel'
 
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         
         if is_train:
-            parser.add_argument('--lambda_gan', type=float, default=0.01, help='weight for rec loss')
             parser.add_argument('--use_allgen_for_disc', action='store_true', help='use all intermediate outputs from generators to train D')
 
         parser.add_argument('--loss_type', type=str, default='MSE', choices=['MSE','L1'], help=' loss type')
@@ -139,9 +46,12 @@ class FTPASGANModel(BaseModel):
             parser.add_argument('--no_lsgan', action='store_true', help='do *not* use least square GAN, if false, use vanilla GAN')
         
         parser.add_argument('--set_sampling_at_stage', type=int, default=None, help='sampling from the model')
-        parser.add_argument('--grad_ctx', action='store_true', help='gan criterion computes adversarial loss signal at provided kspace lines')
+        parser.add_argument('--grad_ctx', action='store_true', help='gan criterion has loss signal at provided')
         parser.add_argument('--no_zscore_clamp', action='store_true', help='clamp data using z_score')
+        parser.add_argument('--no_uncertanity', action='store_true', help='no uncertainty analysis')
         parser.add_argument('--pixelwise_loss_merge', action='store_true', help='no uncertainty analysis')
+        parser.add_argument('--no_uncertanity_at_middle', action='store_true', help='no uncertainty analysis')
+        parser.add_argument('--single_stage', action='store_true', help='no uncertainty analysis')
 
         parser.set_defaults(pool_size=0)
         parser.set_defaults(which_model_netG='pasnet')
@@ -164,7 +74,6 @@ class FTPASGANModel(BaseModel):
         parser.set_defaults(grad_ctx=True)
         parser.set_defaults(pixelwise_loss_merge=True)
         
-
         return parser
 
     def initialize(self, opt):
@@ -201,7 +110,9 @@ class FTPASGANModel(BaseModel):
         if self.isTrain or 'D' in self.model_names:
             use_sigmoid = opt.no_lsgan
             self.cond_input_D = False
-            if opt.which_model_netD == 'n_layers_channel':
+            if opt.which_model_netD in ('n_layers_channel', 'n_layers_channel_group'):
+                if opt.which_model_netD == "n_layers_channel_group":
+                    self.opt.mask_cond = False
                 pre_process = kspaceMap(imSize=opt.fineSize, no_embed=opt.no_kspacemap_embed).to(self.device)
                 d_in_nc = opt.fineSize + (6 if self.opt.mask_cond else 0)
                 self.netD = networks.define_D(d_in_nc, opt.ndf,
@@ -221,10 +132,11 @@ class FTPASGANModel(BaseModel):
             # self.fake_AB_pool = ImagePool(opt.pool_size)
             # define loss functions
             if 'aux' in opt.which_model_netD:
-                self.criterionGAN = networks.GANLossKspaceAux(use_lsgan=not opt.no_lsgan).to(self.device)
+                self.criterionGAN = networks.GANLossKspaceAux(use_lsgan=not opt.no_lsgan, use_mse_as_energy=opt.use_mse_as_disc_energy).to(self.device)
             else:
                 if opt.which_model_netD == 'n_layers_channel':
-                    self.criterionGAN = networks.GANLossKspace(use_lsgan=not opt.no_lsgan, use_mse_as_energy=opt.use_mse_as_disc_energy, grad_ctx=self.opt.grad_ctx).to(self.device)
+                    self.criterionGAN = networks.GANLossKspace(use_lsgan=not opt.no_lsgan, 
+                                use_mse_as_energy=opt.use_mse_as_disc_energy, grad_ctx=self.opt.grad_ctx).to(self.device)
                 else:
                     self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan).to(self.device)
             # define loss functions
@@ -256,16 +168,18 @@ class FTPASGANModel(BaseModel):
         o = int(np.floor(self.opt.output_nc/2))
         # gaussian nll loss
         l2 = self.criterion(fake_B[:,:o,:,:], real_B[:,:o,:,:]) 
-        # to be numercial stable we clip logvar to make variance in [0.01, 5]
-        logvar = logvar.clamp(-4.605, 1.609)
-
-        one_over_var = torch.exp(-logvar)
-        # uncertainty loss
-        assert len(l2) == len(logvar)
-        loss = 0.5 * (one_over_var * l2 + logvar * weight_logvar)
+        if self.opt.no_uncertanity or (self.opt.no_uncertanity_at_middle and stage < 2):
+            loss = l2
+        else:
+            # to be numercial stable we clip logvar to make variance in [0.01, 5]
+            logvar = logvar.clamp(-4.605, 1.609)
+            one_over_var = torch.exp(-logvar)
+            # uncertainty loss
+            assert len(l2) == len(logvar)
+            loss = 0.5 * (one_over_var * l2 + logvar * weight_logvar)
         if not self.opt.pixelwise_loss_merge:
             loss = loss.mean()
-        
+                    
         # l0 sparsity distance
         if beta != 0:
             b,c,h,w = logvar.shape
@@ -306,7 +220,7 @@ class FTPASGANModel(BaseModel):
         # conditioned on mask
         h, b = self.mask.shape[2], self.real_A.shape[0]
         mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
-        if sampling and False:
+        if sampling:
             # may not useful
             assert not sampling 
             self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.metadata, self.opt.set_sampling_at_stage)
@@ -348,24 +262,12 @@ class FTPASGANModel(BaseModel):
                                                 weight_logvar=w_lv, weight_all=w_full) 
         if self.opt.pixelwise_loss_merge:
             self.loss_G = self.loss_G.mean()
-        # track norm of gradient
-        fake_B = self.fake_B.mul(1)
-        gradnorm_fakeAB = torch.cuda.FloatTensor(1)
-        def extract(grad):
-            global set_input2
-            gradnorm_fakeAB = grad.norm(2)
-        fake_B.register_hook(extract)
-
-        fake = self.create_D_input(fake_B)
-        pred_fake = self.netD(fake, self.mask)
-        self.loss_G_GAN = self.criterionGAN(pred_fake, True, self.mask, degree=1, updateG=True, pred_gt=(fake[:,:1,:,:],self.real_B)) * self.opt.lambda_gan
-
-        self.loss_G_all = self.loss_G_GAN + self.loss_G
+            
+        self.loss_G_all = self.loss_G
         self.loss_G_all.backward()
 
         # compute multiple loss for visualization
         self.compute_special_losses()
-        self.loss_gradOutputD = float(gradnorm_fakeAB.item())
         for i in range(weights.shape[0]):
             setattr(self, f'loss_GW_{i}', float(weights[i].item()))
 
@@ -384,9 +286,13 @@ class FTPASGANModel(BaseModel):
         with torch.no_grad():
             fake = self.create_D_input(self.fake_B)
             pred_fake = self.netD(fake, self.mask) 
+            if isinstance(pred_fake, tuple):
+                pred_fake = pred_fake[1]
         return self.mask_disc_score(pred_fake, self.mask.squeeze()), pred_fake
 
     def mask_disc_score(self, pred, mask):
+        if isinstance(pred, tuple):
+            pred = pred[1] # for discriminator has two output takes the second one
         if len(pred.shape) > 2:
             return 0, 0
         mask = mask.mul(1) # copy mask
@@ -407,25 +313,12 @@ class FTPASGANModel(BaseModel):
         fake = self.create_D_input(self.fake_B.detach())
         pred_fake = self.netD(fake, self.mask) 
 
-        degree = 0 if not self.opt.use_allgen_for_disc else 0.2
+        degree = 0 
         self.loss_D_fake = self.criterionGAN(pred_fake, False, self.mask, degree=degree, pred_gt=(fake[:,:1,:,:],self.real_B))
         self.mask_disc_score(pred_fake, self.mask.squeeze())
 
-        if self.opt.use_allgen_for_disc:
-            for p, deg in zip([-2, -3], [0.1, 0.0]):
-                pred_fake = self.create_D_input(self.fake_Bs[p].detach())
-                pred_fake = self.netD(pred_fake, self.mask) 
-                self.loss_D_fake += self.criterionGAN(pred_fake, False, self.mask, degree=deg, pred_gt=(fake[:,:1,:,:],self.real_B))
-            
-            self.loss_D_fake = self.loss_D_fake / self.num_stage
-
-        # Real
-        real = self.create_D_input(self.real_B)
-        pred_real = self.netD(real, self.mask)
-        self.loss_D_real = self.criterionGAN(pred_real, True, self.mask, degree=1, pred_gt=(fake[:,:1,:,:],self.real_B))
-
         # Combined loss
-        self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
+        self.loss_D = self.loss_D_fake 
 
         self.loss_D.backward()
 
@@ -444,33 +337,7 @@ class FTPASGANModel(BaseModel):
         self.backward_G()
         self.optimizer_G.step()
 
-    def set_input_exp(self, input, mask, zscore=3, add_kspace_noise=False):
-        # used for simulate kspace acqusition planning 
-        target, _, metadata = input
-        target = target.to(self.device)
-        self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
-        target = self._clamp(target).detach()
-
-        if len(mask.shape) == 5:
-            mask = mask[:1,:1,:,:1,0].to(self.device).repeat(target.shape[0],1,1,1)
-        self.mask = mask
-            
-        fft_kspace = self.RFFT(target)
-        if add_kspace_noise:
-            noises = torch.zeros_like(fft_kspace).normal_()
-            fft_kspace = fft_kspace + noises
-
-        ifft_img = self.IFFT(fft_kspace * self.mask)
-
-        if self.opt.output_nc >= 2:
-            if self.imag_gt.shape[0] != target.shape[0]:
-                # imagnary part is all zeros
-                self.imag_gt = torch.zeros_like(target)
-            target = torch.cat([target, self.imag_gt], dim=1)
-
-        self.real_A = ifft_img
-        self.real_B = target
-    # change to sampling() when want to use it  
+    # change to sampling() when want to use it
     def _sampling(self, data_list, n_samples=8, max_display=8, return_all=False, sampling=True):
         
         
@@ -551,66 +418,48 @@ class FTPASGANModel(BaseModel):
         # self.netG.module.set_sampling_at_stage(None)
 
         return sample_x, pixel_diff_mean, pixel_diff_std
-    # change to sampling() when want to use it
-    def __sampling(self, data_list, n_samples=8, max_display=8, return_all=False, sampling=True):
-        
-        # to test the effect of adding kpsace noises \sigma and evaluate std
-        import copy
-        def replicate_tensor(data, times, expand=False):
-            ks = list(data.shape)
-            data = data.view(ks[0], 1, *ks[1:])
-            data = data.repeat(1, times, *[1 for _ in range(len(ks[1:]))]) # repeat will copy memories which we do not need here
-            if not expand:
-                data = data.view(ks[0]*times, *ks[1:])
-            return data
-        
-        if not sampling:
-            warnings.warn('sampling is set to False', UserWarning)
-        assert self.mri_data, 'not working for non mri data loader now'
-        max_display = min(max_display, n_samples)
-        # data points [N,2,H,W] for multiple sampling and observe sample difference
-        data = data_list[0] # target
-        mask = data_list[1]
-        metadata = copy.deepcopy(data_list[2])
 
-        assert(data.shape[0] >= max_display)
-        data = data[:max_display]
-        mask = mask[:max_display]
-        scan_type = np.array(metadata['scan_type'][:max_display])
-        metadata['scan_type'] = list(scan_type.reshape(-1))
-        repeated_data = replicate_tensor(data, n_samples)
-        b,c,h,w = data.shape
-        sample_x, input_x = [], []
-        for i in range(n_samples):
-            if len(data) != max_display or len(mask) != max_display or len(mask) != max_display:
-                import pdb; pdb.set_trace()
-            data_list = [data, mask, metadata]
-            self.set_input_exp(data_list, mask, add_kspace_noise=True)
-            self.test()
-            sample_x.append(self.fake_B.cpu()[:,:1,:,:])
-            input_x.append(self.real_A.cpu()[:,:1,:,:])
-        sample_x = torch.stack(sample_x, 1)
-        input_x = torch.stack(input_x, 1)
+    def set_input_exp(self, input, mask, zscore=3):
+        assert self.mri_data
+        # used for test kspace scanning line recommentation
+        target, _, metadata = input
+        target = target.to(self.device)
+        self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
+        target = self._clamp(target).detach()
 
-        input_imgs = repeated_data.cpu()
-        # compute sample mean std
-        all_pixel_diff = (input_imgs.view(b,n_samples,c,h,w) - sample_x.view(b,n_samples,c,h,w)).abs()
-        pixel_diff_mean = torch.mean(all_pixel_diff, dim=1) # n_samples
-        pixel_diff_std = torch.std(all_pixel_diff, dim=1) # n_samples
+        self.mask = mask
 
-        if return_all:# return all samples
-            return sample_x.view(b,n_samples,c,h,w)
-        else:    
-            # return 
-            mean_samples_x = sample_x.view(b,n_samples,c,h,w).mean(dim=1)
-            sample_x = sample_x.view(b,n_samples,c,h,w)[:,:max_display,:,:,:].contiguous()
-            input_x = input_x.view(b,n_samples,c,h,w)
-            sample_x[:,0,:,:] = input_x[:,0,:1,:,:] # Input
-            sample_x[:,1,:,:] = data[:,:1,:,:] # GT
-            sample_x[:,2,:,:] = mean_samples_x # E[x]
-            # sample_x[:,-1,:,:] = pixel_diff_mean.div(pixel_diff_mean.max()).mul_(2).add_(-1) # MEAN
-            sample_x[:,-1,:,:] = pixel_diff_std.div(pixel_diff_std.max()).mul_(2).add_(-1) # STD
-            
-            sample_x = sample_x.view(b*max_display,c,h,w)
-        
-        return sample_x, pixel_diff_mean, pixel_diff_std
+        fft_kspace = self.RFFT(target)
+        ifft_img = self.IFFT(fft_kspace * self.mask)
+
+        if self.opt.output_nc >= 2:
+            if self.imag_gt.shape[0] != target.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(target)
+            target = torch.cat([target, self.imag_gt], dim=1)
+
+        self.real_A = ifft_img
+        self.real_B = target
+
+    def set_input_exp2(self, input, mask, zscore=3):
+        # for natural image data
+        assert not self.mri_data
+        # used for test kspace scanning line recommentation
+        target, label = input
+        target = target.to(self.device)
+        self.metadata = None
+        target = self._clamp(target).detach()
+        self.img_labels = label
+        self.mask = mask
+
+        fft_kspace = self.RFFT(target)
+        ifft_img = self.IFFT(fft_kspace * self.mask)
+
+        if self.opt.output_nc >= 2:
+            if self.imag_gt.shape[0] != target.shape[0]:
+                # imagnary part is all zeros
+                self.imag_gt = torch.zeros_like(target)
+            target = torch.cat([target, self.imag_gt], dim=1)
+
+        self.real_A = ifft_img
+        self.real_B = target

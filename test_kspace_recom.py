@@ -31,6 +31,38 @@ rfft = RFFT()
 ifft = IFFT()
 fft = FFT()
 
+
+def draw_curve5(value, std, pdfsavepath=None, ylabel=''):
+    # plot mse of algorithm and its std
+    global Percentage
+    # uncertanity is a dict each value is a list a a[1] is var
+    # colors = matplotlib.cm.rainbow(np.linspace(0, 1, 5))
+    fig = plt.figure(figsize=(10,10))
+    plt.tick_params(labelsize=25)
+    color = 'black' 
+    ls = '-' 
+    # data = [u[-1] for u in values] # -1 is var mean value
+    # key_name = key.replace('_', '+')
+    xval = [float(a)/len(value) * Percentage[-1] for a in range(1, len(value)+1)]
+    plt.plot(xval, value, color=color, linewidth=5, linestyle=ls)
+    plt.fill_between(xval, value-std, value+std, label='var.', 
+                    alpha=0.2, edgecolor='#FFFFFF', facecolor='#c2d5db')
+
+    # plt.legend(fontsize=25)
+    plt.ylabel(ylabel, fontsize=40)
+    plt.xlabel('kMA (%)', fontsize=40)
+
+    if pdfsavepath is not None:
+        plt.savefig(pdfsavepath)
+    fig.tight_layout()
+    fig.canvas.draw()
+
+    # Now we can save it to a numpy array.
+    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    
+    return data
+
 def __draw_curve4(Pscore):
     # for percentile
     colors = matplotlib.cm.rainbow(np.linspace(0, 1, 3))
@@ -104,7 +136,7 @@ def draw_curve4(Pscore):
     data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     
     return data
-def draw_curve3(uncertainty, pdfsavepath=None):
+def draw_curve3(uncertainty, pdfsavepath=None, std=None):
     global Percentage
     # uncertanity is a dict each value is a list a a[1] is var
     colors = matplotlib.cm.rainbow(np.linspace(0, 1, 5))
@@ -234,7 +266,7 @@ def replace_kspace_lines(pred, gt, mask, n_line, mask_score, random=None):
     mask_new = mask.mul(1).squeeze() # copy mem
     
     if random is None:
-        if is_rawdata:
+        if is_rawdata and conjudge_symmetric:
             # Experimental: Add conjudge 
             mask_score.masked_fill_(mask_new.byte(), 1000000)
             inver_idx = torch.Tensor(list(np.arange(cs_h//2,cs_h,1)[::-1])).long()
@@ -277,6 +309,8 @@ def compute_scores(fake, real, mask):
         real = real[:,:1,:,:]
     mse = F.mse_loss(fake, real)
     ssim = util.ssim_metric(fake, real)
+    
+    std = F.mse_loss(fake, real, reduce=False).view(fake.shape[0],-1).mean(1).std()
 
     # get_mse_percentile(fake, real)
     # # compute information percentage:
@@ -290,7 +324,7 @@ def compute_scores(fake, real, mask):
     #     per = np.nonzero(tmp)[0].size / 65
     #     pers.append(per*100//1 /100)
     # InfoPerc.append(array(pers))   
-    return [mse.item(), ssim.item()]
+    return [mse.item(), ssim.item(), std.item()]
 
 # to track the MSE per kspace recom and corresponding uncertainty 
 # for top10, bottom10 and median
@@ -584,26 +618,29 @@ def animate(images, masks, eval_scores, uncertainty, D_score, iter,
 opt = None
 save_dir = None
 "---------Parameter settings--------"
+## If debug, we just recommend a few lines and show results
 debug = False
-## if conjudge_symmetric is True. We select a line and this conjudge symmetric one is automatically selected
-# The code will adapt automatically for that 
+## If conjudge_symmetric is True. We select a line and this conjudge symmetric one is automatically selected
+## The code will adapt automatically for that 
 conjudge_symmetric=True
 ## How many lines we observed at init. If it is euqal to 0, we use the LF 10 lines
-## If = 25, we use the default 25% subsampling pattern
+## If = 25, we use the default 25% subsampling pattern initially
 observed_line_n = 0
 ## If n_forward is None, it will calculate automatically. For debug, set it to a small value
 n_forward = None if not debug else 10
 tot_iter = 2
 # for displaying the xval of plot, the percentage of oberved lines
 Percentage = [] 
+# If save metadata
 save_metadata = True
+# If save gif together with mp4 demo version
 save_gif = True
+# If it is raw k-space data
 is_rawdata = False
 "------------------------------------" 
+
 if __name__ == '__main__':
-    if debug:
-        print('-'*100)
-        print('Warning in debug mode')
+    
     opt = TestOptions().parse()
     assert (opt.no_dropout)
 
@@ -624,15 +661,18 @@ if __name__ == '__main__':
     ngrid = 9 # how many image to show in each grid
     use_forward = True
 
+    if debug:
+        print('-'*100)
+        print('>> Warning in debug mode')
+
     # create website
     if conjudge_symmetric:
         web_dir = os.path.join(opt.results_dir, opt.name, 'test_recommend_%s' % (opt.which_epoch) if not debug else 'test_recommend_%s_debug' % (opt.which_epoch))
     else:
-        web_dir = os.path.join(opt.results_dir, opt.name, 'test_recommend_%s_noconjectsymmetric' % (opt.which_epoch))
+        web_dir = os.path.join(opt.results_dir, opt.name, 'test_recommend_%s_nocs' % (opt.which_epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
     save_dir = webpage.get_image_dir()
     # test
-    total_test_n = len(test_data_loader)*opt.batchSize if opt.how_many < 0 else (opt.how_many)
     if not hasattr(model, 'sampling'): opt.n_samples = 1 # determnistic model needs no sampling
     
     if model.mri_data:
@@ -666,6 +706,7 @@ if __name__ == '__main__':
     imsize = opt.fineSize
     np.random.seed(1234)
 
+    D_bias = OrderedDict()
     print(f'>> start from {observed_line_n} lines and add {n_recom_each} line per forward, need {n_forward} forward')
     for i, data in enumerate(test_data_loader):
         
@@ -712,15 +753,16 @@ if __name__ == '__main__':
         old_fakeB = fakeB
         old_mask = mask
         old_mask_count = old_mask.squeeze().sum(1).mean()
-        
+        D_bias[f'iter{i}'] = []
         Percentage = [old_mask[0].sum().item() / opt.fineSize]
         for nf in range(n_forward):
             # print(f'real_A range {model.real_A.min()}-{model.real_A.max()}')
             # calcuate which line to replace and replace it
             new_fakeB, new_mask = replace_kspace_lines(old_fakeB, realB, old_mask, n_recom_each, pred_kspace_score, None)
             new_mask_count = new_mask.squeeze().sum(1).mean()
+            mask_choice = new_mask - old_mask
             # assert new_mask_count == old_mask_count + n_recom_each, f'{new_mask_count} != {old_mask_count} + {n_recom_each}'
-
+            D_bias[f'iter{i}'].append(torch.nonzero(mask_choice.squeeze()).cpu().numpy())
             if use_forward:
                 #do another forward
                 model.set_input_exp(data[1:], new_mask)
@@ -788,7 +830,6 @@ if __name__ == '__main__':
             if old_mask[1].sum() == opt.fineSize:
                 print ('>> [random] reach the all lines earlier. break')
                 break
-        # import pdb; pdb.set_trace()
         assert old_mask[1].sum() == TOT_SEEN_LINE
         # InfoPScore['random'] = [copy.deepcopy(InfoPerc)]
         MSE, Uncertainty, InfoPScore = [], [], []
@@ -808,7 +849,7 @@ if __name__ == '__main__':
                 #do another forward
                 model.set_input_exp(data[1:], new_mask)
                 model.test()
-                (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
+                # (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
                 old_fakeB = model.fake_B
                 old_mask = new_mask
                 score_list['random_reconstruction'].append(compute_scores(old_fakeB, realB, old_mask))
@@ -896,6 +937,8 @@ if __name__ == '__main__':
         # visuals['performance_log'] = draw_curve(score,logscale=True)
         visuals['D-score'] = draw_curve2(score_D, pdfsavepath=os.path.join(save_dir, 'D-score.pdf'))
         visuals['uncertainty'] = draw_curve3(score_uncetainty, pdfsavepath=os.path.join(save_dir, 'uncertainty.pdf'))
+        visuals['mse_std'] = draw_curve5(score['ours_C_R'][:,0], std=score['ours_C_R'][:,2], pdfsavepath=os.path.join(save_dir, 'mse_std.pdf'), ylabel='MSE') # the last column is std
+
         visuals['demo'] = video_path
         visuals['demo_uncertainty'] = video_path2
         visuals['groundtruth'] = visual_list['groundtruth'] 
@@ -904,6 +947,7 @@ if __name__ == '__main__':
         if save_gif:
             visuals['gif'] = gif_path
             visuals['gif_uncertainty'] = gif_path2
+
         # save data
         if save_metadata:
             MetaData = {}
@@ -929,4 +973,8 @@ if __name__ == '__main__':
         val_count += bz
         if i >= tot_iter: break
 
-    
+    # discriminator bias experiment
+    savename = 'd_bias.pickle'
+    with open(savename,'wb') as f:
+        pickle.dump(D_bias, f)
+        print('save metadata at', savename)

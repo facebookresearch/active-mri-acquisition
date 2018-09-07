@@ -4,7 +4,7 @@ echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
 checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_exp'
 
-name=knee_baseline_automap
+name=knee_baseline_automap2
 python train.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_attcnn \
@@ -17,7 +17,7 @@ python train.py --dataroot 'KNEE' \
                 --niter_decay 50 \
                 --niter 50 \
                 --input_nc 2 \
-                --output_nc 1 \
+                --output_nc 2 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
                 --dynamic_mask_type 'random' \
                 --no_dropout \

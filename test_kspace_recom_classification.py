@@ -111,8 +111,8 @@ def draw_curve3(uncertainty):
     fig = plt.figure(figsize=(10,10))
     plt.tick_params(labelsize=25)
     for i, (key, values) in enumerate(uncertainty.items()):
-        color = 'black' if 'algorithm' in key else colors[i]
-        ls = '-' if 'algorithm' in key else "--"
+        color = 'black' if 'ours' in key else colors[i]
+        ls = '-' if 'ours' in key else "--"
         data = [u[-1] for u in values] # -1 is var mean value
         key_name = key.replace('_', '+')
         xval = [float(a)/len(data) * Percentage[-1] for a in range(1, len(data)+1)]
@@ -154,7 +154,7 @@ def draw_curve2(data):
     data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     
     return data
-def draw_curve(data):
+def draw_curve(data, pdfsavepath=None):
     # for MSE and SSIM
     global Percentage
     colors = matplotlib.cm.rainbow(np.linspace(0, 1, 5))
@@ -164,8 +164,8 @@ def draw_curve(data):
     fig.add_subplot(121)
 
     for i, (key, values) in enumerate(data.items()):
-        color = 'black' if 'algorithm' in key else colors[i]
-        ls = '-' if 'algorithm' in key else "--"
+        color = 'black' if 'ours' in key else colors[i]
+        ls = '-' if 'ours' in key else "--"
         key_name = key.replace('_', '+')
         xval = [float(a)/values.shape[0] * Percentage[-1] for a in range(1, values.shape[0]+1)]
         plt.plot(xval, values[:,0], color=color, label=key_name, linewidth=5, linestyle=ls)
@@ -176,8 +176,8 @@ def draw_curve(data):
 
     fig.add_subplot(122)
     for i, (key, values) in enumerate(data.items()):
-        color = 'black' if 'algorithm' in key else colors[i]
-        ls = '-' if 'algorithm' in key else "--"
+        color = 'black' if 'ours' in key else colors[i]
+        ls = '-' if 'ours' in key else "--"
         key_name = key.replace('_', '+')
         xval = [float(a)/values.shape[0] * Percentage[-1] for a in range(1, values.shape[0]+1)]
         plt.plot(xval, values[:,1], color=color, label=key_name, linewidth=5, linestyle=ls)
@@ -186,6 +186,9 @@ def draw_curve(data):
     plt.legend(fontsize=25)
     
     plt.tick_params(labelsize=25)
+    if pdfsavepath is not None:
+        plt.savefig(pdfsavepath)
+        
     fig.tight_layout()
     fig.canvas.draw()
 
@@ -194,36 +197,41 @@ def draw_curve(data):
     data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     
     return data
-def draw_curve5(data):
+def draw_curve5(data, n_col, pdfsavepath=None):
     # for Acc
     global Percentage
     colors = matplotlib.cm.rainbow(np.linspace(0, 1, 5))
 
-    fig = plt.figure(figsize=(20,10))
+    fig = plt.figure(figsize=(n_col*10,10))
     n = len(data)
-    fig.add_subplot(121)
-    for i, (key, values) in enumerate(data.items()):
-        color = 'black' if 'algorithm' in key else colors[i]
-        ls = '-' if 'algorithm' in key else "--"
-        key_name = key.replace('_', '+')
-        xval = [float(a)/values.shape[0] * Percentage[-1] for a in range(1, values.shape[0]+1)]
-        plt.plot(xval, values[:,0], color=color, label=key_name, linewidth=5, linestyle=ls)
-    plt.ylabel('Accuracy (top-1 %)', fontsize=25)
-    plt.xlabel('kMA (%)', fontsize=25)
-    plt.legend(fontsize=25)
-    plt.tick_params(labelsize=25)
+    topk = [1,5,10,20]
+    for c in range(0,n_col):
+        fig.add_subplot(1,n_col, c+1)
+        for i, (key, values) in enumerate(data.items()):
+            color = 'black' if 'ours' in key else colors[i]
+            ls = '-' if 'ours' in key else "--"
+            key_name = key.replace('_', '+')
+            xval = [float(a)/values.shape[0] * Percentage[-1] for a in range(1, values.shape[0]+1)]
+            plt.plot(xval, values[:,c], color=color, label=key_name, linewidth=5, linestyle=ls)
+        plt.ylabel(f'Accuracy (top-{topk[c]} %)', fontsize=25)
+        plt.xlabel('kMA (%)', fontsize=25)
+        plt.legend(fontsize=25)
+        plt.tick_params(labelsize=25)
 
-    fig.add_subplot(122)
-    for i, (key, values) in enumerate(data.items()):
-        color = 'black' if 'algorithm' in key else colors[i]
-        ls = '-' if 'algorithm' in key else "--"
-        key_name = key.replace('_', '+')
-        xval = [float(a)/values.shape[0] * Percentage[-1] for a in range(1, values.shape[0]+1)]
-        plt.plot(xval, values[:,1], color=color, label=key_name, linewidth=5, linestyle=ls)
-    plt.ylabel('Accuracy (top-5 %)', fontsize=25)
-    plt.xlabel('kMA (%)', fontsize=25)
-    plt.legend(fontsize=25)
-    plt.tick_params(labelsize=25)
+    if pdfsavepath is not None:
+        plt.savefig(pdfsavepath)
+
+    # fig.add_subplot(122)
+    # for i, (key, values) in enumerate(data.items()):
+    #     color = 'black' if 'ours' in key else colors[i]
+    #     ls = '-' if 'ours' in key else "--"
+    #     key_name = key.replace('_', '+')
+    #     xval = [float(a)/values.shape[0] * Percentage[-1] for a in range(1, values.shape[0]+1)]
+    #     plt.plot(xval, values[:,1], color=color, label=key_name, linewidth=5, linestyle=ls)
+    # plt.ylabel('Accuracy (top-5 %)', fontsize=25)
+    # plt.xlabel('kMA (%)', fontsize=25)
+    # plt.legend(fontsize=25)
+    # plt.tick_params(labelsize=25)
     
     fig.tight_layout()
     fig.canvas.draw()
@@ -252,16 +260,17 @@ def replace_kspace_lines(pred, gt, mask, n_line, mask_score, random=None):
     
     if random is None:
          # Experimental: Add conjudge 
-        cs_h = 128
-        mask_score.masked_fill_(mask_new.byte(), 1000000)
-        inver_idx = torch.Tensor(list(np.arange(cs_h//2,cs_h,1)[::-1])).long()
-        mask_score[:,1:cs_h//2+1] = mask_score[:,1:cs_h//2+1] + mask_score[:,inver_idx]
-        min_ranked_score, indices = torch.sort(mask_score[:,:cs_h//2+1], 1, descending=False)
-        indices = indices[:,:n_line]
-
-        # mask_score.masked_fill_(mask_new.byte(), 100) # do not select from real one set it to a large value
-        # min_ranked_score, indices = torch.sort(mask_score, 1, descending=False)
-        # indices = indices[:,:n_line]
+        if cs_fold:
+            cs_h = 128
+            mask_score.masked_fill_(mask_new.byte(), 1000000)
+            inver_idx = torch.Tensor(list(np.arange(cs_h//2,cs_h,1)[::-1])).long()
+            mask_score[:,1:cs_h//2+1] = mask_score[:,1:cs_h//2+1] + mask_score[:,inver_idx]
+            min_ranked_score, indices = torch.sort(mask_score[:,:cs_h//2+1], 1, descending=False)
+            indices = indices[:,:n_line]
+        else:
+            mask_score.masked_fill_(mask_new.byte(), 100) # do not select from real one set it to a large value
+            min_ranked_score, indices = torch.sort(mask_score, 1, descending=False)
+            indices = indices[:,:n_line]
     else:
         indices = random
 
@@ -528,7 +537,7 @@ def compute_accuracy(imgs, labels):
     inputs = (imgs - classifier_mean) / classifier_std
     
     with torch.no_grad():
-        acc = accuracy(imagnet_classifier(inputs).cpu(), labels, topk=(1,5))
+        acc = accuracy(imagnet_classifier(inputs).cpu(), labels, topk=(1,5,10))
         acc = [a.item() for a in acc]
 
     # print(f'\n img min {inputs.min().item()} max {inputs.max().item()} acc {acc}')
@@ -558,6 +567,7 @@ debug = False
 ## if conjudge_symmetric is True. We select a line and this conjudge symmetric one is automatically selected
 # The code will adapt automatically for that 
 conjudge_symmetric=True
+cs_fold = True
 ## How many lines we observed at init. If it is euqal to 0, we use the LF 10 lines
 ## If = 25, we use the default 25% subsampling pattern
 observed_line_n = 0
@@ -585,7 +595,6 @@ if __name__ == '__main__':
     dataset = datasets.ImageFolder(valdir, transforms.Compose([
             transforms.Grayscale(num_output_channels=1), # zz
             transforms.Resize(144),
-            # transforms.Resize(224),
             transforms.CenterCrop(128),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5], std=[0.5])
@@ -605,7 +614,10 @@ if __name__ == '__main__':
     use_forward = True
 
     # create website
-    web_dir = os.path.join(opt.results_dir, opt.name, 'test_recommend_%s_csfold' % (opt.which_epoch))
+    if cs_fold:
+        web_dir = os.path.join(opt.results_dir, opt.name, 'test_recommend_%s_csfold' % (opt.which_epoch))
+    else:
+        web_dir = os.path.join(opt.results_dir, opt.name, 'test_recommend_%s' % (opt.which_epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
     save_dir = webpage.get_image_dir()
     # test
@@ -643,6 +655,7 @@ if __name__ == '__main__':
     imsize = opt.fineSize
     np.random.seed(1234)
 
+    accuracies = OrderedDict()
     print(f'>> start from {observed_line_n} lines and add {n_recom_each} line per forward, need {n_forward} forward')
     for i, data in enumerate(test_data_loader):
         
@@ -796,7 +809,7 @@ if __name__ == '__main__':
                 #do another forward
                 model.set_input_exp2(data, new_mask)
                 model.test()
-                (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
+                # (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
                 old_fakeB = model.fake_B
                 old_mask = new_mask
                 score_list['random_reconstruction'].append(compute_scores(old_fakeB, realB, old_mask))
@@ -874,7 +887,7 @@ if __name__ == '__main__':
             score['random_C_R'] = np.array(score_list['random_reconstruction'])
         score['order_C'] = np.array(score_list['order'])
         score['order_C_R'] = np.array(score_list['order_reconstruction'])
-        score['algorithm_C_R'] = np.array(score_list['algorithm'])
+        score['ours_C_R'] = np.array(score_list['algorithm'])
         
         
         score_D = np.array(score_D)
@@ -884,19 +897,20 @@ if __name__ == '__main__':
         acc['random_C_R'] = np.array(acc_list['random_reconstruction'])  
         acc['order_C'] = np.array(acc_list['order'])
         acc['order_C_R'] = np.array(acc_list['order_reconstruction'])    
-        acc['algorithm_C_R'] = np.array(acc_list['algorithm'])
-
+        acc['ours_C_R'] = np.array(acc_list['algorithm'])
+        accuracies[f'iter_{i}'] = acc
         # curves of uncertainty
         score_uncetainty = OrderedDict()
         score_uncetainty['random_C_R'] = uncertainty_list['random_reconstruction']
         score_uncetainty['order_C_R'] = uncertainty_list['order_reconstruction']     
-        score_uncetainty['algorithm_C_R'] = uncertainty_list['algorithm']   
+        score_uncetainty['ours_C_R'] = uncertainty_list['algorithm']   
 
         ## draw curves 
-        visuals['performance'] = draw_curve(score)
+        visuals['performance'] = draw_curve(score, pdfsavepath=os.path.join(save_dir, 'performance.pdf'))
         visuals['D-score'] = draw_curve2(score_D)
         visuals['uncertainty'] = draw_curve3(score_uncetainty)
-        visuals['acc'] = draw_curve5(acc)
+        # draw accuracy
+        visuals['acc'] = draw_curve5(acc, n_col=acc['ours_C_R'].shape[1], pdfsavepath=os.path.join(save_dir, 'acc.pdf'))
 
         visuals['demo'] = video_path
         # visuals['demo_uncertainty'] = video_path2
@@ -910,8 +924,11 @@ if __name__ == '__main__':
         if save_metadata:
             MetaData = {}
             MetaData['score'] = score
+            MetaData['acc'] = acc
             MetaData['score_D'] = score_D
-            MetaData['data'] = data
+            # MetaData['data'] = data
+            MetaData['uncertainty'] = score_uncetainty
+            
             meta_name = f'metadata{i}.pickle'
             with open(os.path.join(save_dir, meta_name),'wb') as f:
                 pickle.dump(MetaData, f)
@@ -928,3 +945,18 @@ if __name__ == '__main__':
 
         val_count += bz
         if i >= tot_iter: break
+
+    # merge acc for all iteration to make it smooth
+    tot = len(accuracies)
+    merge_acc = OrderedDict()
+    for k in accuracies['iter_0'].keys():
+        for l, v in accuracies.items():
+            if l == 'iter_0':
+                merge_acc[k] = v[k] * bz
+            else:
+                merge_acc[k] += v[k] * bz
+        merge_acc[k] = merge_acc[k] / (bz * tot)
+    visuals = {}
+    visuals['overall_acc'] = draw_curve5(merge_acc, n_col=merge_acc['ours_C_R'].shape[1], pdfsavepath=os.path.join(save_dir, 'overall_acc.pdf'))
+    save_images(webpage, visuals, 'test_iter{}'.format(tot_iter+1), aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
+    webpage.save()

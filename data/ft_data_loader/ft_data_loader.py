@@ -88,16 +88,20 @@ def get_train_valid_loader(batch_size,
     print('load {} train/val (val ratio {:.4f}) dataset'.format(which_dataset, valid_size))
     if which_dataset in ('KNEE'):
          # a hacker way to import loader
-        sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
+        path = '/private/home/zizhao/work/fast_mri_master'
+        if not os.path.isdir(path):
+            raise ImportError(path+' not exists. Download fast_mri_master repo and change the path')
+        sys.path.insert(0, path)
         from common import args, dicom_dataset, subsample
         args = args.Args().parse_args(args=[])
         mask_func = subsample.Mask(reuse_mask=True)
         dataset = dicom_dataset.Slice(mask_func, args)
     elif which_dataset == 'KNEE_RAW':
         from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
-        sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
         mask_func = Mask(reuse_mask=False, subsampling_ratio=keep_ratio, random=True)
         root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
+        if not os.path.isdir(root):
+            raise ImportError(path+' not exists. Change to the right path.')
         dataset = PCASingleCoilSlice(mask_func, root, which='train')
         print(f'{which_dataset} train has {len(dataset)} samples')
         num_workers = 8
@@ -192,10 +196,13 @@ def get_test_loader(batch_size,
         from common import args, dicom_dataset, subsample
         args = args.Args().parse_args(args=[])
         mask_func = subsample.Mask(reuse_mask=True)
+        args.subsampling_ratio = 1//keep_ratio
+        print(f'KNEE >> subsampling_ratio: {args.subsampling_ratio}' )
         dataset = dicom_dataset.Slice(mask_func, args, which='val')
     elif which_dataset == 'KNEE_RAW':
         from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
         sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
+        print(f'KNEE_RAW >> subsampling_ratio: {keep_ratio}' )
         mask_func = Mask(reuse_mask=True, subsampling_ratio=keep_ratio, random=False)
         root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
         dataset = PCASingleCoilSlice(mask_func, root, which='val')

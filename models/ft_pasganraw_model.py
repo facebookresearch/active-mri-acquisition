@@ -190,6 +190,7 @@ class FTPASGANRAWModel(BaseModel):
         parser.set_defaults(grad_ctx=True)
         parser.set_defaults(pixelwise_loss_merge=True)
         parser.set_defaults(use_mse_as_disc_energy=True)
+        parser.set_defaults(eval_full_valid=True)
         # # 0.16 will around have 
         # parser.set_defaults(kspace_keep_ratio=0.16)
 
@@ -352,8 +353,6 @@ class FTPASGANRAWModel(BaseModel):
         mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
         self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.metadata)
 
-        # if not self.isTrain:
-        #     self.fake_Bs = [a.norm(dim=1, keepdim=True) for a in self.fake_Bs]
         self.fake_B = self.fake_Bs[-1]
         
     def test(self, sampling=False):

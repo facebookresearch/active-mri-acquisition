@@ -119,20 +119,41 @@ checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
 #                 --grad_ctx \
 #                 --debug
 
-name=knee_energyresnetplus_w111logvar_0.03gan
+# name=knee_energyresnetplus_w111logvar_0.03gan
+# python train.py --dataroot 'KNEE' \
+#                 --name $name \
+#                 --model ft_pasgan_ablation \
+#                 --checkpoints_dir $checkpoints_dir \
+#                 --batchSize 48 \
+#                 --gpu_ids $CUDA_VISIBLE_DEVICES \
+#                 --print_freq 50 \
+#                 --lambda_gan 0.03 \
+#                 --mask_cond \
+#                 --where_loss_weight 'logvar' \
+#                 --use_fixed_weight '1,1,1' \
+#                 --lr 0.0006 \
+#                 --use_mse_as_disc_energy \
+#                 --which_model_netG 'resnetplus' \
+#                 --pixelwise_loss_merge \
+#                 --grad_ctx 
+
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_exp'
+
+name=knee_energynet_pasnetplus_w111logvar_gradctx_pxlm_ablation
 python train.py --dataroot 'KNEE' \
                 --name $name \
-                --model ft_pasgan_ablation \
+                --model ft_pasnet_ablation \
                 --checkpoints_dir $checkpoints_dir \
                 --batchSize 48 \
                 --gpu_ids $CUDA_VISIBLE_DEVICES \
                 --print_freq 50 \
-                --lambda_gan 0.03 \
                 --mask_cond \
                 --where_loss_weight 'logvar' \
                 --use_fixed_weight '1,1,1' \
                 --lr 0.0006 \
                 --use_mse_as_disc_energy \
-                --which_model_netG 'resnetplus' \
+                --which_model_netG 'pasnetplus' \
                 --pixelwise_loss_merge \
-                --grad_ctx 
+                --grad_ctx \
+                --niter 50 \
+                --niter 50 

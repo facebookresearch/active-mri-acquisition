@@ -26,7 +26,11 @@ if __name__ == '__main__':
     model.setup(opt)
 
     # create website
-    web_dir = os.path.join(opt.results_dir, opt.name, 'sampling_%s' % (opt.which_epoch))
+    assert opt.kspace_keep_ratio == 0.1 or opt.kspace_keep_ratio == 0.25
+    if opt.kspace_keep_ratio == 0.1:
+        web_dir = os.path.join(opt.results_dir, opt.name, 'sampling_%s_10x' % (opt.which_epoch))
+    else:   
+        web_dir = os.path.join(opt.results_dir, opt.name, 'sampling_%s' % (opt.which_epoch))
     # web_dir = os.path.join(opt.results_dir, opt.name, 'kspace_noises_sampling_%s' % (opt.which_epoch))
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.which_epoch))
     if model.mri_data:
@@ -66,17 +70,17 @@ if __name__ == '__main__':
             #     visuals_gif_seq.append(Image.fromarray(visuals_gif))
             # visuals['rec_gif'] = visuals_gif_seq
 
-        ''' show histogram of uncertainty '''
-        uncertainty = []
-        for j, data in enumerate(test_data_loader):
-            if j > 1: break
-            model.set_input(data)
-            model.test()
-            uncertainty.append(np.stack([logvar.exp().cpu().numpy() for logvar in model.logvars],0))
+        # ''' show histogram of uncertainty '''
+        # uncertainty = []
+        # for j, data in enumerate(test_data_loader):
+        #     if j > 1: break
+        #     model.set_input(data)
+        #     model.test()
+        #     uncertainty.append(np.stack([logvar.exp().cpu().numpy() for logvar in model.logvars],0))
 
-        uncertainty = np.concatenate(uncertainty, 1) #[3,B*J,1,H,W]
-        visuals['uncertainty'] = draw_histogram(uncertainty.reshape(uncertainty.shape[0],-1), os.path.join(webpage.get_image_dir(), f'uncertainty_{it}.pdf'))
-        visuals['validation_metadata'] = os.path.basename(metasavepath)
+        # uncertainty = np.concatenate(uncertainty, 1) #[3,B*J,1,H,W]
+        # visuals['uncertainty'] = draw_histogram(uncertainty.reshape(uncertainty.shape[0],-1), os.path.join(webpage.get_image_dir(), f'uncertainty_{it}.pdf'))
+        # visuals['validation_metadata'] = os.path.basename(metasavepath)
 
 
         save_images(webpage, visuals, f'sampling ({opt.n_samples} samples) iter {it}', aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)

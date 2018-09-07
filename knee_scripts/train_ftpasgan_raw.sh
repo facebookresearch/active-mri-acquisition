@@ -2,11 +2,10 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
+checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_zz_models'
 
-# v2 has bug for l2 loss
-# use v3
-name=rawknee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_gamma10_v3
+# gamma is the weight of discriminator energy function need to be careful here
+name=rawknee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_gamma20_v3_run2
 python train.py --dataroot 'KNEE_RAW' \
                 --name $name \
                 --model ft_pasganraw \
@@ -21,5 +20,5 @@ python train.py --dataroot 'KNEE_RAW' \
                 --lr 0.0002 \
                 --niter 20 \
                 --niter 30 \
-                --gamma 10 \
+                --gamma 20 \
                 --eval_full_valid

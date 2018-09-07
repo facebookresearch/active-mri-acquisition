@@ -44,7 +44,9 @@ if __name__ == '__main__':
     reconst_ssim, reconst_loss, error_uncertainty_list, reconst_loss_sample = [], [], [], []
     visuals = {}
 
+    if_compute_msevar = False # this is for generate data to compute variances histogram plot in the slide
     conjudge_symmetric = True
+    
     opt.how_many = 1024 * 5
     # # create website
     web_dir = os.path.join(opt.results_dir, opt.name, 'moving_ratio_experiment_%s_%s' % (opt.phase, opt.which_epoch))
@@ -69,7 +71,9 @@ if __name__ == '__main__':
         return err 
     
     ratios = np.arange(0.02, 0.25, 0.02) # [0.02,0.05,0.1,0.15,0.2,0.25]
-    # ratios = np.arange(0.02, 0.8, 0.01) # only for draw box plot MSEVAR
+    if if_compute_msevar:
+        ratios = np.arange(0.02, 0.8, 0.01) # only for draw box plot MSEVAR
+        opt.how_many = 1024
     masks = []
     kMA = []
     for ratio in ratios:
@@ -86,7 +90,10 @@ if __name__ == '__main__':
     sum_over = lambda x: x.sum(1).sum(1).sum(1)
     print('Generate mask kmA, ', kMA)
     val_count = 0
-    use_uncertainty = 'energypasnetplus' in opt.name
+    use_uncertainty = False
+    if 'energypasnetplus' in opt.name and not 'nouncertainty' in opt.name:
+        print('>> use_uncertainty')
+        use_uncertainty = True
 
     for i, data in enumerate(test_data_loader):
         r_loss, r_ssim, err_unc_list, r_loss_sample = [], [], [], []
@@ -111,7 +118,8 @@ if __name__ == '__main__':
 
             sys.stdout.write(f'\r iter {i} ratio {kMA[j]}')
             sys.stdout.flush()
-        error_uncertainty_list.append(torch.stack(err_unc_list, 0))
+        if use_uncertainty:
+            error_uncertainty_list.append(torch.stack(err_unc_list, 0))
         reconst_loss.append(r_loss)
         reconst_ssim.append(r_ssim)
         # reconst_loss_sample.append(np.stack(r_loss_sample, 1))
@@ -151,19 +159,22 @@ if __name__ == '__main__':
 
     mse_sample = np.stack(mse_sample, 1)
     reconst_loss_sample = reconst_loss_sample[:,:,0,:,:,0] 
-    metadat = {'mse': mse_sample, 'samples': reconst_loss_sample, 'kMA': kMA}
-    pickle.dump(metadat, open('experiments/kspace_line_var/metadata512.pickle','wb'), protocol=4)
-    # figmsevar = draw_figure.draw_curve_msevar(kMA, mse_sample, ylabel='MSE', pdfsavepath=os.path.join(saveroot,'msevar.pdf'))
-
+    
+    if if_compute_msevar:
+        metadat = {'mse': mse_sample, 'kMA': kMA} # 'samples': reconst_loss_sample,
+        pickle.dump(metadat, open('experiments/kspace_line_var/metadata_small.pickle','wb'), protocol=4)
+        figmsevar = draw_figure.draw_curve_msevar(kMA, mse_sample, ylabel='MSE', pdfsavepath=os.path.join(saveroot,'msevar.pdf'))
+        visuals['MSEVAR'] = figmsevar
     visuals['SSIM'] = figssim
     visuals['MSE'] = figmse
-    # visuals['MSEVAR'] = figmsevar
+    
 
     metadata = {}
     metadata['kMA'] = kMA
     metadata['MSE'] = reconst_loss
     metadata['SSIM'] = reconst_ssim
-    metadata['mse_uncertainty_cor'] = error_uncertainty_list
+    if use_uncertainty:
+        metadata['mse_uncertainty_cor'] = error_uncertainty_list
 
     savepath = os.path.join(webpage.get_image_dir(), filename)
     pickle.dump(metadata, open(savepath,'wb'))

@@ -26,6 +26,107 @@ from scipy.sparse.linalg import svds
 
 
 
+
+def create_mask2(shape, subsampling_ratio, seed=None, subsampling_type='lf_focused'):
+    """ Samples a mask that removes rows, one per instance in the batch
+        1 indicates the pixel is known during training.
+        Expected input shape is: nbatches x 1 x height x width x 2
+        or single batch: 1 x height x width x 2.
+        The 2 at the end is so this mask can be applied to complex style tensors directly,
+        which is pytorch have the 2 complex dimensions at the end.
+
+        Keep in mind that the fft operation in torch places the low frequencies
+        at the corners of the tensor, and the high frequencies in the middle.
+    """
+    original_shape = shape
+    if len(original_shape) == 4:
+        shape = (1, *original_shape)
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    img_mask_np = np.zeros(shape).astype(np.float32) #img_fft_np.copy()
+    nbatches = shape[0]
+    nrows = shape[2]
+
+    # Just simplfies the implementation
+    if not float(subsampling_ratio).is_integer():
+        raise Exception("Subsampling ratio should be integral")
+    center_fraction = 0.078125
+    radius = int(nrows*center_fraction/2)
+    # For random methods
+    # Do not sample from the radius range
+    if subsampling_type == "hf_focused":
+        row_pool = np.concatenate([np.arange(0, nrows//2-radius), np.arange(nrows//2+radius, nrows)],0) 
+    else:
+        # Usually we want to keep lf more
+        row_pool = np.arange(radius, nrows-radius) 
+
+    row_sample = np.zeros((nbatches, nrows))
+    actual_subsampling_nrow = int((1.0/subsampling_ratio - center_fraction) * nrows) # excluding the radius rows
+    # print(row_pool, actual_subsampling_nrow)
+    row_ids = np.random.choice(row_pool, size=actual_subsampling_nrow, replace=False) 
+    row_sample[:,row_ids] = 1
+    sampled_mask = np.expand_dims(row_sample, 1)[..., None, None] # Add extra dimensions
+    sampled_mask = np.broadcast_to(sampled_mask, shape) # Expand
+
+    random_row_sample = np.zeros((nbatches, nrows))
+    for i in range(nbatches):
+        ids = np.random.choice(nrows, size=int(1.0/subsampling_ratio*nrows), replace=False) 
+        random_row_sample[i,ids] = 1
+    
+    # For center masking methods
+    middle = int(nrows/2)
+    non_center_inds = (
+        list(range(radius, middle-radius)) +
+        list(range(middle+radius, nrows-radius)))
+    
+    if subsampling_type == "random":
+        for i in range(nbatches):
+            # sample per batch
+            row_ids = np.random.choice(nrows, size=int((1.0/subsampling_ratio) * nrows), replace=False) 
+            img_mask_np[i,:,row_ids,:,:] = 1
+    elif subsampling_type == "hf_focused":        
+        img_mask_np[:] = sampled_mask
+        img_mask_np[...,(middle-radius):(middle+radius),:,:] = 1
+    elif subsampling_type == "lf_focused":
+        # Random sample everywhere
+        img_mask_np[:] = sampled_mask
+        # Add all low frequencies (Top and bottom)
+        img_mask_np[...,:radius,:,:] = 1
+        img_mask_np[...,(-radius):,:,:] = 1
+    elif subsampling_type == "lf_focused_no_hf":
+        # Random sample everywhere
+        img_mask_np[:] = sampled_mask
+        # region around either end should be all 1
+        img_mask_np[...,:radius,:,:] = 1
+        img_mask_np[...,(-radius):,:,:] = 1
+        # region around center of image should be all 0
+        img_mask_np[...,(middle-radius):(middle+radius),:,:] = 0
+    elif subsampling_type == "alternating_plus_hf":
+        img_mask_np[...,::ratio,:,:] = 1
+        img_mask_np[...,(middle-radius):(middle+radius),:,:] = 1
+        img_mask_np[...,:radius,:,:] = 0
+        img_mask_np[...,(-radius):,:,:] = 0
+    elif subsampling_type == "alternating_plus_lf":
+        #https://arxiv.org/pdf/1709.02576.pdf
+        img_mask_np[...,::ratio,:,:] = 1
+        img_mask_np[...,(middle-radius):(middle+radius),:,:] = 0
+        img_mask_np[...,:radius,:,:] = 1
+        img_mask_np[...,(-radius):,:,:] = 1
+    elif subsampling_type == "alternating":
+        # Really doesn't work very well!
+        img_mask_np[...,::ratio,:,:] = 1
+    elif subsampling_type == "fromfile":
+        mask2d = load_mask(args.subsample_mask_file)
+        img_mask_np_raw = mask2d[None, None, :, :, None]
+        img_mask_np =  np.tile(img_mask_np_raw, reps=(nbatches, 1, 1, 2))
+
+    if len(original_shape) == 4:
+        img_mask_np = img_mask_np[0, ...]
+
+    return torch.from_numpy(img_mask_np)
+
 class MriCoilCompr(object):
     """ Apply coil compression using principal components analysis.
         This used for learning to present the network with a somewhat
@@ -99,10 +200,14 @@ class Mask:
     def __call__(self, shape):
         if self.reuse_mask:
             if self.mask is None:
-                self.mask = create_mask(shape, random_frac=self.random, mask_fraction=self.subsampling_ratio)
+                # self.mask = create_mask(shape, random_frac=self.random, mask_fraction=self.subsampling_ratio)
+                mask = create_mask2([1,shape,shape,2], 1//self.subsampling_ratio) #[1,h,w,2]
+                self.mask = mask[:,:,:1,0].unsqueeze(0)
             return self.mask
         else:
-            self.mask = create_mask(shape, random_frac=self.random, mask_fraction=self.subsampling_ratio)
+            mask = create_mask2([1,shape,shape,2], 1//self.subsampling_ratio) #[1,h,w,2]
+            self.mask = mask[:,:,:1,0].unsqueeze(0)
+            # self.mask = create_mask(shape, random_frac=self.random, mask_fraction=self.subsampling_ratio)
             # self.mask = create_mask(shape, random_frac=self.random, mask_fraction=self.subsampling_ratio, random_full=True)
             return self.mask
 
