@@ -1,6 +1,10 @@
 import numpy as np
 # from numpy.fft import fftshift, ifftshift, fftn, ifftn
 import torch
+import h5py
+import pathlib
+from torch.utils.data import Dataset, DataLoader
+
 
 def kspace_to_image(kspace_tensor):
     # return (1,H,W)   
@@ -8,10 +12,12 @@ def kspace_to_image(kspace_tensor):
 
     return inv_img
 
+
 def image_to_kspace(im_tensor):
     # return (1,H,W,2)
     k_space_tensor = torch.rfft(im_tensor, 2, onesided=False)
     return k_space_tensor
+
 
 # this is easy to control than gen_kspace_mask_deprecated
 def gen_kspace_mask(shape, ratio, lowfreq_ratio):
@@ -135,5 +141,125 @@ class FourierUtil():
         stacked_data = torch.cat([rec_img, _rec_img], dim=0) # 3x1xhxw
 
         return stacked_data
+
+
+class MaskFunc:
+    def __init__(self, center_fractions, accelerations):
+        if len(center_fractions) != len(accelerations):
+            raise ValueError('Number of center fractions should match number of accelerations')
+
+        self.center_fractions = center_fractions
+        self.accelerations = accelerations
+        self.rng = np.random.RandomState()
+
+    def __call__(self, shape, seed=None):
+        if len(shape) < 3:
+            raise ValueError('Shape should have 3 or more dimensions')
+
+        self.rng.seed(seed)
+        num_cols = shape[-2]
+
+        choice = self.rng.randint(0, len(self.accelerations))
+        center_fraction = self.center_fractions[choice]
+        acceleration = self.accelerations[choice]
+
+        # Create the mask
+        num_low_freqs = int(round(num_cols * center_fraction))
+        num_high_freqs = num_cols // acceleration - num_low_freqs
+        mask = self.create_lf_focused_mask(num_cols, num_high_freqs, num_low_freqs)
+        mask = np.fft.ifftshift(mask, axes=0)
+
+        # Reshape the mask
+        mask_shape = [1 for _ in shape]
+        mask_shape[-1] = num_cols
+        mask = torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
+        return mask
+
+    def create_lf_focused_mask(self, num_cols, num_high_freqs, num_low_freqs):
+        p = num_high_freqs / (num_cols - num_low_freqs)
+        mask = self.rng.uniform(size=num_cols) < p
+        pad = (num_cols - num_low_freqs + 1) // 2
+        mask[pad:pad + num_low_freqs] = True
+        return mask
+
+
+def roll(x, shift, dim):
+    if isinstance(shift, (tuple, list)):
+        assert len(shift) == len(dim)
+        for s, d in zip(shift, dim):
+            x = roll(x, s, d)
+        return x
+    shift = shift % x.size(dim)
+    if shift == 0:
+        return x
+    left = x.narrow(dim, 0, x.size(dim) - shift)
+    right = x.narrow(dim, x.size(dim) - shift, shift)
+    return torch.cat((right, left), dim=dim)
+
+
+def ifftshift(x, dim=None):
+    if dim is None:
+        dim = tuple(range(x.dim()))
+        shift = [(dim + 1) // 2 for dim in x.shape]
+    elif isinstance(dim, int):
+        shift = (x.shape[dim] + 1) // 2
+    else:
+        shift = [(x.shape[i] + 1) // 2 for i in dim]
+    return roll(x, shift, dim)
+
+
+class RawDataTransform:
+    def __init__(self, mask_func, seed=None):
+        self.mask_func = mask_func
+        self.seed = seed
+
+    def __call__(self, kspace, attrs):
+        kspace = torch.from_numpy(np.stack([kspace.real, kspace.imag], axis=-1))
+        kspace = ifftshift(kspace, dim=(0, 1))
+        image = torch.ifft(kspace, 2, normalized=False)
+        image = ifftshift(image, dim=(0, 1))
+        norm = torch.sqrt(image[..., 0] ** 2 + image[..., 1] ** 2).max()
+        image /= norm
+        kspace /= norm
+        shape = np.array(kspace.shape)
+        mask = self.mask_func(shape, self.seed)
+        return mask, image, kspace
+
+    def postprocess(self, data, hps):
+        mask, inputs, kspace = data
+        mask = data[0].repeat(1, 1, kspace.shape[1], 1)
+        inputs = inputs.cuda().permute(0, 3, 1, 2)
+        kspace = kspace.cuda().unsqueeze(1)
+        mask = mask.cuda()
+        mask_k_space = mask
+        mask = mask.unsqueeze(4).repeat(1, 1, 1, 1, 2)
+        masked_kspace = kspace * mask
+        masked_image = ifftshift(torch.ifft(masked_kspace, 2, normalized=False), dim=(2, 3))
+        masked_image = masked_image.squeeze(1).permute(0, 3, 1, 2)
+        return inputs, masked_image, mask_k_space
+
+
+# Load k-space data
+class RawSliceData(Dataset):
+    def __init__(self, root, transform, num_cols=None):
+        self.transform = transform
+        self.examples = []
+        files = list(pathlib.Path(root).iterdir())
+        for fname in sorted(files):
+            data = h5py.File(fname, 'r')
+            if num_cols is not None and data['kspace'].shape[2] != num_cols:
+                continue
+            kspace = data['kspace']
+            num_slices = kspace.shape[0]
+            self.examples += [(fname, slice) for slice in range(num_slices)]
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, i):
+        fname, slice = self.examples[i]
+        with h5py.File(fname, 'r') as data:
+            kspace = data['kspace'][slice]
+            return self.transform(kspace, data.attrs)
         
 
