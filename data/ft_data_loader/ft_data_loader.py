@@ -54,8 +54,8 @@ def get_train_valid_loader(batch_size,
                            num_workers=4,
                            pin_memory=False,
                            normalize='gan',
-                           which_dataset='MNIST',
-                           data_dir='/private/home/zizhao/work/data/'
+                            which_dataset='MNIST',
+                           data_dir='/private/home/sumanab/data/'    #'/private/home/zizhao/work/data/'
                          ):
     random_seed = 1234
     
@@ -105,13 +105,43 @@ def get_train_valid_loader(batch_size,
         dataset = PCASingleCoilSlice(mask_func, root, which='train')
         print(f'{which_dataset} train has {len(dataset)} samples')
         num_workers = 8
+    elif which_dataset == 'KNEE_RAW_SINGLE_COIL':
+        from .ft_util import RawSliceData, RawDataTransform, MaskFunc
+        mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4]) #TODO: remove hardcoded value
+        root = '/datasets01/fastMRI/112718'
+        if not os.path.isdir(root):
+            raise ImportError(root+' not exists. Change to the right path.')
+        data_transform = RawDataTransform(mask_func)
+        train_dataset = RawSliceData(root + '/' + 'singlecoil_train', transform=data_transform, num_cols=368)  #TODO: remove hardcoded value
+        valid_dataset = RawSliceData(root + '/' + 'singlecoil_val', transform=data_transform, num_cols=368)    #TODO: remove hardcoded value
+        print(f'{which_dataset} train has {len(train_dataset)} train samples and {len(valid_dataset)} validation samples')
+        num_workers = 8
+
+        train_idx = list(range(len(train_dataset)))
+        valid_idx = list(range(len(valid_dataset)))
+
+        train_sampler = SubsetRandomSampler(train_idx)
+        valid_sampler = SequentialSampler2(valid_idx)
+
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=batch_size, sampler=train_sampler,
+            num_workers=num_workers, pin_memory=pin_memory, drop_last=True
+        )
+
+        valid_loader = torch.utils.data.DataLoader(
+            valid_dataset, batch_size=batch_size, sampler=valid_sampler, shuffle=False,
+            num_workers=num_workers, pin_memory=pin_memory, drop_last=True
+        )
+
+        return train_loader, valid_loader
+
     elif which_dataset == 'TinyImageNet':
         train_dir = '/datasets01/tinyimagenet/081318/train'
         dataset = datasets.ImageFolder(train_dir, transform=train_transform)
     else:
         if which_dataset == 'CIFAR10':
             dataset = FT_CIFAR10
-            data_dir = '/private/home/zizhao/work/data/'
+            data_dir = '/private/home/sumanab/data/'    #'/private/home/zizhao/work/data/'
         elif which_dataset == 'ImageNet':
             dataset = FT_ImageNet
             data_dir = '/datasets01/imagenet_resized_144px/060718/061417'
@@ -173,7 +203,7 @@ def get_test_loader(batch_size,
                     pin_memory=False,
                     normalize='gan',
                     which_dataset='MNIST',
-                    data_dir='/private/home/zizhao/work/data/'
+                    data_dir='/private/home/sumanab/data/'  #'/private/home/zizhao/work/data/'
                     ):
 
     random_seed = 1234
@@ -208,6 +238,14 @@ def get_test_loader(batch_size,
         dataset = PCASingleCoilSlice(mask_func, root, which='val')
         print(f'{which_dataset} val has {len(dataset)} samples')
         num_workers = 8
+    elif which_dataset == 'KNEE_RAW_SINGLE_COIL':
+        from .ft_util import RawSliceData, RawDataTransform, MaskFunc
+        mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4]) #TODO: remove hardcoded value
+        root = '/datasets01/fastMRI/112718'
+        if not os.path.isdir(root):
+            raise ImportError(root+' not exists. Change to the right path.')
+        data_transform = RawDataTransform(mask_func)
+        dataset = RawSliceData(root + '/' + 'singlecoil_test', transform=data_transform, num_cols=368)  #TODO: remove hardcoded value
     elif which_dataset == 'TinyImageNet':
         test_dir = '/datasets01/tinyimagenet/081318/test'
         dataset = datasets.ImageFolder(test_dir, transform=transform)
