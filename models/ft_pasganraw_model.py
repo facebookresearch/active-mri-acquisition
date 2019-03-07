@@ -330,19 +330,32 @@ class FTPASGANRAWModel(BaseModel):
             histogarms[f'uncertainty_stage{i}'] = logvar.exp()
         return histogarms
 
+    # def set_input(self, input):
+    #     assert self.mri_data
+    #
+    #     # for MRI data Slice loader
+    #     input, target, mask, metadata = input
+    #     target = target.to(self.device)
+    #     input = input.to(self.device)
+    #     self.mask = mask.to(self.device)
+    #     self.metadata = None
+    #
+    #     # do clip internally in loader
+    #     # target = self._clamp(target).detach()
+    #     # input = self._clamp(input)
+    #
+    #     self.real_A = input
+    #     self.real_B = target
+
     def set_input(self, input):
         assert self.mri_data
 
         # for MRI data Slice loader
-        input, target, mask, metadata = input
+        mask, target, input = input
         target = target.to(self.device)
         input = input.to(self.device)
         self.mask = mask.to(self.device)
-        self.metadata = None
-
-        # do clip internally in loader
-        # target = self._clamp(target).detach()
-        # input = self._clamp(input)
+        # self.metadata = None
 
         self.real_A = input
         self.real_B = target
@@ -350,8 +363,10 @@ class FTPASGANRAWModel(BaseModel):
     def forward(self, sampling=False):
         # conditioned on mask
         h, b = self.mask.shape[2], self.real_A.shape[0]
-        mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
-        self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.metadata)
+        import pdb; pdb.set_trace()
+        # mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
+        mask = Variable(self.mask)
+        self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, False)
 
         self.fake_B = self.fake_Bs[-1]
         
