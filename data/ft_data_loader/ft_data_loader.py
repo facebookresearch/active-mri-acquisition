@@ -88,7 +88,7 @@ def get_train_valid_loader(batch_size,
     print('load {} train/val (val ratio {:.4f}) dataset'.format(which_dataset, valid_size))
     if which_dataset in ('KNEE'):
          # a hacker way to import loader
-        path = '/private/home/zizhao/work/fast_mri_master'
+        path = '/checkpoint/jzb/data/mmap'
         if not os.path.isdir(path):
             raise ImportError(path+' not exists. Download fast_mri_master repo and change the path')
         sys.path.insert(0, path)
@@ -222,7 +222,7 @@ def get_test_loader(batch_size,
 
     if which_dataset in ('KNEE'):
          # a hacker way to import loader
-        sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
+        sys.path.insert(0, '/checkpoint/jzb/data/mmap')
         from common import args, dicom_dataset, subsample
         args = args.Args().parse_args(args=[])
         mask_func = subsample.Mask(reuse_mask=True)
