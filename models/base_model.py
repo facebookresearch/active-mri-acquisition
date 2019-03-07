@@ -35,7 +35,7 @@ class BaseModel():
         self.image_paths = []
 
         self.validation_phase = False
-        self.mri_data = self.opt.dataroot in ('KNEE','KNEE_RAW')
+        self.mri_data = self.opt.dataroot in ('KNEE','KNEE_RAW', 'KNEE_RAW_SINGLE_COIL')
 
         # condition on metadata scan_type
         self.meta2label = {
