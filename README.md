@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # fast MRI project
 
 This repo provides the source code to reproduce the proposed method for undersampled MRI reconstruction, uncertainty measurement, and k-space acqusition planning.
@@ -57,7 +56,3 @@ The code framework is inspired by the CycleGAN offcical [repo](https://github.co
 Zizhao Zhang\
 Michal Drozdzal\
 Adriana Romero Soriano
-=======
-# fastMRI
-Active Acquisition of MRI as an RL Problem
->>>>>>> refs/remotes/origin/master
