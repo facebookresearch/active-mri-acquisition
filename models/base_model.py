@@ -10,7 +10,8 @@ import functools
 from .fft_utils import create_mask
 from util import visualizer
 
-class BaseModel():
+
+class BaseModel:
 
     # modify parser to add command line options,
     # and also change the default values if needed
@@ -43,7 +44,6 @@ class BaseModel():
             'ax': 1,
             'cor': 2
         }
-
 
     def set_input(self, input):
         self.input = input
@@ -457,9 +457,8 @@ class BaseModel():
 
     def set_input2(self, input, zscore=3):
         # for MRI data Slice loader
-        target, mask, metadata = input
+        mask, target = input
         target = target.to(self.device)
-        self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
         target = self._clamp(target).detach()
 
         if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:

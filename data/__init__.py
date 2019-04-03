@@ -4,6 +4,7 @@ from data.base_data_loader import BaseDataLoader
 from data.base_dataset import BaseDataset
 from data.ft_data_loader import ft_data_loader
 
+
 def find_dataset_using_name(dataset_name):
     # Given the option --dataset [datasetname],
     # the file "datasets/datasetname_dataset.py"
@@ -22,10 +23,12 @@ def find_dataset_using_name(dataset_name):
             dataset = cls
             
     if dataset is None:
-        print("In %s.py, there should be a subclass of BaseDataset with class name that matches %s in lowercase." % (dataset_filename, target_dataset_name))
+        print("In %s.py, there should be a subclass of BaseDataset with class name that matches %s in lowercase." % (
+            dataset_filename, target_dataset_name))
         exit(0)
 
     return dataset
+
 
 def get_option_setter(dataset_name):    
     dataset_class = find_dataset_using_name(dataset_name)
@@ -45,38 +48,42 @@ def CreateDataLoader(opt):
     data_loader.initialize(opt)
     return data_loader
 
+
 # Create Kspace Data
 def CreateFtTLoader(opt, valid_size=0.1, is_test=False):
     
     if not is_test:
         trainloader, validloader = ft_data_loader.get_train_valid_loader(
-                                                        batch_size=opt.batchSize,
-                                                        load_size=opt.loadSize,
-                                                        fine_size=opt.fineSize,
-                                                        keep_ratio=opt.kspace_keep_ratio,
-                                                        augment=True,
-                                                        valid_size=valid_size, # a larger value to acculerate training
-                                                        shuffle=True,
-                                                        num_workers=4,
-                                                        pin_memory=True,
-                                                        normalize=opt.normalize_type,
-                                                        which_dataset=opt.dataroot)
-                                                    
+            batch_size=opt.batchSize,
+            load_size=opt.loadSize,
+            fine_size=opt.fineSize,
+            keep_ratio=opt.kspace_keep_ratio,
+            augment=True,
+            valid_size=valid_size, # a larger value to acculerate training
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+            normalize=opt.normalize_type,
+            which_dataset=opt.dataroot
+        )
         return trainloader, validloader
     else:
-        testloader = ft_data_loader.get_test_loader(batch_size=opt.batchSize,
-                                                    load_size=opt.loadSize,
-                                                    fine_size=opt.fineSize,
-                                                    keep_ratio=opt.kspace_keep_ratio,
-                                                    shuffle=True,
-                                                    num_workers=0,
-                                                    pin_memory=True,
-                                                    normalize=opt.normalize_type,
-                                                    which_dataset=opt.dataroot)
+        testloader = ft_data_loader.get_test_loader(
+            batch_size=opt.batchSize,
+            load_size=opt.loadSize,
+            fine_size=opt.fineSize,
+            keep_ratio=opt.kspace_keep_ratio,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=True,
+            normalize=opt.normalize_type,
+            which_dataset=opt.dataroot
+        )
         return testloader
 
-## Wrapper class of Dataset class that performs
-## multi-threaded data loading
+
+# Wrapper class of Dataset class that performs
+# multi-threaded data loading
 class CustomDatasetDataLoader(BaseDataLoader):
     def name(self):
         return 'CustomDatasetDataLoader'

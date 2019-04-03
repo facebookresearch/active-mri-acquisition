@@ -5,6 +5,7 @@ import torch
 import models
 import data
 
+
 class BaseOptions():
     def __init__(self):
         self.initialized = False

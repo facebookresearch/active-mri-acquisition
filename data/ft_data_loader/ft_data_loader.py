@@ -9,7 +9,9 @@ Easily extended to MNIST, CIFAR-100 and Imagenet.
 import torch
 import numpy as np
 import os, sys
+import pathlib
 import PIL
+
 # from utils import plot_images
 from torchvision import datasets
 from torchvision import transforms
@@ -17,7 +19,10 @@ from torch.utils.data.sampler import SubsetRandomSampler, Sampler
 from .ft_cifar10 import FT_CIFAR10
 from .ft_imagenet import FT_ImageNet
 from .ft_mnist import FT_MNIST
+from .ft_util_vaes import MaskFunc, DicomDataTransform, Slice, FixedAccelerationMaskFunc, RawDataTransform, \
+    RawSliceData, FixedOrderRandomSampler
 import random
+
 
 def get_norm_transform(normalize):
     if normalize == 'gan':
@@ -42,6 +47,7 @@ def get_norm_transform(normalize):
         )
     return normalize_tf
 
+
 # if fine_size is 128, load_size can be 144
 def get_train_valid_loader(batch_size,
                            load_size, 
@@ -50,65 +56,86 @@ def get_train_valid_loader(batch_size,
                            augment,
                            valid_size=0.1,
                            shuffle=True,
-                           show_sample=False,
                            num_workers=4,
                            pin_memory=False,
                            normalize='gan',
-                           which_dataset='MNIST',
-                           data_dir='/private/home/zizhao/work/data/'
-                         ):
+                           which_dataset='MNIST'):
     random_seed = 1234
     
     error_msg = "[!] valid_size should be in the range [0, 1]."
     assert ((valid_size >= 0) and (valid_size <= 1)), error_msg
 
     normalize_tf = get_norm_transform(normalize)
-    # define transforms
-    valid_transform = transforms.Compose(
-        ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) + \
-        [
-            transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
-            transforms.CenterCrop(fine_size),
-            transforms.ToTensor(),
-            normalize_tf,
-        ])
-    if augment:
-        train_transform = transforms.Compose(
-            ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) + \
-            [
-            transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
-            transforms.RandomCrop(fine_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize_tf,
-        ])
-    else:
-        train_transform = valid_transform
 
     print('load {} train/val (val ratio {:.4f}) dataset'.format(which_dataset, valid_size))
     if which_dataset in ('KNEE'):
-         # a hacker way to import loader
-        path = '/private/home/zizhao/work/fast_mri_master'
-        if not os.path.isdir(path):
-            raise ImportError(path+' not exists. Download fast_mri_master repo and change the path')
-        sys.path.insert(0, path)
-        from common import args, dicom_dataset, subsample
-        args = args.Args().parse_args(args=[])
-        mask_func = subsample.Mask(reuse_mask=True)
-        dataset = dicom_dataset.Slice(mask_func, args)
+        mask_func = FixedAccelerationMaskFunc([0.125], [4])
+        dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
+        data_transform = DicomDataTransform(mask_func, None)
+        train_data = Slice(data_transform, dicom_root, which='train', resolution=128,
+                           scan_type='all', num_volumes=None, num_rand_slices=None)
+        valid_data = Slice(data_transform, dicom_root, which='val', resolution=128,
+                           scan_type='all', num_volumes=None, num_rand_slices=None)
+
+        def init_fun(_):
+            return np.random.seed()
+
+        train_loader = torch.utils.data.DataLoader(
+            train_data,
+            batch_size=batch_size,
+            sampler=None,
+            shuffle=True,
+            num_workers=8,
+            worker_init_fn=init_fun,
+            pin_memory=pin_memory,
+            drop_last=True
+        )
+
+        valid_loader = torch.utils.data.DataLoader(
+            valid_data,
+            batch_size=batch_size,
+            sampler=None,
+            shuffle=True,
+            num_workers=8,
+            worker_init_fn=init_fun,
+            pin_memory=pin_memory,
+            drop_last=True
+        )
+
     elif which_dataset == 'KNEE_RAW':
-        from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
-        mask_func = Mask(reuse_mask=False, subsampling_ratio=keep_ratio, random=True)
-        root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
-        if not os.path.isdir(root):
-            raise ImportError(path+' not exists. Change to the right path.')
-        dataset = PCASingleCoilSlice(mask_func, root, which='train')
-        print(f'{which_dataset} train has {len(dataset)} samples')
-        num_workers = 8
-    elif which_dataset == 'TinyImageNet':
-        train_dir = '/datasets01/tinyimagenet/081318/train'
-        dataset = datasets.ImageFolder(train_dir, transform=train_transform)
+        raise NotImplementedError
+        # from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
+        # mask_func = Mask(reuse_mask=False, subsampling_ratio=keep_ratio, random=True)
+        # root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
+        # if not os.path.isdir(root):
+        #     raise ImportError(path+' not exists. Change to the right path.')
+        # dataset = PCASingleCoilSlice(mask_func, root, which='train')
+        # print(f'{which_dataset} train has {len(dataset)} samples')
+        # num_workers = 8
     else:
+        # define transforms
+        valid_transform = transforms.Compose(
+            ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) +
+            [
+                transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
+                transforms.CenterCrop(fine_size),
+                transforms.ToTensor(),
+                normalize_tf,
+            ])
+        if augment:
+            train_transform = transforms.Compose(
+                ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) +
+                [
+                    transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
+                    transforms.RandomCrop(fine_size),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                    normalize_tf,
+                ])
+        else:
+            train_transform = valid_transform
+
+        dataset, data_dir = None, None
         if which_dataset == 'CIFAR10':
             dataset = FT_CIFAR10
             data_dir = '/private/home/zizhao/work/data/'
@@ -117,6 +144,9 @@ def get_train_valid_loader(batch_size,
             data_dir = '/datasets01/imagenet_resized_144px/060718/061417'
         elif which_dataset == 'MNIST':
             dataset = FT_MNIST
+        elif which_dataset == 'TinyImageNet':
+            train_dir = '/datasets01/tinyimagenet/081318/train'
+            dataset = datasets.ImageFolder(train_dir, transform=train_transform)
         
         # load the dataset
         dataset = dataset(
@@ -124,29 +154,30 @@ def get_train_valid_loader(batch_size,
             download=True, transform=train_transform,  unmask_ratio=keep_ratio,
         )
 
-    num_train = len(dataset)
-    indices = list(range(num_train))
-    split = int(np.floor(valid_size * num_train))
+        num_train = len(dataset)
+        indices = list(range(num_train))
+        split = int(np.floor(valid_size * num_train))
 
-    if shuffle:
-        np.random.seed(random_seed)
-        np.random.shuffle(indices)
+        if shuffle:
+            np.random.seed(random_seed)
+            np.random.shuffle(indices)
 
-    train_idx, valid_idx = indices[split:], indices[:split]
-    train_sampler = SubsetRandomSampler(train_idx)
-    valid_sampler = SequentialSampler2(valid_idx)
-    
-    train_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, sampler=train_sampler,
-        num_workers=num_workers, pin_memory=pin_memory, drop_last=True
+        train_idx, valid_idx = indices[split:], indices[:split]
+        train_sampler = SubsetRandomSampler(train_idx)
+        valid_sampler = SequentialSampler2(valid_idx)
+
+        train_loader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, sampler=train_sampler,
+            num_workers=num_workers, pin_memory=pin_memory, drop_last=True
+            )
+
+        valid_loader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, sampler=valid_sampler, shuffle=False,
+            num_workers=num_workers, pin_memory=pin_memory, drop_last=True
         )
-
-    valid_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, sampler=valid_sampler, shuffle=False,
-        num_workers=num_workers, pin_memory=pin_memory, drop_last=True
-    )
     
-    return (train_loader, valid_loader)
+    return train_loader, valid_loader
+
 
 class SequentialSampler2(Sampler):
     r"""Samples elements sequentially, in the order of given list.

@@ -309,9 +309,9 @@ class FTPASGANModel(BaseModel):
         if sampling and False:
             # may not useful
             assert not sampling 
-            self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.metadata, self.opt.set_sampling_at_stage)
+            self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.opt.set_sampling_at_stage)
         else:    
-            self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask, self.metadata)
+            self.fake_Bs, self.logvars, self.mask_cond = self.netG(self.real_A, mask)
 
         self.fake_B = self.fake_Bs[-1]
 
@@ -446,9 +446,9 @@ class FTPASGANModel(BaseModel):
 
     def set_input_exp(self, input, mask, zscore=3, add_kspace_noise=False):
         # used for simulate kspace acqusition planning 
-        target, _, metadata = input
+        target, _ = input
         target = target.to(self.device)
-        self.metadata = self.metadata2onehot(metadata, dtype=type(target)).to(self.device)
+        self.metadata = None
         target = self._clamp(target).detach()
 
         if len(mask.shape) == 5:
@@ -470,6 +470,7 @@ class FTPASGANModel(BaseModel):
 
         self.real_A = ifft_img
         self.real_B = target
+
     # change to sampling() when want to use it  
     def _sampling(self, data_list, n_samples=8, max_display=8, return_all=False, sampling=True):
         
@@ -489,7 +490,6 @@ class FTPASGANModel(BaseModel):
         # data points [N,2,H,W] for multiple sampling and observe sample difference
         data = data_list[0] # target
         mask = data_list[1]
-        metadata = data_list[2]
 
         assert(data.shape[0] >= max_display)
         data = data[:max_display]
@@ -498,16 +498,12 @@ class FTPASGANModel(BaseModel):
         # if n_samples*b < 128:
         repeated_data = replicate_tensor(data, n_samples)
         repeated_mask = replicate_tensor(mask, n_samples)
-        scan_type = metadata['scan_type'][:max_display]
-        scan_type = np.tile(np.array(scan_type)[:,np.newaxis],(1,n_samples))
-        metadata['scan_type'] = list(scan_type.reshape(-1))
-        repeated_metadata = metadata
 
         b,c,h,w = data.shape
         # all_pixel_diff = []
         # all_pixel_avg = []
 
-        repeated_data_list = [repeated_data, repeated_mask, repeated_metadata] # concat extra useless input
+        repeated_data_list = [repeated_data, repeated_mask] # concat extra useless input
         self.set_input(repeated_data_list)
         self.test(sampling=True)
         sample_x = self.fake_B.cpu()[:,:1,:,:] # bxn_samples
@@ -551,6 +547,7 @@ class FTPASGANModel(BaseModel):
         # self.netG.module.set_sampling_at_stage(None)
 
         return sample_x, pixel_diff_mean, pixel_diff_std
+
     # change to sampling() when want to use it
     def __sampling(self, data_list, n_samples=8, max_display=8, return_all=False, sampling=True):
         
@@ -571,20 +568,17 @@ class FTPASGANModel(BaseModel):
         # data points [N,2,H,W] for multiple sampling and observe sample difference
         data = data_list[0] # target
         mask = data_list[1]
-        metadata = copy.deepcopy(data_list[2])
 
         assert(data.shape[0] >= max_display)
         data = data[:max_display]
         mask = mask[:max_display]
-        scan_type = np.array(metadata['scan_type'][:max_display])
-        metadata['scan_type'] = list(scan_type.reshape(-1))
         repeated_data = replicate_tensor(data, n_samples)
         b,c,h,w = data.shape
         sample_x, input_x = [], []
         for i in range(n_samples):
             if len(data) != max_display or len(mask) != max_display or len(mask) != max_display:
                 import pdb; pdb.set_trace()
-            data_list = [data, mask, metadata]
+            data_list = [data, mask]
             self.set_input_exp(data_list, mask, add_kspace_noise=True)
             self.test()
             sample_x.append(self.fake_B.cpu()[:,:1,:,:])

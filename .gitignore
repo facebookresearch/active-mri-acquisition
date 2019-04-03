@@ -16,3 +16,5 @@ ipython_notebook/*.png
 options/__pycache__/
 .DS_Store
 experiments/*
+.idea
+*personal*

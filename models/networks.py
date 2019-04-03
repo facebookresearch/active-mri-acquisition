@@ -2202,13 +2202,10 @@ class PasNet(nn.Module):
 
         return fuse
 
-    def embed_condtions(self, mask, meta):
+    def embed_condtions(self, mask):
         b,c,h,w = mask.shape
         mask = mask.view(b,h,1,1)
-        meta = meta.unsqueeze(2).unsqueeze(3)
-        cond = torch.cat([mask, meta], 1)
-
-        cond_embed = self.mask_embed(cond)
+        cond_embed = self.mask_embed(mask)
         cond_embed = cond_embed.repeat(1,1,h,h)
         
         return cond_embed
@@ -2221,11 +2218,11 @@ class PasNet(nn.Module):
         mu[:,:1,:,:] = q_z
         return mu
 
-    def forward(self, input, mask, meta, use_sampling_at_stage=None):
+    def forward(self, input, mask, use_sampling_at_stage=None):
         mask_embed = None
         # mask in [B,1,H,1]
         if self.mask_cond:
-            mask_embed = self.embed_condtions(mask, meta)
+            mask_embed = self.embed_condtions(mask)
             input_ = torch.cat([input, mask_embed], 1)
         else:
             input_ = input
@@ -2363,17 +2360,10 @@ class PasNetPlus(nn.Module):
 
         return fuse
 
-    def embed_condtions(self, mask, meta):
+    def embed_condtions(self, mask):
         b,c,h,w = mask.shape
         mask = mask.view(b,h,1,1)
-        
-        if self.no_meta:
-            cond = mask
-        else:
-            meta = meta.unsqueeze(2).unsqueeze(3)
-            cond = torch.cat([mask, meta], 1)
-
-        cond_embed = self.mask_embed(cond)
+        cond_embed = self.mask_embed(mask)
         cond_embed = cond_embed.repeat(1,1,h,h)
         
         return cond_embed
@@ -2386,11 +2376,11 @@ class PasNetPlus(nn.Module):
         mu[:,:1,:,:] = q_z
         return mu
 
-    def forward(self, input, mask, meta, use_sampling_at_stage=None):
+    def forward(self, input, mask, use_sampling_at_stage=None):
         mask_embed = None
         # mask in [B,1,H,1]
         if self.mask_cond:
-            mask_embed = self.embed_condtions(mask, meta)
+            mask_embed = self.embed_condtions(mask)
             input_ = torch.cat([input, mask_embed], 1)
         else:
             input_ = input

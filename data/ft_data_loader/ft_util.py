@@ -2,16 +2,19 @@ import numpy as np
 # from numpy.fft import fftshift, ifftshift, fftn, ifftn
 import torch
 
+
 def kspace_to_image(kspace_tensor):
     # return (1,H,W)   
     inv_img = torch.irfft(kspace_tensor, 2, onesided=False)
 
     return inv_img
 
+
 def image_to_kspace(im_tensor):
     # return (1,H,W,2)
     k_space_tensor = torch.rfft(im_tensor, 2, onesided=False)
     return k_space_tensor
+
 
 # this is easy to control than gen_kspace_mask_deprecated
 def gen_kspace_mask(shape, ratio, lowfreq_ratio):
