@@ -85,7 +85,9 @@ class Visualizer():
     def display_current_results(self, visuals, epoch, mode='train'):
         if self.no_tb: return
         for label, image in visuals.items():
-            image_numpy = util.tensor2im(image) 
+            image_numpy = util.tensor2im(image)
+            # import pdb; pdb.set_trace()
+            image_numpy = np.transpose(image_numpy, (2, 0, 1))  # this is a hack, fix the real issue later
             self.writer.add_image('{}/{}'.format(mode, label), image_numpy, epoch)
 
         if self.use_html and (not self.saved):  # save images to a html file
