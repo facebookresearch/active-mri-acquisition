@@ -2,9 +2,9 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_zz_models'
+checkpoints_dir='/private/home/sumanab/checkpoint/'
 
-name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm
+name=dicom_run_1
 python test.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_pasgan \
