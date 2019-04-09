@@ -2,7 +2,7 @@
 # Debug output
 echo $SLURMD_NODENAME $SLURM_JOB_ID $CUDA_VISIBLE_DEVICES $SLURM_LOCALID
 set -ex
-checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
+checkpoints_dir='/private/home/sumanab/checkpoint'
 
 ## general one
 # name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm # current best
@@ -10,7 +10,7 @@ checkpoints_dir='/private/home/zizhao/work/checkpoint_fmri/mri_session_v2'
 # name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_randomfull # similar to the best
 # name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_full
 # name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_2runfixpxlm # just okey
-name=knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_full_randomfull
+name=dicom_run_1
 python test_kspace_recom.py --dataroot 'KNEE' \
                 --name $name \
                 --model ft_pasgan \
