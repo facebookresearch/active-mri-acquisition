@@ -227,7 +227,7 @@ def get_test_loader(batch_size,
         args = args.Args().parse_args(args=[])
         mask_func = subsample.Mask(reuse_mask=True)
         args.subsampling_ratio = 1//keep_ratio
-        print(f'KNEE >> subsampling_ratio: {args.subsampling_ratio}' )
+        print(f'KNEE >> subsampling_ratio: {args.subsampling_ratio}')
         dataset = dicom_dataset.Slice(mask_func, args, which='val')
     elif which_dataset == 'KNEE_RAW':
         from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
