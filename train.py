@@ -20,7 +20,7 @@ if __name__ == '__main__':
     dataset_size = len(train_data_loader)
     model = create_model(opt)
     model.setup(opt)
-    visualizer = Visualizer(opt=opt)
+    visualizer = Visualizer(opt=opt, use_html=True)
     total_steps = 0
     
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
@@ -70,8 +70,8 @@ if __name__ == '__main__':
         if epoch % opt.save_epoch_freq == 0:
             print('saving the model at the end of epoch %d, iters %d' %
                   (epoch, total_steps))
-            model.save_networks('latest')
-            model.save_networks(epoch)
+            # model.save_networks('latest')
+            # model.save_networks(epoch)
 
         print('End of epoch %d / %d \t Time Taken: %d sec' %
               (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))

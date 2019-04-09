@@ -86,16 +86,16 @@ class Visualizer():
         if self.no_tb: return
         for label, image in visuals.items():
             image_numpy = util.tensor2im(image) 
-            self.writer.add_image('{}/{}'.format(mode, label), image_numpy, epoch)
+            self.writer.add_image('{}/{}'.format(mode, label), image_numpy.transpose(2, 0, 1), epoch)
 
         if self.use_html and (not self.saved):  # save images to a html file
+            webpage = html.HTML(self.web_dir, 'Experiment name = %s' % self.name, reflesh=1)
             self.saved = True
             for label, image in visuals.items():
                 image_numpy = util.tensor2im(image)
                 img_path = os.path.join(self.img_dir, 'epoch%.3d_%s.png' % (epoch, label))
                 util.save_image(image_numpy, img_path)
             # update website
-            webpage = html.HTML(self.web_dir, 'Experiment name = %s' % self.name, reflesh=1)
             for n in range(epoch, 0, -1):
                 webpage.add_header('epoch [%d]' % n)
                 ims, txts, links = [], [], []

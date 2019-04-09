@@ -224,9 +224,9 @@ class BaseModel:
         if not hasattr(self, 'display_data') or self.display_data is None:
             self.display_data = []
             for data in val_data_loader:
-                if self.mri_data:
-                    assert len(data) == 4
-                    data = data[1:]
+                # if self.mri_data:
+                #     assert len(data) == 4
+                #     data = data[1:]
                 self.display_data.append(data)
                 val_count += data[0].shape[0]
                 if val_count >= how_many_to_display: break
@@ -466,7 +466,9 @@ class BaseModel:
         else:
             # use provided fixed masked
             # guarantee the target has the same size as mask
-            self.mask = mask[:1,:1,:,:1,0].to(self.device).repeat(target.shape[0],1,1,1) #(b,1,h,1)
+            # self.mask = mask[:1,:1,:,:1,0].to(self.device).repeat(target.shape[0],1,1,1) #(b,1,h,1)
+            self.mask = mask.permute(0, 1, 3, 2)[:1, :1, :, :1].to(self.device).expand(
+                target.shape[0], -1, target.shape[2], -1)  # (b,1,h,1)
 
         fft_kspace = self.RFFT(target)
         ifft_img = self.IFFT(fft_kspace * self.mask)

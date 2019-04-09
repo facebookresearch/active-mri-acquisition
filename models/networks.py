@@ -2271,12 +2271,13 @@ class PasNet(nn.Module):
 
         return [out1, out2, out3], [logvar1, logvar2, logvar3],  mask_embed 
 
+
 ## Currently the best Aug 10
 class PasNetPlus(nn.Module):
     
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, 
                 n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128, 
-                mask_cond=True, use_deconv=True, no_meta=False):
+                mask_cond=True, use_deconv=True, no_meta=True):
         assert(n_blocks >= 0)
         super(PasNetPlus, self).__init__()
         self.input_nc = input_nc
@@ -2317,7 +2318,8 @@ class PasNetPlus(nn.Module):
             model = []
             mult = 2**n_downsampling
             for i in range(n_blocks//self.n_recurive):
-                model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
+                model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer,
+                                      use_dropout=use_dropout, use_bias=use_bias)]
 
             setattr(self, 'model'+str(iii), nn.Sequential(*model))
             

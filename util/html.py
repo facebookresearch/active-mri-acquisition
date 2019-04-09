@@ -11,13 +11,13 @@ class HTML:
 
         if not os.path.exists(self.web_dir):
             os.makedirs(self.web_dir)
-        else:
-            for ff in glob.glob(self.web_dir+'/*'):
-                if os.path.isdir(ff):
-                    shutil.rmtree(ff)
-                else:
-                    os.remove(ff)
-            # os.makedirs(self.web_dir)
+        # else:
+        #     for ff in glob.glob(self.web_dir+'/*'):
+        #         if os.path.isdir(ff):
+        #             shutil.rmtree(ff)
+        #         else:
+        #             os.remove(ff)
+        #     # os.makedirs(self.web_dir)
 
         if not os.path.exists(self.img_dir):    
             os.makedirs(self.img_dir)

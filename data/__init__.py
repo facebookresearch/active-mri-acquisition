@@ -61,7 +61,7 @@ def CreateFtTLoader(opt, valid_size=0.1, is_test=False):
             augment=True,
             valid_size=valid_size, # a larger value to acculerate training
             shuffle=True,
-            num_workers=4,
+            num_workers=opt.nThreads,
             pin_memory=True,
             normalize=opt.normalize_type,
             which_dataset=opt.dataroot
@@ -95,7 +95,7 @@ class CustomDatasetDataLoader(BaseDataLoader):
             self.dataset,
             batch_size=opt.batchSize,
             shuffle=not opt.serial_batches,
-            num_workers=int(opt.nThreads))
+            num_workers=opt.nThreads)
 
     def load_data(self):
         return self

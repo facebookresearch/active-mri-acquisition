@@ -85,7 +85,7 @@ def get_train_valid_loader(batch_size,
             batch_size=batch_size,
             sampler=None,
             shuffle=True,
-            num_workers=8,
+            num_workers=num_workers,
             worker_init_fn=init_fun,
             pin_memory=pin_memory,
             drop_last=True
@@ -96,7 +96,7 @@ def get_train_valid_loader(batch_size,
             batch_size=batch_size,
             sampler=None,
             shuffle=True,
-            num_workers=8,
+            num_workers=num_workers,
             worker_init_fn=init_fun,
             pin_memory=pin_memory,
             drop_last=True
@@ -207,42 +207,52 @@ def get_test_loader(batch_size,
                     data_dir='/private/home/zizhao/work/data/'
                     ):
 
-    random_seed = 1234
-    normalize_tf = get_norm_transform(normalize)
-    # define transform
-    transform = transforms.Compose(
-        ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) + \
-        [
-            transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
-            transforms.CenterCrop(fine_size),
-            transforms.ToTensor(),
-            normalize_tf,
-        ])
-
     print('load {} test dataset'.format(which_dataset))
 
     if which_dataset in ('KNEE'):
-         # a hacker way to import loader
-        sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
-        from common import args, dicom_dataset, subsample
-        args = args.Args().parse_args(args=[])
-        mask_func = subsample.Mask(reuse_mask=True)
-        args.subsampling_ratio = 1//keep_ratio
-        print(f'KNEE >> subsampling_ratio: {args.subsampling_ratio}' )
-        dataset = dicom_dataset.Slice(mask_func, args, which='val')
+        mask_func = FixedAccelerationMaskFunc([0.125], [4])
+        dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
+        data_transform = DicomDataTransform(mask_func, None)
+        test_data = Slice(data_transform, dicom_root, which='public_leaderboard', resolution=128,
+                          scan_type='all', num_volumes=None, num_rand_slices=None)
+
+        def init_fun(_):
+            return np.random.seed()
+
+        data_loader = torch.utils.data.DataLoader(
+            test_data,
+            batch_size=batch_size,
+            sampler=None,
+            shuffle=False,
+            num_workers=num_workers,
+            worker_init_fn=init_fun,
+            pin_memory=pin_memory,
+            drop_last=True
+        )
     elif which_dataset == 'KNEE_RAW':
-        from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
-        sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
-        print(f'KNEE_RAW >> subsampling_ratio: {keep_ratio}' )
-        mask_func = Mask(reuse_mask=True, subsampling_ratio=keep_ratio, random=False)
-        root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
-        dataset = PCASingleCoilSlice(mask_func, root, which='val')
-        print(f'{which_dataset} val has {len(dataset)} samples')
-        num_workers = 8
-    elif which_dataset == 'TinyImageNet':
-        test_dir = '/datasets01/tinyimagenet/081318/test'
-        dataset = datasets.ImageFolder(test_dir, transform=transform)
-    else:  
+        raise NotImplementedError
+
+        # from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
+        # sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
+        # print(f'KNEE_RAW >> subsampling_ratio: {keep_ratio}' )
+        # mask_func = Mask(reuse_mask=True, subsampling_ratio=keep_ratio, random=False)
+        # root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
+        # dataset = PCASingleCoilSlice(mask_func, root, which='val')
+        # print(f'{which_dataset} val has {len(dataset)} samples')
+        # num_workers = 8
+    else:
+        normalize_tf = get_norm_transform(normalize)
+        # define transform
+        transform = transforms.Compose(
+            ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) + \
+            [
+                transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
+                transforms.CenterCrop(fine_size),
+                transforms.ToTensor(),
+                normalize_tf,
+            ])
+
+        dataset = None
         if which_dataset == 'CIFAR10':
             dataset = FT_CIFAR10
         elif which_dataset == 'ImageNet':
@@ -250,32 +260,37 @@ def get_test_loader(batch_size,
             data_dir = '/datasets01/imagenet_resized_144px/060718/061417'
         elif which_dataset == 'MNIST':
             dataset = FT_MNIST
+        elif which_dataset == 'TinyImageNet':
+            test_dir = '/datasets01/tinyimagenet/081318/test'
+            dataset = datasets.ImageFolder(test_dir, transform=transform)
     
         dataset = dataset(
             root=data_dir, train=False, normalize=normalize,
             transform=transform,  unmask_ratio=keep_ratio,
         )
 
-    if shuffle:
-        # TODO these seed setting may not really useful
-        # torch.manual_seed(random_seed)
-        # torch.cuda.manual_seed_all(random_seed)
-        random.seed(random_seed)
-        np.random.seed(random_seed)
-        # torch.backends.cudnn.deterministic = True
+        if shuffle:
+            random_seed = 1234
 
-        indices = list(range(len(dataset)))
-        np.random.shuffle(indices)
-        test_sampler = SequentialSampler2(indices)
-        data_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=batch_size, shuffle=False,
-            num_workers=num_workers, pin_memory=pin_memory, sampler=test_sampler, drop_last=True
-        )
-    else:
-        data_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=batch_size, shuffle=False,
-            num_workers=num_workers, pin_memory=pin_memory, drop_last=True
-        )
+            # TODO these seed setting may not really useful
+            # torch.manual_seed(random_seed)
+            # torch.cuda.manual_seed_all(random_seed)
+            random.seed(random_seed)
+            np.random.seed(random_seed)
+            # torch.backends.cudnn.deterministic = True
+
+            indices = list(range(len(dataset)))
+            np.random.shuffle(indices)
+            test_sampler = SequentialSampler2(indices)
+            data_loader = torch.utils.data.DataLoader(
+                dataset, batch_size=batch_size, shuffle=False,
+                num_workers=num_workers, pin_memory=pin_memory, sampler=test_sampler, drop_last=True
+            )
+        else:
+            data_loader = torch.utils.data.DataLoader(
+                dataset, batch_size=batch_size, shuffle=False,
+                num_workers=num_workers, pin_memory=pin_memory, drop_last=True
+            )
 
     return data_loader
 
