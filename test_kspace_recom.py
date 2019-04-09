@@ -173,6 +173,7 @@ def draw_curve2(data, pdfsavepath=None):
     fig.add_subplot(111)
     # x = np.arange(data.shape[0])
     xval = [float(a)/data.shape[0] * Percentage[-1] for a in range(1, data.shape[0]+1)]
+    data = np.asarray([[x.cpu().data.numpy() for x in row] for row in data])
     plt.plot(xval, data[:,0], 'k', label='ours', linewidth=10)
     plt.fill_between(xval, data[:,0]-data[:,1], data[:,0]+data[:,1],
                     alpha=0.2, edgecolor='#FFFFFF', facecolor='#c2d5db')
@@ -588,6 +589,9 @@ def animate(images, masks, eval_scores, uncertainty, D_score, iter,
         std_D = np.array([u[1] for u in D_score[:i+1]])
 
         im5, = ax5.plot(x, avg_D, **plot_property, label='score')
+        # import pdb; pdb.set_trace()
+        avg_D = avg_D[0].cpu().numpy()
+        std_D = std_D[0].cpu().numpy()
         fill5 = ax5.fill_between(x, avg_D-std_D, avg_D+std_D, label='var.', 
                     alpha=0.2, edgecolor='#FFFFFF', facecolor='#c2d5db')
         title5 = ax5.text(0.2,0.9," kMA {}%".format(kMA), 
@@ -797,8 +801,7 @@ if __name__ == '__main__':
 
         ## generate video demo
         video_path2, gif_path2 = animate2(reconstruction_list, visual_list['algorithm_errormap'], start_line=observed_line_n, iter=i)
-        video_path, gif_path = animate(visual_list['algorithm_errormap'], score_list['algorithm_mask'], score_list['algorithm'], uncertainty_list['algorithm'], 
-                        score_D, start_line=observed_line_n, iter=i)
+        video_path, gif_path = animate(visual_list['algorithm_errormap'], score_list['algorithm_mask'], score_list['algorithm'], uncertainty_list['algorithm'], score_D, start_line=observed_line_n, iter=i)
         
         
         ''' Start to random select lines '''
@@ -812,6 +815,7 @@ if __name__ == '__main__':
         mask_zero_idx = np.nonzero(1-tmp_mask[0].squeeze())
         if not conjudge_symmetric:
             assert len(mask_zero_idx) == unobsered_line_n
+        mask_zero_idx = mask_zero_idx.cpu().data.numpy()
         lines = [np.random.permutation(mask_zero_idx) for _ in range(bz)] # permute for each data
         cand_lines = np.stack(lines, 0).squeeze()
 
@@ -871,6 +875,7 @@ if __name__ == '__main__':
         mask_zero_idx = np.nonzero(1-mask[0].squeeze())
         if not conjudge_symmetric:
             assert len(mask_zero_idx) == unobsered_line_n
+        mask_zero_idx = mask_zero_idx.cpu().data.numpy()
         lines = [np.sort(mask_zero_idx, axis=0) for _ in range(bz)] # permute for each data
         lines = [a if np.random.rand() < 0.5 else a[::-1] for a in lines]
         cand_lines = np.stack(lines, 0).squeeze()
