@@ -23,3 +23,5 @@ python test_kspace_recom.py --dataroot 'KNEE' \
 #                 --checkpoints_dir $checkpoints_dir \
 #                 --batchSize 8 \
 #                 --gpu_ids $CUDA_VISIBLE_DEVICES \
+
+python test_kspace_recom.py

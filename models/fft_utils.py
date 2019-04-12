@@ -106,5 +106,5 @@ def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42,
         mask_fft[i,:mask_lf] = mask_fft[i,-mask_lf:] = 1
 
     mask_fft = torch.from_numpy(mask_fft).view(b, 1, n, 1)
-    
+
     return mask_fft

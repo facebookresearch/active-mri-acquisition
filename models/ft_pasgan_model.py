@@ -446,7 +446,7 @@ class FTPASGANModel(BaseModel):
 
     def set_input_exp(self, input, mask, zscore=3, add_kspace_noise=False):
         # used for simulate kspace acqusition planning 
-        target, _ = input
+        target = input
         target = target.to(self.device)
         self.metadata = None
         target = self._clamp(target).detach()

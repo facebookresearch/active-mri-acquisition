@@ -717,10 +717,11 @@ if __name__ == '__main__':
         score_D = []
         visuals = {}
 
+        data[0] = data[0].permute(0, 1, 3, 2)
         if observed_line_n != 32:
             if init_mask.shape[0] == 1:
                 init_mask = init_mask.repeat(data[0].shape[0],1,1,1)
-            model.set_input_exp(data[1:], init_mask)
+            model.set_input_exp(data[1], init_mask)
         else:
             model.set_input(data)
 
@@ -765,7 +766,7 @@ if __name__ == '__main__':
             D_bias[f'iter{i}'].append(torch.nonzero(mask_choice.squeeze()).cpu().numpy())
             if use_forward:
                 #do another forward
-                model.set_input_exp(data[1:], new_mask)
+                model.set_input_exp(data[1], new_mask)
                 model.test()
                 (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
                 old_fakeB = model.fake_B
@@ -847,7 +848,7 @@ if __name__ == '__main__':
                 new_fakeB, new_mask = replace_kspace_lines(old_fakeB, realB, old_mask, n_recom_each, None, random=cand_line)
 
                 #do another forward
-                model.set_input_exp(data[1:], new_mask)
+                model.set_input_exp(data[1], new_mask)
                 model.test()
                 # (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
                 old_fakeB = model.fake_B
@@ -901,7 +902,7 @@ if __name__ == '__main__':
             new_fakeB, new_mask = replace_kspace_lines(old_fakeB, realB, old_mask, n_recom_each, None, random=cand_line)
 
             # do another forward
-            model.set_input_exp(data[1:], new_mask)
+            model.set_input_exp(data[1], new_mask)
             model.test()
             (vis_score, inv_score), pred_kspace_score = model.forward_D() # pred_kspace_score[B, 128]
             old_fakeB = model.fake_B
