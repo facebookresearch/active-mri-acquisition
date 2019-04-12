@@ -2364,9 +2364,9 @@ class PasNetPlus(nn.Module):
 
     def embed_condtions(self, mask):
         b,c,h,w = mask.shape
-        mask = mask.view(b,h,1,1)
+        mask = mask.view(b,w,1,1)
         cond_embed = self.mask_embed(mask)
-        cond_embed = cond_embed.repeat(1,1,h,h)
+        cond_embed = cond_embed.repeat(1,1,w,w)
         
         return cond_embed
     

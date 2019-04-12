@@ -304,8 +304,8 @@ class FTPASGANModel(BaseModel):
 
     def forward(self, sampling=False):
         # conditioned on mask
-        h, b = self.mask.shape[2], self.real_A.shape[0]
-        mask = Variable(self.mask.view(self.mask.shape[0],1,h,1).expand(b,1,h,1))
+        w, b = self.mask.shape[3], self.real_A.shape[0]
+        mask = Variable(self.mask.view(self.mask.shape[0],1,1,w).expand(b,1,1,w))
         if sampling and False:
             # may not useful
             assert not sampling 

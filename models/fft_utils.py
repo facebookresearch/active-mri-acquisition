@@ -95,8 +95,9 @@ def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42,
             # we sample fraction and mask_low_freqs lines
             ratio = np.random.rand(1) + 0.5
             mask_frac = mask_fraction * ratio
-            ratio = np.random.rand(1) + 0.5
-            mask_lf = int(mask_low_freqs * ratio)
+            # ratio = np.random.rand(1) + 0.5
+            # mask_lf = int(mask_low_freqs * ratio)
+            mask_lf = np.random.choice(range(int(mask_low_freqs * 0.5), int(mask_low_freqs * 1.5) + 1))
             seed = np.random.randint(10000)
         else:
             mask_frac = mask_fraction
@@ -105,6 +106,6 @@ def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42,
         mask_fft[i,:] = s_fft
         mask_fft[i,:mask_lf] = mask_fft[i,-mask_lf:] = 1
 
-    mask_fft = torch.from_numpy(mask_fft).view(b, 1, n, 1)
+    mask_fft = torch.from_numpy(mask_fft).view(b, 1, 1, n)
 
     return mask_fft
