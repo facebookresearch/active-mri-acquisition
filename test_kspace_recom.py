@@ -251,7 +251,7 @@ def merge_kpsace(pred, gt, mask):
         p_fft = rfft(pred[:,:1,:,:])
         g_fft = rfft(gt[:,:1,:,:])
     assert len(mask.shape) == 4
-    assert mask.shape[1] == 1 and mask.shape[3] == 1
+    assert mask.shape[1] == 1 and mask.shape[2] == 1
     res = g_fft * mask + p_fft * (1-mask)
     res = ifft(res)
 
@@ -269,9 +269,9 @@ def replace_kspace_lines(pred, gt, mask, n_line, mask_score, random=None):
         if is_rawdata and conjudge_symmetric:
             # Experimental: Add conjudge 
             mask_score.masked_fill_(mask_new.byte(), 1000000)
-            inver_idx = torch.Tensor(list(np.arange(cs_h//2,cs_h,1)[::-1])).long()
-            mask_score[:,1:cs_h//2+1] = mask_score[:,1:cs_h//2+1] + mask_score[:,inver_idx]
-            min_ranked_score, indices = torch.sort(mask_score[:,:cs_h//2+1], 1, descending=False)
+            inver_idx = torch.Tensor(list(np.arange(cs_w // 2, cs_w, 1)[::-1])).long()
+            mask_score[:, 1:cs_w // 2 + 1] = mask_score[:, 1:cs_w // 2 + 1] + mask_score[:, inver_idx]
+            min_ranked_score, indices = torch.sort(mask_score[:, :cs_w // 2 + 1], 1, descending=False)
             indices = indices[:,:n_line]
         else:
             mask_score.masked_fill_(mask_new.byte(), 1000000) # do not select from real one set it to a large value
@@ -282,17 +282,17 @@ def replace_kspace_lines(pred, gt, mask, n_line, mask_score, random=None):
 
     for i, ind in enumerate(indices):
         try:
-            if mask_new[i, ind] == 1:
-                import pdb; pdb.set_trace()
+            # if mask_new[i, ind] == 1:
+                # import pdb; pdb.set_trace()
             mask_new[i, ind] = 1
             if conjudge_symmetric:
-                mask_new[i, cs_h-ind] = 1
+                mask_new[i, cs_w - ind] = 1
         except:
             print(i, ind)
 
     sys.stdout.write(f'\r mask ratio: {mask_new[0].sum()}')
     sys.stdout.flush()
-    mask_new = mask_new.unsqueeze(1).unsqueeze(3)
+    mask_new = mask_new.unsqueeze(1).unsqueeze(2)
     results = merge_kpsace(pred, gt, mask_new)
 
     return results, mask_new
@@ -500,7 +500,7 @@ def animate(images, masks, eval_scores, uncertainty, D_score, iter,
     # uncertainty[0] image uncertainty overall value
     # comp_score has multiple comparative results in tuple
     def normalize(data):
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         for i in range(len(data)):
             maxv = 0
             maxv = max(data[i].max().item(), maxv)
@@ -648,13 +648,13 @@ if __name__ == '__main__':
     test_data_loader = CreateFtTLoader(opt, is_test=True)
     model = create_model(opt)
     model.setup(opt)
-    cs_h = 128
+    cs_w = 128
     
     if 'raw' in opt.name.lower():
         # conjudge_symmetric = False
         is_rawdata = True
         print(f'>> raw data: conjudge_symmetric: {conjudge_symmetric}, is_rawdata: {is_rawdata}')
-        cs_h = 320
+        cs_w = 320
 
     val_count = 0
     # saved = False
@@ -692,9 +692,9 @@ if __name__ == '__main__':
     if conjudge_symmetric:
         print('>> keep conjudge symmetric')
         for jj in range(len(init_mask)):
-            for j in range(1,cs_h-1):
-                if init_mask[jj, 0, j, 0] == 1:
-                    init_mask[jj, 0, cs_h-j, 0] = 1
+            for j in range(1, cs_w - 1):
+                if init_mask[jj, 0, 0, j] == 1:
+                    init_mask[jj, 0, 0, cs_w - j] = 1
 
     unobsered_line_n = opt.fineSize - observed_line_n
     n_recom_each = 1
@@ -809,7 +809,7 @@ if __name__ == '__main__':
         bz = mask.shape[0]
         tmp_mask = mask.mul(1)
         if conjudge_symmetric:
-            tmp_mask[:,:,cs_h//2+1:,:] = 1
+            tmp_mask[:,:, :, cs_w // 2 + 1:] = 1
         mask_zero_idx = np.nonzero(1-tmp_mask[0].squeeze())
         if not conjudge_symmetric:
             assert len(mask_zero_idx) == unobsered_line_n

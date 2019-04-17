@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=128000
-#SBATCH --time=600
+#SBATCH --time=4320
 #SBATCH --comment="none"
 #SBATCH --nodes=1
 cd /private/home/lep/code/Active_Acquisition
