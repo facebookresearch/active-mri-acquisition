@@ -1,13 +1,15 @@
+import math
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 
 from models import create_model
 from models.fft_utils import RFFT, IFFT, FFT
 from options.test_options import TestOptions
+from tensorboardX import SummaryWriter
 from util import util
+from util.rl.dqn import DDQN
+from util.rl.replay_buffer import ExperienceBuffer
 
 from data import CreateFtTLoader
 from gym.spaces import Box, Discrete
@@ -17,76 +19,31 @@ rfft = RFFT()
 ifft = IFFT()
 fft = FFT()
 
+# TODO make these command line args
 CONJUGATE_SYMMETRIC = True
 IMAGE_WIDTH = 128
 NUM_LINES_INITIAL = 5
-BUDGET = 20
+BUDGET = 10
+EPS_START = 0.9
+EPS_END = 0.01
+EPS_DECAY = 10000
+NUM_EPISODES = 10000
+WINDOW = 100
+LOG_Q_VALUE_STEP = 10
+BATCH_SIZE = 16
+TEST_FREQ = 2
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+def get_epsilon(steps_done):
+    return EPS_END + (EPS_START - EPS_END) * \
+        math.exp(-1. * steps_done / EPS_DECAY)
 
 
 def infinite_iterator(iterator):
     while True:
         yield from iterator
-
-
-class Flatten(nn.Module):
-    def forward(self, x):
-        return x.view(x.size(0), -1)
-
-
-class DDQN(nn.Module):
-    def __init__(self, num_actions):
-        super(DDQN, self).__init__()
-        self.conv_image = nn.Sequential(
-            nn.Conv2d(2, 128, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(256, 128, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(128, 16, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
-            # nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-            # nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            # nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=0), nn.ReLU(),
-            # nn.Conv2d(32, 16, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
-        )
-
-        self.conv_fft = nn.Sequential(
-            nn.Conv2d(2, 128, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(256, 128, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(128, 16, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
-            # nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-            # nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            # nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=0), nn.ReLU(),
-            # nn.Conv2d(32, 16, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
-        )
-
-        self.fc = nn.Sequential(
-            nn.Linear(2 * 13 * 13 * 16, 512), nn.ReLU(),
-            nn.Linear(512, 256), nn.ReLU(),
-            nn.Linear(256, num_actions)
-        )
-
-        self.optimizer = optim.Adam(self.parameters(), lr=3e-4)
-
-    def forward(self, x):
-        reconstructions = x[:, :2, :, :]
-        masked_rffts = x[:, 2:, :, :]
-
-        image_encoding = self.conv_image(reconstructions)
-        rfft_encoding = self.conv_image(masked_rffts)
-
-        return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
-
-    def optimize(self, batch):
-        observations = torch.tensor(batch['observations']).to(device)
-        actions = torch.tensor(batch['actions']).to(device)
-        self.zero_grad()
-        predictions = self(observations)
-        loss = F.cross_entropy(predictions, actions)
-        loss.backward()
-        self.optimizer.step()
-
-        return loss.item()
 
 
 # noinspection PyAttributeOutsideInit
@@ -141,8 +98,9 @@ class ReconstrunctionEnv:
         return masked_rffts, reconstructions, score
 
     def reset(self):
-        _, self._ground_truth = next(self._data_loader)
-        self._ground_truth = self._ground_truth.to(self._model.device)
+        if self._ground_truth is None:
+            _, self._ground_truth = next(self._data_loader)
+            self._ground_truth = self._ground_truth.to(self._model.device)
         self._current_mask = self._initial_mask
         self._scans_left = self.budget
         masked_rffts, reconstructions, self._current_score = self._compute_masked_rfft_reconstruction_and_score()
@@ -151,6 +109,8 @@ class ReconstrunctionEnv:
     def step(self, action):
         assert self._scans_left > 0
         line_to_scan = NUM_LINES_INITIAL + action
+        if int(self._current_mask[0, 0, 0, line_to_scan].item()) == 1:
+            return None, -1.0, True, {}
         self._current_mask = ReconstrunctionEnv.compute_new_mask(self._current_mask, line_to_scan)
         masked_rffts, reconstructions, new_score = self._compute_masked_rfft_reconstruction_and_score()
 
@@ -172,46 +132,76 @@ def generate_initial_mask(num_lines):
         return mask
 
 
+def test_policy(env, policy, writer, num_episodes, step):
+    average_total_reward = 0
+    for episode in range(num_episodes):
+        obs = env.reset()
+        done = False
+        total_reward = 0
+        actions = []
+        while not done:
+            action = policy.get_action(obs, 0.)
+            actions.append(action)
+            next_obs, reward, done, _ = env.step(action)
+            if done:
+                next_obs = None
+            total_reward += reward
+            obs = next_obs
+        average_total_reward += total_reward
+        if episode == 0:
+            print(actions)
+    writer.add_scalar('eval/average_reward', average_total_reward / num_episodes, step)
+
+
+def train_policy(env, policy, target_net, writer):
+    steps = 0
+    for episode in range(NUM_EPISODES):
+        print('Episode {}'.format(episode))
+        target_net.load_state_dict(policy.state_dict())
+        obs = env.reset()
+        done = False
+        total_reward = 0
+        while not done:
+            epsilon = get_epsilon(steps)
+            action = policy.get_action(obs, epsilon)
+            next_obs, reward, done, _ = env.step(action)
+            steps += 1
+            if done:
+                next_obs = None
+            policy.add_experience(obs, action, next_obs, reward)
+            loss, grad_norm = policy.update_parameters(target_net, BATCH_SIZE)
+            writer.add_scalar('epsilon', epsilon, steps)
+            if loss is not None:
+                writer.add_scalar('loss', loss, steps)
+                writer.add_scalar('grad_norm', grad_norm, steps)
+            total_reward += reward
+            obs = next_obs
+        writer.add_scalar('episode_reward', total_reward, episode)
+        if (episode + 1) % TEST_FREQ == 0:
+            test_policy(env, policy, writer, 1, episode)
+
+
+def main(opts):
+    test_data_loader = CreateFtTLoader(opts, is_test=True)
+    model = create_model(opts)
+    model.setup(opts)
+    model.eval()
+
+    writer = SummaryWriter('/checkpoint/lep/active_acq/dqn')
+
+    env = ReconstrunctionEnv(model, test_data_loader, generate_initial_mask(NUM_LINES_INITIAL), BUDGET)
+
+    policy = DDQN(env.action_space.n, device, ExperienceBuffer(1000000, (4, 128, 128))).to(device)
+    target_net = DDQN(env.action_space.n, device, None).to(device)
+
+    train_policy(env, policy, target_net, writer)
+
+
 if __name__ == '__main__':
     opts = TestOptions().parse()
     assert opts.no_dropout
 
     opts.batchSize = 1
     opts.results_dir = opts.checkpoints_dir
-    test_data_loader = CreateFtTLoader(opts, is_test=True)
-    model = create_model(opts)
-    model.setup(opts)
-    model.eval()
 
-    env = ReconstrunctionEnv(model, test_data_loader, generate_initial_mask(NUM_LINES_INITIAL), BUDGET)
-
-    policy = DDQN(env.action_space.n)
-    policy = policy.to(device)
-
-    min_o = np.inf
-    max_o = -np.inf
-    batch = {'observations': [], 'actions': []}
-    for i in range(1000):
-        env.reset()
-        total_reward = 0
-        for j in range(10, 50):
-            obs, reward, done, _ = env.step(j)
-            # pred = policy(torch.tensor(obs).unsqueeze(0))
-            batch['observations'].append(obs)
-            batch['actions'].append(j)
-            # min_o = min(min_o, np.min(obs))
-            # max_o = max(max_o, np.max(obs))
-            total_reward += reward
-            if done:
-                break
-        print(total_reward)
-
-    for i in range(50):
-        loss = policy.optimize(batch)
-        print(i, loss)
-
-    policy.eval()
-    for obs in batch['observations']:
-        print(torch.argmax(policy(torch.tensor(obs).unsqueeze(0).to(device))))
-
-    print(min_o, max_o)
+    main(opts)
