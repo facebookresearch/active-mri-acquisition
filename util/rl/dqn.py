@@ -1,8 +1,14 @@
+import math
 import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+
+
+def get_epsilon(steps_done, opts):
+    return opts.epsilon_end + (opts.epsilon_start - opts.epsilon_end) * \
+        math.exp(-1. * steps_done / opts.epsilon_decay)
 
 
 class Flatten(nn.Module):
@@ -11,32 +17,30 @@ class Flatten(nn.Module):
 
 
 class DDQN(nn.Module):
-    def __init__(self, num_actions, device, memory, gamma=0.99):
+    def __init__(self, num_actions, device, memory, gamma=0.999):
         super(DDQN, self).__init__()
         self.conv_image = nn.Sequential(
-            nn.Conv2d(2, 128, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(256, 128, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(128, 16, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
+            nn.Conv2d(128, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
         )
 
         self.conv_fft = nn.Sequential(
-            nn.Conv2d(2, 128, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(256, 128, kernel_size=3, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(128, 16, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
+            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(2 * 13 * 13 * 16, 512), nn.ReLU(),
+            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(),
             nn.Linear(512, 256), nn.ReLU(),
             nn.Linear(256, num_actions)
         )
 
         self.num_actions = num_actions
-        self.optimizer = optim.Adam(self.parameters(), lr=3e-6)
+        self.optimizer = optim.Adam(self.parameters(), lr=6.25e-5)
         self.memory = memory
-        self.gamma = 0.999
+        self.gamma = gamma
         self.device = device
 
     def forward(self, x):
@@ -63,9 +67,9 @@ class DDQN(nn.Module):
         if len(self.memory) < batch_size:
             return None, None
         batch = self.memory.sample(batch_size)
-        observations = torch.tensor(batch.observation, device=self.device)
+        observations = torch.tensor(batch.observation, device=self.device, dtype=torch.float32)
         actions = torch.tensor(batch.action, device=self.device).unsqueeze(1)
-        rewards = torch.tensor(batch.reward, device=self.device)
+        rewards = torch.tensor(batch.reward, device=self.device, dtype=torch.float32)
 
         not_done_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_observation)),
                                      device=self.device,
@@ -98,7 +102,7 @@ class DDQN(nn.Module):
             grad_norm += (p.grad.data.norm(2).item() ** 2)
         grad_norm = grad_norm ** .5
         # grad_norm = torch.nn.utils.clip_grad_norm_(self.parameters(), 100)
-        torch.nn.utils.clip_grad_value_(self.parameters(), 0.1)
+        torch.nn.utils.clip_grad_value_(self.parameters(), 1)
 
         self.optimizer.step()
 
