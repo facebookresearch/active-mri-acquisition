@@ -70,7 +70,7 @@ class ReconstrunctionEnv:
         self.observation_space = Box(low=-50000, high=50000, shape=(4, 128, 128))
         factor = 2 if CONJUGATE_SYMMETRIC else 1
         # num_actions = (IMAGE_WIDTH - factor * NUM_LINES_INITIAL) // 2
-        num_actions = opts.budget + 2
+        num_actions = opts.budget + 10
         self.action_space = Discrete(num_actions)
 
         self._model = model
@@ -110,9 +110,9 @@ class ReconstrunctionEnv:
             masked_rffts = ReconstrunctionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
             reconstructions, _, mask_embed = self._model.netG(ifft(masked_rffts), self._current_mask)
             spectral_maps = self.kspace_map(reconstructions[-1], self._current_mask)
-            observation = torch.cat([spectral_maps, mask_embed], dim=1).shape
+            observation = torch.cat([spectral_maps, mask_embed], dim=1)
             score = ReconstrunctionEnv.compute_score(reconstructions[-1], self._ground_truth)
-        return observation, score
+        return observation.squeeze().cpu().numpy().astype(np.float32), score
 
     def reset(self):
         if self._ground_truth is None:
@@ -121,7 +121,7 @@ class ReconstrunctionEnv:
         self._current_mask = self._initial_mask
         self._scans_left = self.opts.budget
         observation, self._current_score = self._compute_observation_and_score()
-        return observation.squeeze().cpu().numpy().astype(np.float32)
+        return observation
 
     def step(self, action):
         assert self._scans_left > 0
@@ -179,6 +179,7 @@ def train_policy(env, policy, target_net, writer, opts):
         while not done:
             epsilon = get_epsilon(steps, opts)
             action = policy.get_action(obs, epsilon)
+            logging.debug('Action: %d', action)
             next_obs, reward, done, _ = env.step(action)
             steps += 1
             if done:
@@ -205,14 +206,14 @@ def main(opts):
     model.setup(opts)
     model.eval()
 
-    writer = SummaryWriter('/checkpoint/lep/active_acq/dqn')
+    writer = SummaryWriter('/checkpoint/lep/active_acq/dqn/masks')
 
     env = ReconstrunctionEnv(
         model, test_data_loader, generate_initial_mask(opts.initial_num_lines), opts)
 
     logging.info('Created environment with {} actions'.format(env.action_space.n))
 
-    policy = DDQN(env.action_space.n, device, ExperienceBuffer(1000000, (4, 128, 128))).to(device)
+    policy = DDQN(env.action_space.n, device, ExperienceBuffer(1000000, (134, 128, 128))).to(device)
     target_net = DDQN(env.action_space.n, device, None).to(device)
 
     train_policy(env, policy, target_net, writer, opts)

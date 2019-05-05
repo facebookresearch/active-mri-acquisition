@@ -20,21 +20,12 @@ class DDQN(nn.Module):
     def __init__(self, num_actions, device, memory, gamma=0.999):
         super(DDQN, self).__init__()
         self.conv_image = nn.Sequential(
-            nn.Conv2d(128, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
-        )
-
-        self.conv_fft = nn.Sequential(
-            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
-        )
-
-        self.fc = nn.Sequential(
-            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(),
-            nn.Linear(512, 256), nn.ReLU(),
-            nn.Linear(256, num_actions)
+            nn.Conv2d(134, 256, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            nn.Conv2d(512, 1024, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            nn.Conv2d(1024, 1024, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            nn.AvgPool2d(kernel_size=8),
+            nn.Conv2d(1024, num_actions, kernel_size=1, stride=1)
         )
 
         self.num_actions = num_actions
@@ -44,13 +35,7 @@ class DDQN(nn.Module):
         self.device = device
 
     def forward(self, x):
-        reconstructions = x[:, :2, :, :]
-        masked_rffts = x[:, 2:, :, :]
-
-        image_encoding = self.conv_image(reconstructions)
-        rfft_encoding = self.conv_image(masked_rffts)
-
-        return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
+        return self.conv_image(x).view(-1, self.num_actions)
 
     def get_action(self, observation, eps_threshold):
         sample = random.random()
