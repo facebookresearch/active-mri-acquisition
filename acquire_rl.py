@@ -12,7 +12,7 @@ from options.rl_options import RLOptions
 from tensorboardX import SummaryWriter
 from util import util
 from util.rl.dqn import DDQN, get_epsilon
-from util.rl.replay_buffer import ExperienceBuffer
+from util.rl.replay_buffer import ReplayMemory, infinite_iterator, TransitionTransform
 
 from data import CreateFtTLoader
 from gym.spaces import Box, Discrete
@@ -27,11 +27,6 @@ CONJUGATE_SYMMETRIC = True
 IMAGE_WIDTH = 128
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
-def infinite_iterator(iterator):
-    while True:
-        yield from iterator
 
 
 # TODO fix evaluator code because I think self.seperate_mask should now be [0, i, 0, 0, i] = 1
@@ -182,10 +177,8 @@ def train_policy(env, policy, target_net, writer, opts):
             logging.debug('Action: %d', action)
             next_obs, reward, done, _ = env.step(action)
             steps += 1
-            if done:
-                next_obs = None
-            policy.add_experience(obs, action, next_obs, reward)
-            loss, grad_norm = policy.update_parameters(target_net, opts.rl_batch_size)
+            policy.add_experience(obs, action, next_obs, reward, done)
+            loss, grad_norm = policy.update_parameters(target_net)
             if steps % opts.target_net_update_freq == 0:
                 logging.info('Updating target network.')
                 target_net.load_state_dict(policy.state_dict())
@@ -213,8 +206,9 @@ def main(opts):
 
     logging.info('Created environment with {} actions'.format(env.action_space.n))
 
-    policy = DDQN(env.action_space.n, device, ExperienceBuffer(1000000, (134, 128, 128))).to(device)
-    target_net = DDQN(env.action_space.n, device, None).to(device)
+    replay_memory = ReplayMemory(1000000, (134, 128, 128), transform=TransitionTransform())
+    policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
+    target_net = DDQN(env.action_space.n, device, None, opts).to(device)
 
     train_policy(env, policy, target_net, writer, opts)
 

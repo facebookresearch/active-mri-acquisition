@@ -5,6 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+from torch.utils.data import DataLoader
+
+from replay_buffer import infinite_iterator
+
 
 def get_epsilon(steps_done, opts):
     return opts.epsilon_end + (opts.epsilon_start - opts.epsilon_end) * \
@@ -17,7 +21,7 @@ class Flatten(nn.Module):
 
 
 class DDQN(nn.Module):
-    def __init__(self, num_actions, device, memory, gamma=0.999):
+    def __init__(self, num_actions, device, memory, opts):
         super(DDQN, self).__init__()
         self.conv_image = nn.Sequential(
             nn.Conv2d(134, 256, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
@@ -28,10 +32,13 @@ class DDQN(nn.Module):
             nn.Conv2d(1024, num_actions, kernel_size=1, stride=1)
         )
 
+        if memory is not None:
+            self._data_loader = infinite_iterator(DataLoader(memory, batch_size=opts.rl_batch_size, num_workers=8))
+            self.optimizer = optim.Adam(self.parameters(), lr=6.25e-5)
+
         self.num_actions = num_actions
-        self.optimizer = optim.Adam(self.parameters(), lr=6.25e-5)
         self.memory = memory
-        self.gamma = gamma
+        self.opts = opts
         self.device = device
 
     def forward(self, x):
@@ -45,20 +52,20 @@ class DDQN(nn.Module):
             q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
         return torch.argmax(q_values, dim=1).item()
 
-    def add_experience(self, observation, action, next_observation, reward):
-        self.memory.push(observation, action, next_observation, reward)
+    def add_experience(self, observation, action, next_observation, reward, done):
+        self.memory.push(observation, action, next_observation, reward, done)
 
-    def update_parameters(self, target_net, batch_size):
-        if len(self.memory) < batch_size:
+    def update_parameters(self, target_net):
+        if len(self.memory) < self.opts.rl_batch_size:
             return None, None
-        batch = self.memory.sample(batch_size)
-        observations = torch.tensor(batch.observation, device=self.device, dtype=torch.float32)
-        actions = torch.tensor(batch.action, device=self.device).unsqueeze(1)
-        rewards = torch.tensor(batch.reward, device=self.device, dtype=torch.float32)
+        batch = next(self._data_loader)
+        observations = batch['observations'].to(self.device)
+        next_observations = batch['next_observations'].to(self.device)
+        actions = batch['actions'].to(self.device)
+        rewards = batch['rewards'].to(self.device).squeeze()
+        dones = batch['dones'].to(self.device)
 
-        not_done_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_observation)),
-                                     device=self.device,
-                                     dtype=torch.uint8)
+        not_done_mask = (1 - dones).squeeze()
 
         # Compute Q-values and get best action according to online network
         all_q_values = self.forward(observations)
@@ -67,13 +74,11 @@ class DDQN(nn.Module):
         # Compute target values using the best action found
         target_values = torch.zeros(observations.shape[0], device=self.device)
         if not_done_mask.any().item() != 0:
-            best_actions = all_q_values.detach()[not_done_mask].max(1)[1]
-            not_done_next_observations = torch.cat(
-                [torch.tensor([s]) for s in batch.next_observation if s is not None]).to(self.device)
-            target_values[not_done_mask] = target_net(not_done_next_observations)\
-                .gather(1, best_actions.unsqueeze(1)).squeeze().detach()
+            best_actions = all_q_values.detach().max(1)[1]
+            target_values[not_done_mask] = target_net(next_observations)\
+                .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
 
-        target_values = self.gamma * target_values + rewards
+        target_values = self.opts.gamma * target_values + rewards
 
         # loss = F.mse_loss(q_values, target_values.unsqueeze(1))
         loss = F.smooth_l1_loss(q_values, target_values.unsqueeze(1))

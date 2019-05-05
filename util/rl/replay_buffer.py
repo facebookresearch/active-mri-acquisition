@@ -1,14 +1,20 @@
 import numpy as np
 import random
+import torch
 
 from collections import namedtuple
+from torch.utils.data import Dataset
+
+Transition = namedtuple('Transition', ('observation', 'action', 'next_observation', 'reward', 'done'))
 
 
-Transition = namedtuple("Transition", ("observation", "action", "next_observation", "reward"))
+def infinite_iterator(iterator):
+    while True:
+        yield from iterator
 
 
-class ExperienceBuffer:
-    def __init__(self, capacity, obs_shape):
+class ReplayMemory(Dataset):
+    def __init__(self, capacity, obs_shape, transform=None):
         self.capacity = capacity
         self.memory = []
         self.position = 0
@@ -16,6 +22,8 @@ class ExperienceBuffer:
         self.std_obs = np.ones(obs_shape, dtype=np.float32)
         self._m2_obs = np.ones(obs_shape, dtype=np.float32)
         self.cnt = 1
+
+        self.transform = transform
 
     def normalize(self, observation):
         if observation is None:
@@ -35,18 +43,30 @@ class ExperienceBuffer:
         self._m2_obs = self._m2_obs + (delta * delta2)
         self.std_obs = np.sqrt(self._m2_obs / (self.cnt - 1))
 
-    def push(self, observation, action, next_observation, reward):
+    def push(self, observation, action, next_observation, reward, done):
         if len(self.memory) < self.capacity:
             self.memory.append(None)
         self._update_stats(observation)
         self.memory[self.position] = Transition(
-            self.normalize(observation), action, self.normalize(next_observation), reward)
+            self.normalize(observation), action, self.normalize(next_observation), reward, done)
         self.position = (self.position + 1) % self.capacity
 
-    def sample(self, batch_size):
-        batch_size = min(len(self.memory), batch_size)
-        transitions = random.sample(self.memory, batch_size)
-        return Transition(*zip(*transitions))
+    def __getitem__(self, idx):
+        transition = Transition(*zip(*random.sample(self.memory, 1)))
+        if self.transform:
+            transition = self.transform(transition)
+        return transition
 
     def __len__(self):
         return len(self.memory)
+
+
+class TransitionTransform:
+    def __call__(self, transition):
+        return {
+            'observations': torch.tensor(transition.observation, dtype=torch.float32).squeeze(),
+            'next_observations': torch.tensor(transition.next_observation, dtype=torch.float32).squeeze(),
+            'actions': torch.tensor(transition.action),
+            'rewards': torch.tensor(transition.reward, dtype=torch.float32),
+            'dones': torch.tensor(transition.done, dtype=torch.uint8)
+        }

@@ -27,6 +27,7 @@ class RLOptions(BaseOptions):
         parser.add_argument('--rl_batch_size', type=int, default=16)
         parser.add_argument('--agent_test_episode_freq', type=int, default=20)
         parser.add_argument('--target_net_update_freq', type=int, default=500)
+        parser.add_argument('--gamma', type=float, default=0.999)
         parser.add_argument('--debug', dest='debug', action='store_true')
 
         self.isTrain = False
