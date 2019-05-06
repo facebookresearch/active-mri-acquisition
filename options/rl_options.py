@@ -24,12 +24,13 @@ class RLOptions(BaseOptions):
         parser.add_argument('--epsilon_start', type=float, default=0.99)
         parser.add_argument('--epsilon_end', type=float, default=0.01)
         parser.add_argument('--epsilon_decay', type=float, default=10000)
-        parser.add_argument('--num_episodes', type=int, default=100000)
+        parser.add_argument('--num_episodes', type=int, default=10000)
         parser.add_argument('--rl_batch_size', type=int, default=16)
         parser.add_argument('--agent_test_episode_freq', type=int, default=20)
         parser.add_argument('--target_net_update_freq', type=int, default=500)
         parser.add_argument('--gamma', type=float, default=0.999)
         parser.add_argument('--debug', dest='debug', action='store_true')
+        parser.add_argument('--no_replacement_policy', dest='no_replacement_policy', action='store_true')
 
         self.isTrain = False
         return parser

@@ -94,10 +94,13 @@ class DDQN(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-    def get_action(self, observation, eps_threshold):
+    def get_action(self, observation, eps_threshold, episode_actions):
         sample = random.random()
         if sample < eps_threshold:
-            return random.randrange(self.num_actions)
+            if self.opts.no_replacement_policy:
+                return random.choice([x for x in range(self.num_actions) if x not in episode_actions])
+            else:
+                return random.randrange(self.num_actions)
         with torch.no_grad():
             q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
         return torch.argmax(q_values, dim=1).item()

@@ -29,7 +29,7 @@ IMAGE_WIDTH = 128
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-# TODO fix evaluator code because I think self.seperate_mask should now be [0, i, 0, 0, i] = 1
+# TODO fix evaluator code because I think "self.seperate_mask" should now be [0, i, 0, 0, i] = 1
 class KSpaceMap(nn.Module):
     """Auxiliary module used to compute spectral maps of a zero-filled reconstruction.
         See https://arxiv.org/pdf/1902.03051.pdf for details.
@@ -174,7 +174,7 @@ def test_policy(env, policy, writer, num_episodes, step):
         total_reward = 0
         actions = []
         while not done:
-            action = policy.get_action(obs, 0.)
+            action = policy.get_action(obs, 0., None)
             actions.append(action)
             next_obs, reward, done, _ = env.step(action)
             if done:
@@ -194,24 +194,37 @@ def train_policy(env, policy, target_net, writer, opts):
         obs = env.reset()
         done = False
         total_reward = 0
+        episode_actions = []
+        cnt_repeated_actions = 0
         while not done:
             epsilon = get_epsilon(steps, opts)
-            action = policy.get_action(obs, epsilon)
-            # logging.debug('Action: %d', action)
+            action = policy.get_action(obs, epsilon, episode_actions)
             next_obs, reward, done, _ = env.step(action)
             steps += 1
-            policy.add_experience(obs, action, next_obs, reward, done)
+            is_zero_target = (done or action in episode_actions) if opts.no_replacement_policy else done
+            policy.add_experience(obs, action, next_obs, reward, is_zero_target)
             loss, grad_norm = policy.update_parameters(target_net)
+
             if steps % opts.target_net_update_freq == 0:
                 logging.info('Updating target network.')
                 target_net.load_state_dict(policy.state_dict())
+
+            # Adding per-step tensorboard logs
             writer.add_scalar('epsilon', epsilon, steps)
             if loss is not None:
                 writer.add_scalar('loss', loss, steps)
                 writer.add_scalar('grad_norm', grad_norm, steps)
+
             total_reward += reward
             obs = next_obs
+            cnt_repeated_actions += int(action in episode_actions)
+            episode_actions.append(action)
+
+        # Adding per-episode tensorboard logs
         writer.add_scalar('episode_reward', total_reward, episode)
+        writer.add_scalar('cnt_repeated_actions', cnt_repeated_actions, episode)
+
+        # Evaluate the current policy
         if (episode + 1) % opts.agent_test_episode_freq == 0:
             test_policy(env, policy, writer, 1, episode)
 
@@ -222,7 +235,7 @@ def main(opts):
     model.setup(opts)
     model.eval()
 
-    writer = SummaryWriter('/checkpoint/lep/active_acq/dqn/debug')
+    writer = SummaryWriter('/checkpoint/lep/active_acq/dqn/debug_no_replacement_1')
 
     env = ReconstrunctionEnv(
         model, test_data_loader, generate_initial_mask(opts.initial_num_lines), opts)
