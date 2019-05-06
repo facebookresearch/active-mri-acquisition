@@ -7,7 +7,7 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
-from replay_buffer import infinite_iterator
+from .replay_buffer import infinite_iterator
 
 
 def get_epsilon(steps_done, opts):
@@ -20,10 +20,11 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
-class DDQN(nn.Module):
-    def __init__(self, num_actions, device, memory, opts):
-        super(DDQN, self).__init__()
-        self.conv_image = nn.Sequential(
+class SpectralMapsModel(nn.Module):
+    """This model is similar to the evaluator model described in https://arxiv.org/pdf/1902.03051.pdf """
+    def __init__(self, num_actions):
+        super(SpectralMapsModel, self).__init__()
+        self.layers = nn.Sequential(
             nn.Conv2d(134, 256, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
             nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
             nn.Conv2d(512, 1024, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
@@ -31,6 +32,55 @@ class DDQN(nn.Module):
             nn.AvgPool2d(kernel_size=8),
             nn.Conv2d(1024, num_actions, kernel_size=1, stride=1)
         )
+
+    def forward(self, x):
+        return self.conv_image(x).view(-1, self.num_actions)
+
+
+class TwoStreamsModel(nn.Module):
+    """ A model inspired by the DQN architecture but with two convolutional streams. One receives the zero-filled
+        reconstructions, the other receives the masked rfft observations. The output of the streams are combined
+        using a few linear layers.
+    """
+    def __init__(self, num_actions):
+        super(TwoStreamsModel, self).__init__()
+        self.conv_image = nn.Sequential(
+            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
+        )
+
+        self.conv_fft = nn.Sequential(
+            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
+        )
+
+        self.fc = nn.Sequential(
+            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(),
+            nn.Linear(512, 256), nn.ReLU(),
+            nn.Linear(256, num_actions)
+        )
+
+    def forward(self, x):
+        reconstructions = x[:, :2, :, :]
+        masked_rffts = x[:, 2:, :, :]
+        image_encoding = self.conv_image(reconstructions)
+        rfft_encoding = self.conv_image(masked_rffts)
+        return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
+
+
+def get_model(num_actions, type='spectral_maps'):
+    if type == 'spectral_maps':
+        return SpectralMapsModel(num_actions)
+    if type == 'two_streams':
+        return TwoStreamsModel(num_actions)
+
+
+class DDQN(nn.Module):
+    def __init__(self, num_actions, device, memory, opts):
+        super(DDQN, self).__init__()
+        self.model = get_model(num_actions, opts.rl_model_type)
 
         if memory is not None:
             self._data_loader = infinite_iterator(DataLoader(memory, batch_size=opts.rl_batch_size, num_workers=8))
@@ -42,7 +92,7 @@ class DDQN(nn.Module):
         self.device = device
 
     def forward(self, x):
-        return self.conv_image(x).view(-1, self.num_actions)
+        return self.model(x)
 
     def get_action(self, observation, eps_threshold):
         sample = random.random()

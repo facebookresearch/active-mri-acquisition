@@ -31,6 +31,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # TODO fix evaluator code because I think self.seperate_mask should now be [0, i, 0, 0, i] = 1
 class KSpaceMap(nn.Module):
+    """Auxiliary module used to compute spectral maps of a zero-filled reconstruction.
+        See https://arxiv.org/pdf/1902.03051.pdf for details.
+    """
     def __init__(self, img_width=128):
         super(KSpaceMap, self).__init__()
 
@@ -59,10 +62,16 @@ class KSpaceMap(nn.Module):
 
 # noinspection PyAttributeOutsideInit
 class ReconstrunctionEnv:
+    """RL environment representing the active acquisition process with reconstruction model. """
     def __init__(self, model, data_loader, initial_mask, opts):
         self.opts = opts
 
-        self.observation_space = Box(low=-50000, high=50000, shape=(4, 128, 128))
+        obs_shape = None
+        if opts.rl_model_type == 'spectral_maps':
+            obs_shape = (134, 128, 128)
+        if opts.rl_model_type == 'two_streams':
+            obs_shape = (4, 128, 128)
+        self.observation_space = Box(low=-50000, high=50000, shape=obs_shape)
         factor = 2 if CONJUGATE_SYMMETRIC else 1
         # num_actions = (IMAGE_WIDTH - factor * NUM_LINES_INITIAL) // 2
         num_actions = opts.budget + 10
@@ -100,7 +109,7 @@ class ReconstrunctionEnv:
             raise ValueError
         return score
 
-    def _compute_observation_and_score(self):
+    def _compute_observation_and_score_spectral_maps(self):
         with torch.no_grad():
             masked_rffts = ReconstrunctionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
             reconstructions, _, mask_embed = self._model.netG(ifft(masked_rffts), self._current_mask)
@@ -108,6 +117,20 @@ class ReconstrunctionEnv:
             observation = torch.cat([spectral_maps, mask_embed], dim=1)
             score = ReconstrunctionEnv.compute_score(reconstructions[-1], self._ground_truth)
         return observation.squeeze().cpu().numpy().astype(np.float32), score
+
+    def _compute_observation_and_score_two_streams(self):
+        with torch.no_grad():
+            masked_rffts = ReconstrunctionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
+            reconstructions, _, _ = self._model.netG(ifft(masked_rffts), self._current_mask)
+            observation = torch.cat([reconstructions[-1], masked_rffts], dim=1)
+            score = ReconstrunctionEnv.compute_score(reconstructions[-1], self._ground_truth)
+        return observation.squeeze().cpu().numpy().astype(np.float32), score
+
+    def _compute_observation_and_score(self):
+        if self.opts.rl_model_type == 'spectral_maps':
+            return self._compute_observation_and_score_spectral_maps()
+        if self.opts.rl_model_type == 'two_streams':
+            return self._compute_observation_and_score_two_streams()
 
     def reset(self):
         if self._ground_truth is None:
@@ -174,7 +197,7 @@ def train_policy(env, policy, target_net, writer, opts):
         while not done:
             epsilon = get_epsilon(steps, opts)
             action = policy.get_action(obs, epsilon)
-            logging.debug('Action: %d', action)
+            # logging.debug('Action: %d', action)
             next_obs, reward, done, _ = env.step(action)
             steps += 1
             policy.add_experience(obs, action, next_obs, reward, done)
@@ -199,14 +222,14 @@ def main(opts):
     model.setup(opts)
     model.eval()
 
-    writer = SummaryWriter('/checkpoint/lep/active_acq/dqn/masks')
+    writer = SummaryWriter('/checkpoint/lep/active_acq/dqn/debug')
 
     env = ReconstrunctionEnv(
         model, test_data_loader, generate_initial_mask(opts.initial_num_lines), opts)
 
     logging.info('Created environment with {} actions'.format(env.action_space.n))
 
-    replay_memory = ReplayMemory(1000000, (134, 128, 128), transform=TransitionTransform())
+    replay_memory = ReplayMemory(100000, env.observation_space.shape, transform=TransitionTransform())
     policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
     target_net = DDQN(env.action_space.n, device, None, opts).to(device)
 

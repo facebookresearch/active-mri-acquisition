@@ -20,6 +20,7 @@ class RLOptions(BaseOptions):
         # Reinforcement learning options
         parser.add_argument('--initial_num_lines', type=int, default=10)
         parser.add_argument('--budget', type=int, default=5)
+        parser.add_argument('--rl_model_type', type=str, default='two_streams')
         parser.add_argument('--epsilon_start', type=float, default=0.99)
         parser.add_argument('--epsilon_end', type=float, default=0.01)
         parser.add_argument('--epsilon_decay', type=float, default=10000)
