@@ -1,6 +1,7 @@
 import logging
-import math
 import numpy as np
+import os
+import random
 import sys
 import torch
 import torch.nn as nn
@@ -174,7 +175,7 @@ def test_policy(env, policy, writer, num_episodes, step):
         total_reward = 0
         actions = []
         while not done:
-            action = policy.get_action(obs, 0., None)
+            action = policy.get_action(obs, 0., actions)
             actions.append(action)
             next_obs, reward, done, _ = env.step(action)
             if done:
@@ -203,7 +204,7 @@ def train_policy(env, policy, target_net, writer, opts):
             steps += 1
             is_zero_target = (done or action in episode_actions) if opts.no_replacement_policy else done
             policy.add_experience(obs, action, next_obs, reward, is_zero_target)
-            loss, grad_norm = policy.update_parameters(target_net)
+            loss, grad_norm, mean_q_values, std_q_values = policy.update_parameters(target_net)
 
             if steps % opts.target_net_update_freq == 0:
                 logging.info('Updating target network.')
@@ -214,6 +215,8 @@ def train_policy(env, policy, target_net, writer, opts):
             if loss is not None:
                 writer.add_scalar('loss', loss, steps)
                 writer.add_scalar('grad_norm', grad_norm, steps)
+                writer.add_scalar('mean_q_values', mean_q_values, steps)
+                writer.add_scalar('std_q_values', std_q_values, steps)
 
             total_reward += reward
             obs = next_obs
@@ -235,10 +238,9 @@ def main(opts):
     model.setup(opts)
     model.eval()
 
-    writer = SummaryWriter('/checkpoint/lep/active_acq/dqn/debug_no_replacement_1')
+    writer = SummaryWriter(opts.tb_logs_dir)
 
-    env = ReconstrunctionEnv(
-        model, test_data_loader, generate_initial_mask(opts.initial_num_lines), opts)
+    env = ReconstrunctionEnv(model, test_data_loader, generate_initial_mask(opts.initial_num_lines), opts)
 
     logging.info('Created environment with {} actions'.format(env.action_space.n))
 
@@ -254,6 +256,18 @@ if __name__ == '__main__':
     opts = RLOptions().parse()
     opts.batchSize = 1
     opts.results_dir = opts.checkpoints_dir
+
+    random.seed(opts.seed)
+    np.random.seed(opts.seed)
+    torch.manual_seed(opts.seed)
+
+    experiment_str = '{}_bu{}_tupd{}_bs{}_edecay{}_gamma{}_norepl{}_seed{}'.format(
+        opts.rl_model_type, opts.budget, opts.target_net_update_freq,
+        opts.rl_batch_size, opts.epsilon_decay, opts.gamma, int(opts.no_replacement_policy), opts.seed
+    )
+    opts.tb_logs_dir = os.path.join(opts.results_dir, 'dqn', experiment_str)
+    if not os.path.isdir(opts.tb_logs_dir):
+        os.makedirs(opts.tb_logs_dir)
 
     # Initializing logger
     logger = logging.getLogger()

@@ -1,4 +1,5 @@
 import math
+import numpy as np
 import random
 import torch
 import torch.nn as nn
@@ -94,23 +95,35 @@ class DDQN(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-    def get_action(self, observation, eps_threshold, episode_actions):
+    def _get_action_no_replacement(self, observation, eps_threshold, episode_actions):
         sample = random.random()
         if sample < eps_threshold:
-            if self.opts.no_replacement_policy:
-                return random.choice([x for x in range(self.num_actions) if x not in episode_actions])
-            else:
-                return random.randrange(self.num_actions)
+            return random.choice([x for x in range(self.num_actions) if x not in episode_actions])
+        with torch.no_grad():
+            q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
+            q_values[:, episode_actions] = -np.inf
+        return torch.argmax(q_values, dim=1).item()
+
+    def _get_action_standard_e_greedy(self, observation, eps_threshold):
+        sample = random.random()
+        if sample < eps_threshold:
+            return random.randrange(self.num_actions)
         with torch.no_grad():
             q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
         return torch.argmax(q_values, dim=1).item()
+
+    def get_action(self, observation, eps_threshold, episode_actions):
+        if self.opts.no_replacement_policy:
+            return self._get_action_no_replacement(observation, eps_threshold, episode_actions)
+        else:
+            return self._get_action_standard_e_greedy(observation, eps_threshold)
 
     def add_experience(self, observation, action, next_observation, reward, done):
         self.memory.push(observation, action, next_observation, reward, done)
 
     def update_parameters(self, target_net):
         if len(self.memory) < self.opts.rl_batch_size:
-            return None, None
+            return None, None, None, None
         batch = next(self._data_loader)
         observations = batch['observations'].to(self.device)
         next_observations = batch['next_observations'].to(self.device)
@@ -149,4 +162,4 @@ class DDQN(nn.Module):
 
         self.optimizer.step()
 
-        return loss, grad_norm
+        return loss, grad_norm, all_q_values.detach().mean().cpu().numpy(), all_q_values.detach().std().cpu().numpy()
