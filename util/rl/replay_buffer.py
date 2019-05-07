@@ -18,9 +18,9 @@ class ReplayMemory(Dataset):
         self.capacity = capacity
         self.memory = []
         self.position = 0
-        self.mean_obs = np.zeros(obs_shape, dtype=np.float32)
-        self.std_obs = np.ones(obs_shape, dtype=np.float32)
-        self._m2_obs = np.ones(obs_shape, dtype=np.float32)
+        self.mean_obs = torch.zeros(obs_shape, dtype=torch.float32)
+        self.std_obs = torch.ones(obs_shape, dtype=torch.float32)
+        self._m2_obs = torch.ones(obs_shape, dtype=torch.float32)
         self.cnt = 1
 
         self.transform = transform
@@ -46,27 +46,27 @@ class ReplayMemory(Dataset):
     def push(self, observation, action, next_observation, reward, done):
         if len(self.memory) < self.capacity:
             self.memory.append(None)
-        self._update_stats(observation)
         self.memory[self.position] = Transition(
-            self.normalize(observation), action, self.normalize(next_observation), reward, done)
+            torch.tensor(observation, dtype=torch.float32),
+            torch.tensor([action]),
+            torch.tensor(next_observation, dtype=torch.float32),
+            torch.tensor([reward], dtype=torch.float32),
+            torch.tensor([done], dtype=torch.uint8))
+        self._update_stats(self.memory[self.position].observation)
         self.position = (self.position + 1) % self.capacity
 
-    def __getitem__(self, idx):
-        transition = Transition(*zip(*random.sample(self.memory, 1)))
+    def __getitem__(self, _):
+        transition = random.sample(self.memory, 1)
+        transition = {
+            'observations': self.normalize(transition[0].observation),
+            'next_observations': self.normalize(transition[0].next_observation),
+            'actions': transition[0].action,
+            'rewards': transition[0].reward,
+            'dones': transition[0].done
+        }
         if self.transform:
             transition = self.transform(transition)
         return transition
 
     def __len__(self):
         return len(self.memory)
-
-
-class TransitionTransform:
-    def __call__(self, transition):
-        return {
-            'observations': torch.tensor(transition.observation, dtype=torch.float32).squeeze(),
-            'next_observations': torch.tensor(transition.next_observation, dtype=torch.float32).squeeze(),
-            'actions': torch.tensor(transition.action),
-            'rewards': torch.tensor(transition.reward, dtype=torch.float32),
-            'dones': torch.tensor(transition.done, dtype=torch.uint8)
-        }

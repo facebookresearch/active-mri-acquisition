@@ -13,7 +13,7 @@ from options.rl_options import RLOptions
 from tensorboardX import SummaryWriter
 from util import util
 from util.rl.dqn import DDQN, get_epsilon
-from util.rl.replay_buffer import ReplayMemory, infinite_iterator, TransitionTransform
+from util.rl.replay_buffer import ReplayMemory, infinite_iterator
 
 from data import CreateFtTLoader
 from gym.spaces import Box, Discrete
@@ -244,11 +244,15 @@ def main(opts):
 
     logging.info('Created environment with {} actions'.format(env.action_space.n))
 
-    replay_memory = ReplayMemory(100000, env.observation_space.shape, transform=TransitionTransform())
+    replay_memory = ReplayMemory(100000, env.observation_space.shape)
     policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
     target_net = DDQN(env.action_space.n, device, None, opts).to(device)
 
     train_policy(env, policy, target_net, writer, opts)
+
+    print('training_done', flush=True)
+    sys.exit(0)
+    print('exited', flush=True)
 
 
 if __name__ == '__main__':
@@ -261,9 +265,10 @@ if __name__ == '__main__':
     np.random.seed(opts.seed)
     torch.manual_seed(opts.seed)
 
-    experiment_str = '{}_bu{}_tupd{}_bs{}_edecay{}_gamma{}_norepl{}_seed{}'.format(
+    experiment_str = '{}_bu{}_tupd{}_bs{}_edecay{}_gamma{}_norepl{}_seed{}_nep{}'.format(
         opts.rl_model_type, opts.budget, opts.target_net_update_freq,
-        opts.rl_batch_size, opts.epsilon_decay, opts.gamma, int(opts.no_replacement_policy), opts.seed
+        opts.rl_batch_size, opts.epsilon_decay, opts.gamma, int(opts.no_replacement_policy),
+        opts.seed, opts.num_episodes
     )
     opts.tb_logs_dir = os.path.join(opts.results_dir, 'dqn', experiment_str)
     if not os.path.isdir(opts.tb_logs_dir):
