@@ -1,179 +1,47 @@
+import copy
 import logging
 import numpy as np
 import os
 import random
 import sys
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
-from models import create_model
-from models.fft_utils import RFFT, IFFT, FFT
 from options.rl_options import RLOptions
 from tensorboardX import SummaryWriter
-from util import util
 from util.rl.dqn import DDQN, get_epsilon
-from util.rl.replay_buffer import ReplayMemory, infinite_iterator
+from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy
+from util.rl.replay_buffer import ReplayMemory
 
-from data import CreateFtTLoader
-from gym.spaces import Box, Discrete
-
-
-rfft = RFFT()
-ifft = IFFT()
-fft = FFT()
+from rl_env import ReconstrunctionEnv, device, generate_initial_mask, CONJUGATE_SYMMETRIC
 
 
-CONJUGATE_SYMMETRIC = True
-IMAGE_WIDTH = 128
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
-# TODO fix evaluator code because I think "self.seperate_mask" should now be [0, i, 0, 0, i] = 1
-class KSpaceMap(nn.Module):
-    """Auxiliary module used to compute spectral maps of a zero-filled reconstruction.
-        See https://arxiv.org/pdf/1902.03051.pdf for details.
-    """
-    def __init__(self, img_width=128):
-        super(KSpaceMap, self).__init__()
-
-        self.RFFT = RFFT()
-        self.IFFT = IFFT()
-        self.img_width = img_width
-        self.register_buffer('separated_masks', torch.FloatTensor(1, img_width, 1, 1, img_width))
-        self.separated_masks.fill_(0)
-        for i in range(img_width):
-            self.separated_masks[0, i, 0, 0, i] = 1
-
-    def forward(self, input, mask):
-        batch_size, _, img_height, img_width = input.shape
-        assert img_width == self.img_width
-        k_space = self.RFFT(input[:, :1, :, :])  # Take only real part
-
-        # This code creates w channels, where the i-th channel is a copy of k_space
-        # with everything but the i-th column masked out
-        k_space = k_space.unsqueeze(1).repeat(1, img_width, 1, 1, 1)  # [batch_size , w, 2, h, w]
-        masked_kspace = self.separated_masks * k_space
-        masked_kspace = masked_kspace.view(batch_size * img_width, 2, img_height, img_width)
-
-        # The imaginary part is discarded
-        return self.IFFT(masked_kspace)[:, 0, :, :].view(batch_size, img_width, img_height, img_width)
+def update_statisics(value, episode_step, statistics):
+    if episode_step not in statistics:
+        statistics[episode_step] = {'mean': 0, 'm2': 0, 'count': 0}
+    statistics[episode_step]['count'] += 1
+    delta = value - statistics[episode_step]['mean']
+    statistics[episode_step]['mean'] += delta / statistics[episode_step]['count']
+    delta2 = value - statistics[episode_step]['mean']
+    statistics[episode_step]['m2'] += delta * delta2
 
 
-# noinspection PyAttributeOutsideInit
-class ReconstrunctionEnv:
-    """RL environment representing the active acquisition process with reconstruction model. """
-    def __init__(self, model, data_loader, initial_mask, opts):
-        self.opts = opts
-
-        obs_shape = None
-        if opts.rl_model_type == 'spectral_maps':
-            obs_shape = (134, 128, 128)
-        if opts.rl_model_type == 'two_streams':
-            obs_shape = (4, 128, 128)
-        self.observation_space = Box(low=-50000, high=50000, shape=obs_shape)
-        factor = 2 if CONJUGATE_SYMMETRIC else 1
-        # num_actions = (IMAGE_WIDTH - factor * NUM_LINES_INITIAL) // 2
-        num_actions = opts.budget + 10
-        self.action_space = Discrete(num_actions)
-
-        self._model = model
-        self._data_loader = infinite_iterator(data_loader)
-        self._ground_truth = None
-        self._initial_mask = initial_mask.to(model.device)
-        self.kspace_map = KSpaceMap(img_width=IMAGE_WIDTH).to(device)    # Used to compute spectral maps
-        self.reset()
-
-    @staticmethod
-    def compute_masked_rfft(ground_truth, mask):
-        state = rfft(ground_truth) * mask
-        return state
-
-    @staticmethod
-    def compute_new_mask(old_mask, action):
-        new_mask = old_mask.clone().squeeze()
-        new_mask[action] = 1
-        if CONJUGATE_SYMMETRIC:
-            new_mask[IMAGE_WIDTH - action] = 1
-        return new_mask.view(1, 1, 1, -1)
-
-    @staticmethod
-    def compute_score(reconstruction, ground_truth, kind='mse'):
-        reconstruction = reconstruction[:, :1, :, :]
-        ground_truth = ground_truth[:, :1, :, :]
-        if kind == 'mse':
-            score = F.mse_loss(reconstruction, ground_truth)
-        elif kind == 'ssim':
-            score = util.ssim_metric(reconstruction, ground_truth)
-        else:
-            raise ValueError
-        return score
-
-    def _compute_observation_and_score_spectral_maps(self):
-        with torch.no_grad():
-            masked_rffts = ReconstrunctionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
-            reconstructions, _, mask_embed = self._model.netG(ifft(masked_rffts), self._current_mask)
-            spectral_maps = self.kspace_map(reconstructions[-1], self._current_mask)
-            observation = torch.cat([spectral_maps, mask_embed], dim=1)
-            score = ReconstrunctionEnv.compute_score(reconstructions[-1], self._ground_truth)
-        return observation.squeeze().cpu().numpy().astype(np.float32), score
-
-    def _compute_observation_and_score_two_streams(self):
-        with torch.no_grad():
-            masked_rffts = ReconstrunctionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
-            reconstructions, _, _ = self._model.netG(ifft(masked_rffts), self._current_mask)
-            observation = torch.cat([reconstructions[-1], masked_rffts], dim=1)
-            score = ReconstrunctionEnv.compute_score(reconstructions[-1], self._ground_truth)
-        return observation.squeeze().cpu().numpy().astype(np.float32), score
-
-    def _compute_observation_and_score(self):
-        if self.opts.rl_model_type == 'spectral_maps':
-            return self._compute_observation_and_score_spectral_maps()
-        if self.opts.rl_model_type == 'two_streams':
-            return self._compute_observation_and_score_two_streams()
-
-    def reset(self):
-        if self._ground_truth is None:
-            _, self._ground_truth = next(self._data_loader)
-            self._ground_truth = self._ground_truth.to(self._model.device)
-        self._current_mask = self._initial_mask
-        self._scans_left = self.opts.budget
-        observation, self._current_score = self._compute_observation_and_score()
-        return observation
-
-    def step(self, action):
-        assert self._scans_left > 0
-        line_to_scan = self.opts.initial_num_lines + action
-        has_already_been_scanned = bool(self._current_mask[0, 0, 0, line_to_scan].item())
-        self._current_mask = ReconstrunctionEnv.compute_new_mask(self._current_mask, line_to_scan)
-        observation, new_score = self._compute_observation_and_score()
-
-        reward = -1.0 if has_already_been_scanned else (self._current_score - new_score).item() / 0.01
-        self._current_score = new_score
-
-        self._scans_left -= 1
-        done = (self._scans_left == 0)
-
-        return observation, reward, done, {}
-
-
-def generate_initial_mask(num_lines):
-        mask = torch.zeros(1, 1, 1, IMAGE_WIDTH)
-        for i in range(num_lines):
-            mask[0, 0, 0, i] = 1
-            if CONJUGATE_SYMMETRIC:
-                mask[0, 0, 0, -(i+1)] = 1
-        return mask
-
-
-def test_policy(env, policy, writer, num_episodes, step):
+def test_policy(env, policy, writer, num_episodes, step, opts):
     average_total_reward = 0
-    for episode in range(num_episodes):
+    episode = 0
+    statistics = {}
+    import time
+    start = time.time()
+    while True:
+        episode += 1
         obs = env.reset()
+        policy.init_episode()
+        if episode == num_episodes or obs is None:
+            break
         done = False
         total_reward = 0
         actions = []
+        episode_step = 0
+        update_statisics(env.compute_score(opts.use_reconstructions), episode_step, statistics)
         while not done:
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
@@ -182,10 +50,17 @@ def test_policy(env, policy, writer, num_episodes, step):
                 next_obs = None
             total_reward += reward
             obs = next_obs
+            episode_step += 1
+            update_statisics(env.compute_score(opts.use_reconstructions), episode_step, statistics)
         average_total_reward += total_reward
         if episode == 0:
             logging.debug(actions)
-    writer.add_scalar('eval/average_reward', average_total_reward / num_episodes, step)
+        if episode % 50 == 0:
+            logging.info('Episode {}. Saving statistics'.format(episode))
+            np.save(os.path.join(opts.tb_logs_dir, 'test_stats'), statistics)
+    end = time.time()
+    logging.debug('Test run lasted {} seconds.'.format(end - start))
+    writer.add_scalar('eval/average_reward', average_total_reward / episode, step)
 
 
 def train_policy(env, policy, target_net, writer, opts):
@@ -232,27 +107,48 @@ def train_policy(env, policy, target_net, writer, opts):
             test_policy(env, policy, writer, 1, episode)
 
 
-def main(opts):
-    test_data_loader = CreateFtTLoader(opts, is_test=True)
-    model = create_model(opts)
-    model.setup(opts)
-    model.eval()
+def get_experiment_str(opts):
+    if opts.policy == 'dqn':
+        return '{}_bu{}_tupd{}_bs{}_edecay{}_gamma{}_norepl{}_seed{}_neptr{}_neptest'.format(
+            opts.rl_model_type, opts.budget, opts.target_net_update_freq,
+            opts.rl_batch_size, opts.epsilon_decay, opts.gamma, int(opts.no_replacement_policy),
+            opts.seed, opts.num_episodes, opts.num_test_episodes)
+    else:
+        return '{}_bu{}_seed{}_neptest{}'.format(opts.policy, opts.budget, opts.seed, opts.num_test_episodes)
 
+
+def main(opts):
     writer = SummaryWriter(opts.tb_logs_dir)
 
-    env = ReconstrunctionEnv(model, test_data_loader, generate_initial_mask(opts.initial_num_lines), opts)
+    env = ReconstrunctionEnv(generate_initial_mask(opts.initial_num_lines), opts)
+    env.set_training()
 
     logging.info('Created environment with {} actions'.format(env.action_space.n))
 
-    replay_memory = ReplayMemory(100000, env.observation_space.shape)
-    policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
-    target_net = DDQN(env.action_space.n, device, None, opts).to(device)
+    if opts.policy == 'random':
+        policy = RandomPolicy(range(env.action_space.n))
+        opts.use_reconstructions = False
+    elif opts.policy == 'random_r':
+        policy = RandomPolicy(range(env.action_space.n))
+        opts.use_reconstructions = True
+    elif opts.policy == 'lowfirst':
+        assert CONJUGATE_SYMMETRIC
+        policy = NextIndexPolicy(range(env.action_space.n))
+        opts.use_reconstructions = False
+    elif opts.policy == 'lowfirst_r':
+        assert CONJUGATE_SYMMETRIC
+        policy = NextIndexPolicy(range(env.action_space.n))
+        opts.use_reconstructions = True
+    elif opts.policy == 'dqn':
+        replay_memory = ReplayMemory(opts.size_replay_buffer, env.observation_space.shape)
+        policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
+        target_net = DDQN(env.action_space.n, device, None, opts).to(device)
+        train_policy(env, policy, target_net, writer, opts)
+    else:
+        raise ValueError
 
-    train_policy(env, policy, target_net, writer, opts)
-
-    print('training_done', flush=True)
-    sys.exit(0)
-    print('exited', flush=True)
+    env.set_testing()
+    test_policy(env, policy, writer, None, 0, opts)
 
 
 if __name__ == '__main__':
@@ -265,12 +161,8 @@ if __name__ == '__main__':
     np.random.seed(opts.seed)
     torch.manual_seed(opts.seed)
 
-    experiment_str = '{}_bu{}_tupd{}_bs{}_edecay{}_gamma{}_norepl{}_seed{}_nep{}'.format(
-        opts.rl_model_type, opts.budget, opts.target_net_update_freq,
-        opts.rl_batch_size, opts.epsilon_decay, opts.gamma, int(opts.no_replacement_policy),
-        opts.seed, opts.num_episodes
-    )
-    opts.tb_logs_dir = os.path.join(opts.results_dir, 'dqn', experiment_str)
+    experiment_str = get_experiment_str(opts)
+    opts.tb_logs_dir = os.path.join(opts.results_dir, opts.rl_logs_subdir, experiment_str)
     if not os.path.isdir(opts.tb_logs_dir):
         os.makedirs(opts.tb_logs_dir)
 
