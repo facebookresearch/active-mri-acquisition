@@ -54,7 +54,7 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         average_total_reward += total_reward
         if episode == 0:
             logging.debug(actions)
-        if episode % 100 == 0:
+        if episode % opts.freq_save_test_stats == 0:
             logging.info('Episode {}. Saving statistics'.format(episode))
             np.save(os.path.join(opts.tb_logs_dir, 'test_stats_{}'.format(episode)), statistics)
     end = time.time()
@@ -103,7 +103,7 @@ def train_policy(env, policy, target_net, writer, opts):
 
         # Evaluate the current policy
         if (episode + 1) % opts.agent_test_episode_freq == 0:
-            test_policy(env, policy, writer, 1, episode)
+            test_policy(env, policy, writer, 1, episode, opts)
 
 
 def get_experiment_str(opts):

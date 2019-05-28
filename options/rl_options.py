@@ -5,6 +5,7 @@ class RLOptions(BaseOptions):
     def initialize(self, parser):
         parser.add_argument('--rl_logs_subdir', type=str, default='debug',
                             help='sub-directory of opts.results_dir to store results of RL runs.')
+        parser.add_argument('--freq_save_test_stats', type=int, default=500)
 
         # Options for the reconstruction model
         parser = BaseOptions.initialize(self, parser)

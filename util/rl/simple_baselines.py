@@ -50,7 +50,7 @@ class GreedyMC:
         self._valid_actions = list(self.actions)
         self.samples = samples
         self.use_ground_truth = use_ground_truth
-        self.horizon = horizon
+        self.horizon = min(horizon, self.env.opts.budget)
         self.policy = []
         self.actions_used = []
 
@@ -66,20 +66,20 @@ class GreedyMC:
     def compute_policy_for_horizon(self, obs):
         self._valid_actions = [x for x in self._valid_actions if x not in self.actions_used]
         self.actions_used = []
-        obs_tensor = torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
+        original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
+            else torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
         policy_indices = None
         best_mse = np.inf
         for _ in range(self.samples):
             indices = np.random.choice(len(self._valid_actions),
                                        min(len(self._valid_actions), self.horizon),
                                        replace=False)
-            mask = self.env._current_mask
+            new_mask = self.env._current_mask
             for index in indices:
                 line_to_scan = self.env.opts.initial_num_lines + self._valid_actions[index]
-                mask = self.env.compute_new_mask(mask, line_to_scan)
-            target = ifft(rfft(self.env._ground_truth) * mask) if self.use_ground_truth \
-                else ifft(rfft(obs_tensor) * mask)
-            mse = F.mse_loss(obs_tensor[0, 0], target[0, 0])
+                new_mask = self.env.compute_new_mask(new_mask, line_to_scan)
+            new_obs_tensor = ifft(rfft(original_obs_tensor) * new_mask)
+            mse = F.mse_loss(original_obs_tensor[0, 0], new_obs_tensor[0, 0])
             if mse < best_mse:
                 best_mse = mse
                 policy_indices = indices
