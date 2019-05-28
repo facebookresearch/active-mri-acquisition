@@ -161,17 +161,17 @@ class ReconstrunctionEnv:
         if self.opts.sequential_images:
             if self.is_testing:
                 if self.image_idx_test == min(self.opts.num_test_episodes, len(self._dataset_test)):
-                    return None
+                    return None     # Returns None to signal that testing is done
                 _, self._ground_truth = self._dataset_test.__getitem__(self._test_order[self.image_idx_test])
                 self.image_idx_test += 1
             else:
-                if self.image_idx_train == len(self._dataset_train):
-                    return None
                 _, self._ground_truth = self._dataset_train.__getitem__(self._train_order[self.image_idx_train])
-                self.image_idx_train += 1
+                self.image_idx_train = (self.image_idx_train + 1) % self.opts.num_train_images
         else:
             dataset_to_check = self._dataset_test if self.is_testing else self._dataset_train
-            _, self._ground_truth = self._dataset_train.__getitem__(np.random.choice(len(dataset_to_check)))
+            max_num_images = self.opts.num_test_episodes if self.is_testing else self.opts.num_train_images
+            dataset_len = min(len(dataset_to_check), max_num_images)
+            _, self._ground_truth = self._dataset_train.__getitem__(np.random.choice(dataset_len))
         self._ground_truth = self._ground_truth.to(self._model.device).unsqueeze(0)
         self._current_mask = self._initial_mask
         self._scans_left = min(self.opts.budget, self.action_space.n)
