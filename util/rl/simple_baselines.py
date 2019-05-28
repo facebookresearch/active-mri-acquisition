@@ -52,17 +52,20 @@ class GreedyMC:
         self.use_ground_truth = use_ground_truth
         self.horizon = horizon
         self.policy = []
+        self.actions_used = []
 
     def get_action(self, obs, _, __):
         if len(self.policy) == 0:
             self.compute_policy_for_horizon(obs)
         action_index = self.policy[0]
         action = self._valid_actions[action_index]
-        del self._valid_actions[action_index]
+        self.actions_used.append(action)
         del self.policy[0]
         return action
 
     def compute_policy_for_horizon(self, obs):
+        self._valid_actions = [x for x in self._valid_actions if x not in self.actions_used]
+        self.actions_used = []
         obs_tensor = torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
         policy_indices = None
         best_mse = np.inf
@@ -85,3 +88,4 @@ class GreedyMC:
     def init_episode(self):
         self._valid_actions = list(self.actions)
         self.policy = []
+        self.actions_used = []
