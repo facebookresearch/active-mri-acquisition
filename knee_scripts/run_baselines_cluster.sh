@@ -9,7 +9,8 @@ mkdir -p ${LOGS_DIR}/stderr
 
 queue=dev
 
-for policy in "random" "random_r" "lowfirst" "lowfirst_r"; do
+# for policy in "random" "random_r" "lowfirst" "lowfirst_r" "greedymc"; do
+for policy in "greedymc" "greedymc_gt"; do
     job_name=active_acq_baselines_${policy}
 
     # This creates a slurm script to call training
@@ -27,14 +28,14 @@ for policy in "random" "random_r" "lowfirst" "lowfirst_r"; do
     # echo "#SBATCH --comment=\"NeurIPS deadline 05/23\"" >> ${SLURM}
     echo "#SBATCH --nodes=1" >> ${SLURM}
 
-    echo "/private/home/lep/code/Active_Acquisition" >> ${SLURM}
+    echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
 
-    echo srun python python acquire_rl.py --dataroot KNEE \
+    echo srun python acquire_rl.py --dataroot KNEE \
         --name knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_run2 --model ft_pasgan \
         --checkpoints_dir /checkpoint/lep/active_acq --batchSize 96 --which_model_netG pasnetplus --gpu_ids 0 \
-        --budget 10 --policy ${policy} --sequential_images --budget 1000 --num_test_episodes 200000 \
-        --rl_logs_subdir all_baselines --seed 0
+        --policy ${policy} --sequential_images --budget 1000 --num_test_episodes 200000 \
+        --rl_logs_subdir all_baselines --seed 0 \
+        --greedymc_num_samples 10 --greedymc_horizon 5 >> ${SLURM}
 
     sbatch ${SLURM}
-done
 done

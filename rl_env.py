@@ -30,8 +30,6 @@ class KSpaceMap(nn.Module):
     def __init__(self, img_width=128):
         super(KSpaceMap, self).__init__()
 
-        self.RFFT = RFFT()
-        self.IFFT = IFFT()
         self.img_width = img_width
         self.register_buffer('separated_masks', torch.FloatTensor(1, img_width, 1, 1, img_width))
         self.separated_masks.fill_(0)
@@ -41,7 +39,7 @@ class KSpaceMap(nn.Module):
     def forward(self, input, mask):
         batch_size, _, img_height, img_width = input.shape
         assert img_width == self.img_width
-        k_space = self.RFFT(input[:, :1, :, :])  # Take only real part
+        k_space = rfft(input[:, :1, :, :])  # Take only real part
 
         # This code creates w channels, where the i-th channel is a copy of k_space
         # with everything but the i-th column masked out
@@ -50,7 +48,7 @@ class KSpaceMap(nn.Module):
         masked_kspace = masked_kspace.view(batch_size * img_width, 2, img_height, img_width)
 
         # The imaginary part is discarded
-        return self.IFFT(masked_kspace)[:, 0, :, :].view(batch_size, img_width, img_height, img_width)
+        return ifft(masked_kspace)[:, 0, :, :].view(batch_size, img_width, img_height, img_width)
 
 
 # noinspection PyAttributeOutsideInit

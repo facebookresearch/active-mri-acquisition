@@ -25,7 +25,8 @@ class RLOptions(BaseOptions):
         parser.set_defaults(loadSize=parser.get_default('fineSize'))
 
         # Reinforcement learning options
-        parser.add_argument('--policy', choices=['dqn', 'random', 'random_r', 'lowfirst', 'lowfirst_r'],
+        parser.add_argument('--policy', choices=['dqn', 'random', 'random_r',
+                                                 'lowfirst', 'lowfirst_r', 'greedymc', 'greedymc_gt'],
                             default='random')
         parser.add_argument('--initial_num_lines', type=int, default=10)
         parser.add_argument('--budget', type=int, default=5)
@@ -43,6 +44,8 @@ class RLOptions(BaseOptions):
         parser.add_argument('--debug', dest='debug', action='store_true')
         parser.add_argument('--no_replacement_policy', dest='no_replacement_policy', action='store_true')
         parser.add_argument('--seed', type=int, default=0)
+        parser.add_argument('--greedymc_num_samples', type=int, default=10)
+        parser.add_argument('--greedymc_horizon', type=int, default=1)
 
         self.isTrain = False
         return parser

@@ -1,4 +1,3 @@
-import copy
 import logging
 import numpy as np
 import os
@@ -9,7 +8,7 @@ import torch
 from options.rl_options import RLOptions
 from tensorboardX import SummaryWriter
 from util.rl.dqn import DDQN, get_epsilon
-from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy
+from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy, GreedyMC
 from util.rl.replay_buffer import ReplayMemory
 
 from rl_env import ReconstrunctionEnv, device, generate_initial_mask, CONJUGATE_SYMMETRIC
@@ -55,9 +54,9 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         average_total_reward += total_reward
         if episode == 0:
             logging.debug(actions)
-        if episode % 50 == 0:
+        if episode % 100 == 0:
             logging.info('Episode {}. Saving statistics'.format(episode))
-            np.save(os.path.join(opts.tb_logs_dir, 'test_stats'), statistics)
+            np.save(os.path.join(opts.tb_logs_dir, 'test_stats_{}'.format(episode)), statistics)
     end = time.time()
     logging.debug('Test run lasted {} seconds.'.format(end - start))
     writer.add_scalar('eval/average_reward', average_total_reward / episode, step)
@@ -109,12 +108,14 @@ def train_policy(env, policy, target_net, writer, opts):
 
 def get_experiment_str(opts):
     if opts.policy == 'dqn':
-        return '{}_bu{}_tupd{}_bs{}_edecay{}_gamma{}_norepl{}_seed{}_neptr{}_neptest'.format(
-            opts.rl_model_type, opts.budget, opts.target_net_update_freq,
-            opts.rl_batch_size, opts.epsilon_decay, opts.gamma, int(opts.no_replacement_policy),
-            opts.seed, opts.num_episodes, opts.num_test_episodes)
+        policy_str = '{}.bu{}.tupd{}.bs{}.edecay{}.gamma{}.norepl{}.npetr{}_'.format(
+            opts.rl_model_type, opts.budget, opts.target_net_update_freq, opts.rl_batch_size, opts.epsilon_decay,
+            opts.gamma, int(opts.no_replacement_policy), opts.num_episodes)
     else:
-        return '{}_bu{}_seed{}_neptest{}'.format(opts.policy, opts.budget, opts.seed, opts.num_test_episodes)
+        policy_str = opts.policy
+        if 'greedymc' in opts.policy:
+            policy_str = '{}.nsam{}.hor{}_'.format(policy_str, opts.greedymc_num_samples, opts.greedymc_horizon)
+    return '{}_bu{}_seed{}_neptest{}'.format(policy_str, opts.budget, opts.seed, opts.num_test_episodes)
 
 
 def main(opts):
@@ -138,6 +139,12 @@ def main(opts):
     elif opts.policy == 'lowfirst_r':
         assert CONJUGATE_SYMMETRIC
         policy = NextIndexPolicy(range(env.action_space.n))
+        opts.use_reconstructions = True
+    elif opts.policy == 'greedymc':
+        policy = GreedyMC(env, samples=opts.greedymc_num_samples, horizon=opts.greedymc_horizon)
+        opts.use_reconstructions = True
+    elif opts.policy == 'greedymc_gt':
+        policy = GreedyMC(env, samples=opts.greedymc_num_samples, horizon=opts.greedymc_horizon, use_ground_truth=True)
         opts.use_reconstructions = True
     elif opts.policy == 'dqn':
         replay_memory = ReplayMemory(opts.size_replay_buffer, env.observation_space.shape)
