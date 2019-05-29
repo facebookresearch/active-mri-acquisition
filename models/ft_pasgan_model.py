@@ -26,10 +26,10 @@ class kspaceMap(nn.Module):
         self.IFFT = IFFT()
         self.imSize = imSize
         # seperate image to spectral maps
-        self.register_buffer('seperate_mask', torch.FloatTensor(1,imSize,1,imSize,1))
+        self.register_buffer('seperate_mask', torch.FloatTensor(1,imSize,1,1,imSize))
         self.seperate_mask.fill_(0)
         for i in range(imSize):
-            self.seperate_mask[0,i,0,i,0] = 1
+            self.seperate_mask[0,i,0,0,i] = 1
 
         self.no_embed = no_embed
         if not no_embed:

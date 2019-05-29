@@ -8,7 +8,7 @@ import torch
 from options.rl_options import RLOptions
 from tensorboardX import SummaryWriter
 from util.rl.dqn import DDQN, get_epsilon
-from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy, GreedyMC, FullGreedyOneStep
+from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy, GreedyMC, FullGreedyOneStep, EvaluatorNetwork
 from util.rl.replay_buffer import ReplayMemory
 
 from rl_env import ReconstrunctionEnv, device, generate_initial_mask, CONJUGATE_SYMMETRIC
@@ -145,6 +145,8 @@ def get_policy(env, writer, opts):
         policy = FullGreedyOneStep(env,
                                    use_ground_truth='_gt_' in opts.policy,
                                    use_reconstructions=opts.use_reconstructions)
+    elif 'evaluator_net' in opts.policy:
+        policy = EvaluatorNetwork(env)
     elif opts.policy == 'dqn':
         replay_memory = ReplayMemory(opts.replay_buffer_size, env.observation_space.shape)
         policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)

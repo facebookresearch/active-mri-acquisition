@@ -1,8 +1,7 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
 
-from rl_env import rfft, ifft, device
+from rl_env import device
 
 
 class RandomPolicy:
@@ -139,3 +138,14 @@ class FullGreedyOneStep:
 
     def init_episode(self):
         self._valid_actions = list(self.actions)
+
+
+class EvaluatorNetwork:
+    def __init__(self, env):
+        self.env = env
+
+    def get_action(self, *_):
+        return self.env.get_evaluator_action()
+
+    def init_episode(self):
+        pass

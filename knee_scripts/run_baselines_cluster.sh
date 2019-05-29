@@ -11,7 +11,7 @@ queue=dev
 
 #for policy in "greedyfull1_r" "greedyfull1_gt_r" "random_r" "lowfirst_r"; do
 #for policy in "greedyfull1" "greedyfull1_gt" "random" "lowfirst"; do
-for policy in "greedyfull1" "greedyfull1_gt" "greedyfull1_r" "greedyfull1_gt_r"; do
+for policy in "evaluator_net" "evaluator_net_r"; do
     job_name=active_acq_baselines_${policy}
 
     # This creates a slurm script to call training

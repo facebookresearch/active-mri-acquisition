@@ -54,7 +54,7 @@ class KSpaceMap(nn.Module):
 
 # noinspection PyAttributeOutsideInit
 class ReconstrunctionEnv:
-    """RL environment representing the active acquisition process with reconstruction model. """
+    """ RL environment representing the active acquisition process with reconstruction model. """
     def __init__(self, initial_mask, opts):
         self.opts = opts
         train_loader, valid_loader = CreateFtTLoader(opts, is_test=False)
@@ -102,15 +102,6 @@ class ReconstrunctionEnv:
         state = rfft(ground_truth) * mask
         return state
 
-    def compute_new_mask(self, old_mask, action):
-        line_to_scan = self.opts.initial_num_lines + action
-        new_mask = old_mask.clone().squeeze()
-        had_arlready_been_scanned = bool(new_mask[line_to_scan])
-        new_mask[line_to_scan] = 1
-        if CONJUGATE_SYMMETRIC:
-            new_mask[IMAGE_WIDTH - line_to_scan - 1] = 1
-        return new_mask.view(1, 1, 1, -1), had_arlready_been_scanned
-
     @staticmethod
     def _compute_score(reconstruction, ground_truth, kind='mse'):
         reconstruction = reconstruction[:, :1, :, :]
@@ -122,6 +113,20 @@ class ReconstrunctionEnv:
         else:
             raise ValueError
         return score
+
+    def compute_new_mask(self, old_mask, action):
+        """ Computes a new mask by adding the action to the given old mask.
+
+            Note that action is relative to the set of valid k-space lines that can be scanned. That is, action = 0
+            represents the lowest index of k-space lines that are not part of the initial mask.
+        """
+        line_to_scan = self.opts.initial_num_lines + action
+        new_mask = old_mask.clone().squeeze()
+        had_arlready_been_scanned = bool(new_mask[line_to_scan])
+        new_mask[line_to_scan] = 1
+        if CONJUGATE_SYMMETRIC:
+            new_mask[IMAGE_WIDTH - line_to_scan - 1] = 1
+        return new_mask.view(1, 1, 1, -1), had_arlready_been_scanned
 
     def compute_score(self, use_reconstruction=True, kind='mse', ground_truth=None, mask_to_use=None):
         """ Computes the score (MSE or SSIM) of the current state with respect to the current ground truth.
@@ -174,6 +179,13 @@ class ReconstrunctionEnv:
             return self._compute_observation_and_score_two_streams()
 
     def reset(self):
+        """ Loads a new image from the dataset and starts a new episode with this image.
+
+            If [[self.opts.sequential_images]] is True, it loops over images in the dataset in order. Otherwise,
+            it selects a random image from the first [[self.num_{train/test}_images]] in the dataset. The dataset
+            is ordered according to [[self._{train/test}_order]].
+
+        """
         if self.opts.sequential_images:
             if self.is_testing:
                 if self.image_idx_test == min(self.opts.num_test_images, len(self._dataset_test)):
@@ -200,6 +212,9 @@ class ReconstrunctionEnv:
         return observation
 
     def step(self, action):
+        """ Adds a new line (specified by the action) to the current mask and computes the resulting observation and
+            reward (drop in MSE after reconstructing with respect to the current ground truth).
+        """
         assert self._scans_left > 0
         self._current_mask, has_already_been_scanned = self.compute_new_mask(self._current_mask, action)
         observation, new_score = self._compute_observation_and_score()
@@ -213,12 +228,14 @@ class ReconstrunctionEnv:
         return observation, reward, done, {}
 
     def get_evaluator_action(self):
+        """ Returns the action recommended by the evaluator network of [[self._model]]. """
         with torch.no_grad():
-            masked_rffts = ReconstrunctionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
-            reconstructions, _, _ = self._model.netG(ifft(masked_rffts), self._current_mask)
-            observation = torch.cat([reconstructions[-1], masked_rffts], dim=1)
-            score = ReconstrunctionEnv._compute_score(reconstructions[-1], self._ground_truth)
-        return observation.squeeze().cpu().numpy().astype(np.float32), score
+            self._model.set_input_exp(self._ground_truth, self._current_mask)
+            self._model.forward()
+            evaluator_input = self._model.create_D_input(self._model.fake_B)
+            kspace_scores = self._model.netD(evaluator_input, self._current_mask)
+            kspace_scores.masked_fill_(self._current_mask.squeeze().byte(), 100000)
+            return torch.argmin(kspace_scores).item() - NUM_LINES_INITIAL
 
 
 def generate_initial_mask(num_lines):
