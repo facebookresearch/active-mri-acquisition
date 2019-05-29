@@ -83,6 +83,8 @@ class DDQN(nn.Module):
         super(DDQN, self).__init__()
         self.model = get_model(num_actions, opts.rl_model_type)
 
+        raise NotImplementedError
+        # TODO start by changing this data loader
         if memory is not None:
             self._data_loader = infinite_iterator(DataLoader(memory, batch_size=opts.rl_batch_size, num_workers=8))
             self.optimizer = optim.Adam(self.parameters(), lr=6.25e-5)
@@ -163,3 +165,6 @@ class DDQN(nn.Module):
         self.optimizer.step()
 
         return loss, grad_norm, all_q_values.detach().mean().cpu().numpy(), all_q_values.detach().std().cpu().numpy()
+
+    def init_episode(self):
+        pass

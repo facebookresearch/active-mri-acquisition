@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import torch
 import torch.nn as nn
@@ -80,6 +81,7 @@ class ReconstrunctionEnv:
         self._initial_mask = initial_mask.to(model.device)
         self.k_space_map = KSpaceMap(img_width=IMAGE_WIDTH).to(device)    # Used to compute spectral maps
 
+        # These two store a shuffling of the datasets
         self._test_order = np.load('data/rl_test_order.npy')
         self._train_order = np.load('data/rl_train_order.npy')
         self.image_idx_test = 0
@@ -100,13 +102,14 @@ class ReconstrunctionEnv:
         state = rfft(ground_truth) * mask
         return state
 
-    @staticmethod
-    def compute_new_mask(old_mask, line_to_scan):
+    def compute_new_mask(self, old_mask, action):
+        line_to_scan = self.opts.initial_num_lines + action
         new_mask = old_mask.clone().squeeze()
+        had_arlready_been_scanned = bool(new_mask[line_to_scan])
         new_mask[line_to_scan] = 1
         if CONJUGATE_SYMMETRIC:
             new_mask[IMAGE_WIDTH - line_to_scan - 1] = 1
-        return new_mask.view(1, 1, 1, -1)
+        return new_mask.view(1, 1, 1, -1), had_arlready_been_scanned
 
     @staticmethod
     def _compute_score(reconstruction, ground_truth, kind='mse'):
@@ -163,15 +166,20 @@ class ReconstrunctionEnv:
                 if self.image_idx_test == min(self.opts.num_test_episodes, len(self._dataset_test)):
                     return None     # Returns None to signal that testing is done
                 _, self._ground_truth = self._dataset_test.__getitem__(self._test_order[self.image_idx_test])
+                logging.debug('Testing episode started with image {}'.format(self._test_order[self.image_idx_test]))
                 self.image_idx_test += 1
             else:
                 _, self._ground_truth = self._dataset_train.__getitem__(self._train_order[self.image_idx_train])
+                logging.debug('Training episode started with image {}'.format(self._train_order[self.image_idx_train]))
                 self.image_idx_train = (self.image_idx_train + 1) % self.opts.num_train_images
         else:
             dataset_to_check = self._dataset_test if self.is_testing else self._dataset_train
             max_num_images = self.opts.num_test_episodes if self.is_testing else self.opts.num_train_images
             dataset_len = min(len(dataset_to_check), max_num_images)
-            _, self._ground_truth = self._dataset_train.__getitem__(np.random.choice(dataset_len))
+            index_chosen_image = np.random.choice(dataset_len)
+            logging.debug('{} episode started with randomly chosen image {}/{}'.format(
+                'Testing' if self.is_testing else 'Training', index_chosen_image, dataset_len))
+            _, self._ground_truth = self._dataset_train.__getitem__(index_chosen_image)
         self._ground_truth = self._ground_truth.to(self._model.device).unsqueeze(0)
         self._current_mask = self._initial_mask
         self._scans_left = min(self.opts.budget, self.action_space.n)
@@ -180,9 +188,7 @@ class ReconstrunctionEnv:
 
     def step(self, action):
         assert self._scans_left > 0
-        line_to_scan = self.opts.initial_num_lines + action
-        has_already_been_scanned = bool(self._current_mask[0, 0, 0, line_to_scan].item())
-        self._current_mask = ReconstrunctionEnv.compute_new_mask(self._current_mask, line_to_scan)
+        self._current_mask, has_already_been_scanned = self.compute_new_mask(self._current_mask, action)
         observation, new_score = self._compute_observation_and_score()
 
         reward = -1.0 if has_already_been_scanned else (self._current_score - new_score).item() / 0.01

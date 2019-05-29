@@ -8,7 +8,7 @@ import torch
 from options.rl_options import RLOptions
 from tensorboardX import SummaryWriter
 from util.rl.dqn import DDQN, get_epsilon
-from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy, GreedyMC
+from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy, GreedyMC, FullGreedyOneStep
 from util.rl.replay_buffer import ReplayMemory
 
 from rl_env import ReconstrunctionEnv, device, generate_initial_mask, CONJUGATE_SYMMETRIC
@@ -27,7 +27,8 @@ def update_statisics(value, episode_step, statistics):
 def test_policy(env, policy, writer, num_episodes, step, opts):
     average_total_reward = 0
     episode = 0
-    statistics = {}
+    statistics_mse = {}
+    statistics_ssim = {}
     import time
     start = time.time()
     while True:
@@ -40,7 +41,8 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         total_reward = 0
         actions = []
         episode_step = 0
-        update_statisics(env.compute_score(opts.use_reconstructions), episode_step, statistics)
+        update_statisics(env.compute_score(opts.use_reconstructions, kind='mse'), episode_step, statistics_mse)
+        update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim'), episode_step, statistics_ssim)
         while not done:
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
@@ -50,13 +52,15 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
             total_reward += reward
             obs = next_obs
             episode_step += 1
-            update_statisics(env.compute_score(opts.use_reconstructions), episode_step, statistics)
+            update_statisics(env.compute_score(opts.use_reconstructions, kind='mse'), episode_step, statistics_mse)
+            update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim'), episode_step, statistics_ssim)
         average_total_reward += total_reward
         if episode == 0:
             logging.debug(actions)
         if episode % opts.freq_save_test_stats == 0:
-            logging.info('Episode {}. Saving statistics'.format(episode))
-            np.save(os.path.join(opts.tb_logs_dir, 'test_stats_{}'.format(episode)), statistics)
+            logging.info('Episode {}. Saving statistics.'.format(episode))
+            np.save(os.path.join(opts.tb_logs_dir, 'test_stats_mse_{}'.format(episode)), statistics_mse)
+            np.save(os.path.join(opts.tb_logs_dir, 'test_stats_ssim_{}'.format(episode)), statistics_ssim)
     end = time.time()
     logging.debug('Test run lasted {} seconds.'.format(end - start))
     writer.add_scalar('eval/average_reward', average_total_reward / episode, step)
@@ -64,7 +68,7 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
 
 def train_policy(env, policy, target_net, writer, opts):
     steps = 0
-    for episode in range(opts.num_episodes):
+    for episode in range(opts.num_train_episodes):
         logging.info('Episode {}'.format(episode))
         obs = env.reset()
         done = False
@@ -110,7 +114,7 @@ def get_experiment_str(opts):
     if opts.policy == 'dqn':
         policy_str = '{}.bu{}.tupd{}.bs{}.edecay{}.gamma{}.norepl{}.npetr{}_'.format(
             opts.rl_model_type, opts.budget, opts.target_net_update_freq, opts.rl_batch_size, opts.epsilon_decay,
-            opts.gamma, int(opts.no_replacement_policy), opts.num_episodes)
+            opts.gamma, int(opts.no_replacement_policy), opts.num_train_episodes)
     else:
         policy_str = opts.policy
         if 'greedymc' in opts.policy:
@@ -118,14 +122,7 @@ def get_experiment_str(opts):
     return '{}_bu{}_seed{}_neptest{}'.format(policy_str, opts.budget, opts.seed, opts.num_test_episodes)
 
 
-def main(opts):
-    writer = SummaryWriter(opts.tb_logs_dir)
-
-    env = ReconstrunctionEnv(generate_initial_mask(opts.initial_num_lines), opts)
-    env.set_training()
-
-    logging.info('Created environment with {} actions'.format(env.action_space.n))
-
+def get_policy(env, writer, opts):
     if opts.policy == 'random':
         policy = RandomPolicy(range(env.action_space.n))
         opts.use_reconstructions = False
@@ -146,14 +143,29 @@ def main(opts):
     elif opts.policy == 'greedymc_gt':
         policy = GreedyMC(env, samples=opts.greedymc_num_samples, horizon=opts.greedymc_horizon, use_ground_truth=True)
         opts.use_reconstructions = True
+    elif opts.policy == 'greedyfull1':
+        policy = FullGreedyOneStep(env)
+        opts.use_reconstructions = True
+    elif opts.policy == 'greedyfull1_gt':
+        policy = FullGreedyOneStep(env, use_ground_truth=True)
+        opts.use_reconstructions = True
     elif opts.policy == 'dqn':
-        replay_memory = ReplayMemory(opts.size_replay_buffer, env.observation_space.shape)
+        replay_memory = ReplayMemory(opts.replay_buffer_size, env.observation_space.shape)
         policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
         target_net = DDQN(env.action_space.n, device, None, opts).to(device)
         train_policy(env, policy, target_net, writer, opts)
     else:
         raise ValueError
 
+    return policy
+
+
+def main(opts):
+    writer = SummaryWriter(opts.tb_logs_dir)
+    env = ReconstrunctionEnv(generate_initial_mask(opts.initial_num_lines), opts)
+    env.set_training()
+    logging.info('Created environment with {} actions'.format(env.action_space.n))
+    policy = get_policy(env, writer, opts)
     env.set_testing()
     test_policy(env, policy, writer, None, 0, opts)
 

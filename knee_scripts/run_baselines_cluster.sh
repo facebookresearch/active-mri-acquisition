@@ -11,7 +11,7 @@ queue=dev
 
 # for policy in "random" "random_r" "lowfirst" "lowfirst_r" "greedymc"; do
 # for policy in "greedymc" "greedymc_gt"; do
-for policy in "greedymc" "greedymc_gt"; do
+for policy in "greedyfull1" "greedyfull1_gt"; do
     job_name=active_acq_baselines_${policy}
 
     # This creates a slurm script to call training
@@ -36,7 +36,7 @@ for policy in "greedymc" "greedymc_gt"; do
         --checkpoints_dir /checkpoint/lep/active_acq --batchSize 96 --which_model_netG pasnetplus --gpu_ids 0 \
         --policy ${policy} --sequential_images --budget 1000 --num_test_episodes 200000 \
         --rl_logs_subdir all_baselines --seed 0 \
-        --greedymc_num_samples 100 --greedymc_horizon 100 >> ${SLURM}
+        --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
 
     sbatch ${SLURM}
 done

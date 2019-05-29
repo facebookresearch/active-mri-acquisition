@@ -42,7 +42,9 @@ class GreedyMC:
     """ This policy takes the current reconstruction as if it was "ground truth",
         and attempts to find the set of actions that decreases MSE the most with respected to the masked
         reconstruction. The policy executes the set of actions, and recomputes it after all actions in the set
-        have been executed.
+        have been executed. The set of actions are searched using Monte Carlo sampling.
+
+        If [[use_ground_truth]] is True, the actual true image is used (rather than the reconstruction).
     """
     def __init__(self, env, samples=10, horizon=1, use_ground_truth=False):
         self.env = env
@@ -70,14 +72,14 @@ class GreedyMC:
             else torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
         policy_indices = None
         best_mse = np.inf
+        # This is wasteful because samples can be repeated, particularly when the horizon is short.
         for _ in range(self.samples):
             indices = np.random.choice(len(self._valid_actions),
                                        min(len(self._valid_actions), self.horizon),
                                        replace=False)
             new_mask = self.env._current_mask
             for index in indices:
-                line_to_scan = self.env.opts.initial_num_lines + self._valid_actions[index]
-                new_mask = self.env.compute_new_mask(new_mask, line_to_scan)
+                new_mask = self.env.compute_new_mask(new_mask, self._valid_actions[index])[0]
             new_obs_tensor = ifft(rfft(original_obs_tensor) * new_mask)
             mse = F.mse_loss(original_obs_tensor[0, 0], new_obs_tensor[0, 0])
             if mse < best_mse:
@@ -89,3 +91,39 @@ class GreedyMC:
         self._valid_actions = list(self.actions)
         self.policy = []
         self.actions_used = []
+
+
+# noinspection PyProtectedMember
+class FullGreedyOneStep:
+    """ This policy takes the current reconstruction as if it was "ground truth",
+        and attempts to find the single action that decreases MSE the most with respected to the masked
+        reconstruction. It uses exhaustive search of actions rather than Monte Carlo sampling.
+
+        If [[use_ground_truth]] is True, the actual true image is used (rather than the reconstruction).
+    """
+    def __init__(self, env, use_ground_truth=False):
+        self.env = env
+        self.actions = list(range(env.action_space.n))
+        self._valid_actions = list(self.actions)
+        self.use_ground_truth = use_ground_truth
+        self.policy = []
+        self.actions_used = []
+
+    def get_action(self, obs, _, __):
+        original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
+            else torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
+        best_action_index = None
+        best_mse = np.inf
+        for idx_action, action in enumerate(self._valid_actions):
+            new_mask = self.env.compute_new_mask(self.env._current_mask, action)[0]
+            new_obs_tensor = ifft(rfft(original_obs_tensor) * new_mask)
+            mse = F.mse_loss(original_obs_tensor[0, 0], new_obs_tensor[0, 0])
+            if mse < best_mse:
+                best_mse = mse
+                best_action_index = idx_action
+        action = self._valid_actions[best_action_index]
+        del self._valid_actions[best_action_index]
+        return action
+
+    def init_episode(self):
+        self._valid_actions = list(self.actions)
