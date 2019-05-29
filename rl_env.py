@@ -212,6 +212,14 @@ class ReconstrunctionEnv:
 
         return observation, reward, done, {}
 
+    def get_evaluator_action(self):
+        with torch.no_grad():
+            masked_rffts = ReconstrunctionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
+            reconstructions, _, _ = self._model.netG(ifft(masked_rffts), self._current_mask)
+            observation = torch.cat([reconstructions[-1], masked_rffts], dim=1)
+            score = ReconstrunctionEnv._compute_score(reconstructions[-1], self._ground_truth)
+        return observation.squeeze().cpu().numpy().astype(np.float32), score
+
 
 def generate_initial_mask(num_lines):
         mask = torch.zeros(1, 1, 1, IMAGE_WIDTH)

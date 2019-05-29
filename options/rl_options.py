@@ -22,9 +22,10 @@ class RLOptions(BaseOptions):
         parser.set_defaults(loadSize=parser.get_default('fineSize'))
 
         # General options for all active acquisition algorithms
-        parser.add_argument('--policy', choices=['dqn', 'random', 'random_r',
+        parser.add_argument('--policy', choices=['dqn',
+                                                 'random', 'random_r',
                                                  'lowfirst', 'lowfirst_r',
-                                                 'greedymc', 'greedymc_gt', 'greedymc_r', 'greedymc_gt_r' 
+                                                 'greedymc', 'greedymc_gt', 'greedymc_r', 'greedymc_gt_r',
                                                  'greedyfull1', 'greedyfull1_gt', 'greedyfull1_r', 'greedyfull1_gt_r'],
                             default='random')
         parser.add_argument('--initial_num_lines', type=int, default=10)

@@ -129,6 +129,7 @@ def get_experiment_str(opts):
 def get_policy(env, writer, opts):
     # Not a great policy specification protocol, but works for now.
     opts.use_reconstructions = (opts.policy[-2:] == '_r')
+    logging.info('Use reconstructions is'.format(opts.use_reconstructions))
     if 'random' in opts.policy:
         policy = RandomPolicy(range(env.action_space.n))
     elif 'lowfirst' in opts.policy:

@@ -74,7 +74,7 @@ class GreedyMC:
         policy_indices = None
         best_score = np.inf
         # This is wasteful because samples can be repeated, particularly when the horizon is short.
-        # Also, this is not batched for [[compute_score]] so it's slow.
+        # Also, this is not batched for [[compute_score]] so it's even slower.
         for _ in range(self.samples):
             indices = np.random.choice(len(self._valid_actions),
                                        min(len(self._valid_actions), self.horizon),
@@ -132,7 +132,7 @@ class FullGreedyOneStep:
                                             mask_to_use=masks_to_try)
             all_scores.extend(scores)
 
-        best_action_index = max(range(len(all_masks)), key=lambda x: scores[x])
+        best_action_index = min(range(len(all_masks)), key=lambda x: scores[x])
         action = self._valid_actions[best_action_index]
         del self._valid_actions[best_action_index]
         return action
