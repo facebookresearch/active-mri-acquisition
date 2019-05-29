@@ -46,7 +46,7 @@ class GreedyMC:
 
         If [[use_ground_truth]] is True, the actual true image is used (rather than the reconstruction).
     """
-    def __init__(self, env, samples=10, horizon=1, use_ground_truth=False):
+    def __init__(self, env, samples=10, horizon=1, use_ground_truth=False, use_reconstructions=True):
         self.env = env
         self.actions = list(range(env.action_space.n))
         self._valid_actions = list(self.actions)
@@ -55,6 +55,7 @@ class GreedyMC:
         self.horizon = min(horizon, self.env.opts.budget)
         self.policy = []
         self.actions_used = []
+        self.use_reconstructions = use_reconstructions
 
     def get_action(self, obs, _, __):
         if len(self.policy) == 0:
@@ -71,7 +72,7 @@ class GreedyMC:
         original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
             else torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
         policy_indices = None
-        best_mse = np.inf
+        best_score = np.inf
         # This is wasteful because samples can be repeated, particularly when the horizon is short.
         for _ in range(self.samples):
             indices = np.random.choice(len(self._valid_actions),
@@ -80,10 +81,12 @@ class GreedyMC:
             new_mask = self.env._current_mask
             for index in indices:
                 new_mask = self.env.compute_new_mask(new_mask, self._valid_actions[index])[0]
-            new_obs_tensor = ifft(rfft(original_obs_tensor) * new_mask)
-            mse = F.mse_loss(original_obs_tensor[0, 0], new_obs_tensor[0, 0])
-            if mse < best_mse:
-                best_mse = mse
+            score = self.env.compute_score(use_reconstruction=self.use_reconstructions,
+                                           kind='mse',
+                                           ground_truth=original_obs_tensor,
+                                           mask_to_use=new_mask)
+            if score < best_score:
+                best_score = score
                 policy_indices = indices
         self.policy = policy_indices.tolist()
 
@@ -101,25 +104,28 @@ class FullGreedyOneStep:
 
         If [[use_ground_truth]] is True, the actual true image is used (rather than the reconstruction).
     """
-    def __init__(self, env, use_ground_truth=False):
+    def __init__(self, env, use_ground_truth=False, use_reconstructions=True):
         self.env = env
         self.actions = list(range(env.action_space.n))
         self._valid_actions = list(self.actions)
         self.use_ground_truth = use_ground_truth
         self.policy = []
         self.actions_used = []
+        self.use_reconstructions = use_reconstructions
 
     def get_action(self, obs, _, __):
         original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
             else torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
         best_action_index = None
-        best_mse = np.inf
+        best_score = np.inf
         for idx_action, action in enumerate(self._valid_actions):
             new_mask = self.env.compute_new_mask(self.env._current_mask, action)[0]
-            new_obs_tensor = ifft(rfft(original_obs_tensor) * new_mask)
-            mse = F.mse_loss(original_obs_tensor[0, 0], new_obs_tensor[0, 0])
-            if mse < best_mse:
-                best_mse = mse
+            score = self.env.compute_score(use_reconstruction=self.use_reconstructions,
+                                           kind='mse',
+                                           ground_truth=original_obs_tensor,
+                                           mask_to_use=new_mask)
+            if score < best_score:
+                best_score = score
                 best_action_index = idx_action
         action = self._valid_actions[best_action_index]
         del self._valid_actions[best_action_index]

@@ -15,6 +15,9 @@ from rl_env import ReconstrunctionEnv, device, generate_initial_mask, CONJUGATE_
 
 
 def update_statisics(value, episode_step, statistics):
+    """ Updates a running mean and standard deviation for [[episode_step]], given [[value]].
+        https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
+    """
     if episode_step not in statistics:
         statistics[episode_step] = {'mean': 0, 'm2': 0, 'count': 0}
     statistics[episode_step]['count'] += 1

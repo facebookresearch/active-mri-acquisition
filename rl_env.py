@@ -123,19 +123,32 @@ class ReconstrunctionEnv:
             raise ValueError
         return score
 
-    def compute_score(self, use_reconstruction=True, kind='mse'):
-        """Computes the score (MSE or SSIM) of the current state with respect to the current ground truth.
+    def compute_score(self, use_reconstruction=True, kind='mse', ground_truth=None, mask_to_use=None):
+        """ Computes the score (MSE or SSIM) of the current state with respect to the current ground truth.
 
-            Input [[use_reconstruction]] specifies if the reconstruction network will be used or not.
+            This method takes the current ground truth, masks it with the current mask and creates
+            a zero-filled reconstruction from the masked image; this zero-filled reconstruction can be passed
+            through the reconstruction network. The score evaluates the difference between the final reconstruction
+            and the current ground truth.
+
+            It is possible to pass alternate ground truth and mask.
+
+            @:param use_reconstruction: specifies if the reconstruction network will be used or not.
+            @:param ground_truth: specifies if the score has to be computed with respect to an alternate "ground truth".
+            @:param mask_to_use: specifies if the score has to be computed with an alternate mask.
         """
         with torch.no_grad():
-            masked_rffts = ReconstrunctionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
+            if ground_truth is None:
+                ground_truth = self._ground_truth
+            if mask_to_use is None:
+                mask_to_use = self._current_mask
+            masked_rffts = ReconstrunctionEnv.compute_masked_rfft(ground_truth, mask_to_use)
             if use_reconstruction:
-                reconstructions, _, mask_embed = self._model.netG(ifft(masked_rffts), self._current_mask)
+                reconstructions, _, mask_embed = self._model.netG(ifft(masked_rffts), mask_to_use)
                 image = reconstructions[-1]
             else:
                 image = ifft(masked_rffts)
-        return ReconstrunctionEnv._compute_score(image, self._ground_truth, kind)
+        return ReconstrunctionEnv._compute_score(image, ground_truth, kind)
 
     def _compute_observation_and_score_spectral_maps(self):
         with torch.no_grad():
