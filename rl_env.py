@@ -148,7 +148,7 @@ class ReconstrunctionEnv:
                 image = reconstructions[-1]
             else:
                 image = ifft(masked_rffts)
-        return ReconstrunctionEnv._compute_score(image, ground_truth, kind)
+        return [ReconstrunctionEnv._compute_score(img.unsqueeze(0), ground_truth, kind) for img in image]
 
     def _compute_observation_and_score_spectral_maps(self):
         with torch.no_grad():
@@ -176,7 +176,7 @@ class ReconstrunctionEnv:
     def reset(self):
         if self.opts.sequential_images:
             if self.is_testing:
-                if self.image_idx_test == min(self.opts.num_test_episodes, len(self._dataset_test)):
+                if self.image_idx_test == min(self.opts.num_test_images, len(self._dataset_test)):
                     return None     # Returns None to signal that testing is done
                 _, self._ground_truth = self._dataset_test.__getitem__(self._test_order[self.image_idx_test])
                 logging.debug('Testing episode started with image {}'.format(self._test_order[self.image_idx_test]))
@@ -187,7 +187,7 @@ class ReconstrunctionEnv:
                 self.image_idx_train = (self.image_idx_train + 1) % self.opts.num_train_images
         else:
             dataset_to_check = self._dataset_test if self.is_testing else self._dataset_train
-            max_num_images = self.opts.num_test_episodes if self.is_testing else self.opts.num_train_images
+            max_num_images = self.opts.num_test_images if self.is_testing else self.opts.num_train_images
             dataset_len = min(len(dataset_to_check), max_num_images)
             index_chosen_image = np.random.choice(dataset_len)
             logging.debug('{} episode started with randomly chosen image {}/{}'.format(

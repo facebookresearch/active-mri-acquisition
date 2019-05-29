@@ -24,12 +24,13 @@ class RLOptions(BaseOptions):
         # General options for all active acquisition algorithms
         parser.add_argument('--policy', choices=['dqn', 'random', 'random_r',
                                                  'lowfirst', 'lowfirst_r',
-                                                 'greedymc', 'greedymc_gt', 'greedyfull1', 'greedyfull1_gt'],
+                                                 'greedymc', 'greedymc_gt', 'greedymc_r', 'greedymc_gt_r' 
+                                                 'greedyfull1', 'greedyfull1_gt', 'greedyfull1_r', 'greedyfull1_gt_r'],
                             default='random')
         parser.add_argument('--initial_num_lines', type=int, default=10)
         parser.add_argument('--budget', type=int, default=5)
-        parser.add_argument('--num_test_episodes', type=int, default=10000)
-        parser.add_argument('--num_train_images', type=int, default=1000)
+        parser.add_argument('--num_test_images', type=int, default=1000)
+        parser.add_argument('--num_train_images', type=int, default=10000)
         parser.add_argument('--debug', dest='debug', action='store_true')
         parser.add_argument('--seed', type=int, default=0)
         parser.add_argument('--sequential_images', dest='sequential_images', action='store_true',

@@ -9,9 +9,8 @@ mkdir -p ${LOGS_DIR}/stderr
 
 queue=dev
 
-# for policy in "random" "random_r" "lowfirst" "lowfirst_r" "greedymc"; do
-# for policy in "greedymc" "greedymc_gt"; do
-for policy in "greedyfull1" "greedyfull1_gt"; do
+#for policy in "greedyfull1_r" "greedyfull1_gt_r" "random_r" "lowfirst_r"; do
+for policy in "greedyfull1" "greedyfull1_gt" "random", "lowfirst"; do
     job_name=active_acq_baselines_${policy}
 
     # This creates a slurm script to call training
@@ -34,7 +33,7 @@ for policy in "greedyfull1" "greedyfull1_gt"; do
     echo srun python acquire_rl.py --dataroot KNEE \
         --name knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_run2 --model ft_pasgan \
         --checkpoints_dir /checkpoint/lep/active_acq --batchSize 96 --which_model_netG pasnetplus --gpu_ids 0 \
-        --policy ${policy} --sequential_images --budget 1000 --num_test_episodes 200000 \
+        --policy ${policy} --sequential_images --budget 1000 --num_test_images 1000 --freq_save_test_stats 20 \
         --rl_logs_subdir all_baselines --seed 0 \
         --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
 

@@ -74,6 +74,7 @@ class GreedyMC:
         policy_indices = None
         best_score = np.inf
         # This is wasteful because samples can be repeated, particularly when the horizon is short.
+        # Also, this is not batched for [[compute_score]] so it's slow.
         for _ in range(self.samples):
             indices = np.random.choice(len(self._valid_actions),
                                        min(len(self._valid_actions), self.horizon),
@@ -112,21 +113,26 @@ class FullGreedyOneStep:
         self.policy = []
         self.actions_used = []
         self.use_reconstructions = use_reconstructions
+        self.batch_size = 64
 
     def get_action(self, obs, _, __):
         original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
             else torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
-        best_action_index = None
-        best_score = np.inf
+        all_masks = []
         for idx_action, action in enumerate(self._valid_actions):
             new_mask = self.env.compute_new_mask(self.env._current_mask, action)[0]
-            score = self.env.compute_score(use_reconstruction=self.use_reconstructions,
-                                           kind='mse',
-                                           ground_truth=original_obs_tensor,
-                                           mask_to_use=new_mask)
-            if score < best_score:
-                best_score = score
-                best_action_index = idx_action
+            all_masks.append(new_mask)
+
+        all_scores = []
+        for i in range(0, len(all_masks), self.batch_size):
+            masks_to_try = torch.cat(all_masks[i: min(i + self.batch_size, len(all_masks))])
+            scores = self.env.compute_score(use_reconstruction=self.use_reconstructions,
+                                            kind='mse',
+                                            ground_truth=original_obs_tensor,
+                                            mask_to_use=masks_to_try)
+            all_scores.extend(scores)
+
+        best_action_index = max(range(len(all_masks)), key=lambda x: scores[x])
         action = self._valid_actions[best_action_index]
         del self._valid_actions[best_action_index]
         return action

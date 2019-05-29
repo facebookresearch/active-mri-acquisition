@@ -34,6 +34,7 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
     statistics_ssim = {}
     import time
     start = time.time()
+    all_actions = []
     while True:
         episode += 1
         obs = env.reset()
@@ -44,8 +45,8 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         total_reward = 0
         actions = []
         episode_step = 0
-        update_statisics(env.compute_score(opts.use_reconstructions, kind='mse'), episode_step, statistics_mse)
-        update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim'), episode_step, statistics_ssim)
+        update_statisics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
+        update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
         while not done:
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
@@ -55,15 +56,15 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
             total_reward += reward
             obs = next_obs
             episode_step += 1
-            update_statisics(env.compute_score(opts.use_reconstructions, kind='mse'), episode_step, statistics_mse)
-            update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim'), episode_step, statistics_ssim)
+            update_statisics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
+            update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
         average_total_reward += total_reward
-        if episode == 0:
-            logging.debug(actions)
+        all_actions.append(actions)
         if episode % opts.freq_save_test_stats == 0:
             logging.info('Episode {}. Saving statistics.'.format(episode))
             np.save(os.path.join(opts.tb_logs_dir, 'test_stats_mse_{}'.format(episode)), statistics_mse)
             np.save(os.path.join(opts.tb_logs_dir, 'test_stats_ssim_{}'.format(episode)), statistics_ssim)
+            np.save(os.path.join(opts.tb_logs_dir, 'all_actions'), np.array(all_actions))
     end = time.time()
     logging.debug('Test run lasted {} seconds.'.format(end - start))
     writer.add_scalar('eval/average_reward', average_total_reward / episode, step)
@@ -122,36 +123,27 @@ def get_experiment_str(opts):
         policy_str = opts.policy
         if 'greedymc' in opts.policy:
             policy_str = '{}.nsam{}.hor{}_'.format(policy_str, opts.greedymc_num_samples, opts.greedymc_horizon)
-    return '{}_bu{}_seed{}_neptest{}'.format(policy_str, opts.budget, opts.seed, opts.num_test_episodes)
+    return '{}_bu{}_seed{}_neptest{}'.format(policy_str, opts.budget, opts.seed, opts.num_test_images)
 
 
 def get_policy(env, writer, opts):
-    if opts.policy == 'random':
+    # Not a great policy specification protocol, but works for now.
+    opts.use_reconstructions = (opts.policy[-2:] == '_r')
+    if 'random' in opts.policy:
         policy = RandomPolicy(range(env.action_space.n))
-        opts.use_reconstructions = False
-    elif opts.policy == 'random_r':
-        policy = RandomPolicy(range(env.action_space.n))
-        opts.use_reconstructions = True
-    elif opts.policy == 'lowfirst':
+    elif 'lowfirst' in opts.policy:
         assert CONJUGATE_SYMMETRIC
         policy = NextIndexPolicy(range(env.action_space.n))
-        opts.use_reconstructions = False
-    elif opts.policy == 'lowfirst_r':
-        assert CONJUGATE_SYMMETRIC
-        policy = NextIndexPolicy(range(env.action_space.n))
-        opts.use_reconstructions = True
-    elif opts.policy == 'greedymc':
-        policy = GreedyMC(env, samples=opts.greedymc_num_samples, horizon=opts.greedymc_horizon)
-        opts.use_reconstructions = True
-    elif opts.policy == 'greedymc_gt':
-        policy = GreedyMC(env, samples=opts.greedymc_num_samples, horizon=opts.greedymc_horizon, use_ground_truth=True)
-        opts.use_reconstructions = True
-    elif opts.policy == 'greedyfull1':
-        policy = FullGreedyOneStep(env)
-        opts.use_reconstructions = True
-    elif opts.policy == 'greedyfull1_gt':
-        policy = FullGreedyOneStep(env, use_ground_truth=True)
-        opts.use_reconstructions = True
+    elif 'greedymc' in opts.policy:
+        policy = GreedyMC(env,
+                          samples=opts.greedymc_num_samples,
+                          horizon=opts.greedymc_horizon,
+                          use_reconstructions=opts.use_reconstructions,
+                          use_ground_truth='_gt_' in opts.policy)
+    elif 'greedyfull1' in opts.policy:
+        policy = FullGreedyOneStep(env,
+                                   use_ground_truth='_gt_' in opts.policy,
+                                   use_reconstructions=opts.use_reconstructions)
     elif opts.policy == 'dqn':
         replay_memory = ReplayMemory(opts.replay_buffer_size, env.observation_space.shape)
         policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
