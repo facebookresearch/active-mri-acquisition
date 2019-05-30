@@ -14,9 +14,12 @@ def infinite_iterator(iterator):
 
 
 class ReplayMemory(Dataset):
-    def __init__(self, capacity, obs_shape, transform=None):
+    def __init__(self, capacity, obs_shape, batch_size, transform=None):
         self.capacity = capacity
         self.memory = []
+        # [[self.batch_size] is only used for DataLoader buffering. The batch size used for DQN updates should be
+        # the batch size passed as input.
+        self.batch_size = 8 * batch_size
         self.position = 0
         self.mean_obs = torch.zeros(obs_shape, dtype=torch.float32)
         self.std_obs = torch.ones(obs_shape, dtype=torch.float32)
@@ -56,6 +59,7 @@ class ReplayMemory(Dataset):
         self.position = (self.position + 1) % self.capacity
 
     def __getitem__(self, _):
+        assert len(self.memory) >= self.batch_size
         transition = random.sample(self.memory, 1)
         transition = {
             'observations': self.normalize(transition[0].observation),
@@ -69,4 +73,4 @@ class ReplayMemory(Dataset):
         return transition
 
     def __len__(self):
-        return len(self.memory)
+        return 0 if len(self.memory) < self.batch_size else self.batch_size

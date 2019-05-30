@@ -148,7 +148,7 @@ def get_policy(env, writer, opts):
     elif 'evaluator_net' in opts.policy:
         policy = EvaluatorNetwork(env)
     elif opts.policy == 'dqn':
-        replay_memory = ReplayMemory(opts.replay_buffer_size, env.observation_space.shape)
+        replay_memory = ReplayMemory(opts.replay_buffer_size, env.observation_space.shape, opts.rl_batch_size)
         policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
         target_net = DDQN(env.action_space.n, device, None, opts).to(device)
         train_policy(env, policy, target_net, writer, opts)

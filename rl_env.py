@@ -132,11 +132,12 @@ class ReconstrunctionEnv:
         """ Computes the score (MSE or SSIM) of the current state with respect to the current ground truth.
 
             This method takes the current ground truth, masks it with the current mask and creates
-            a zero-filled reconstruction from the masked image; this zero-filled reconstruction can be passed
-            through the reconstruction network. The score evaluates the difference between the final reconstruction
-            and the current ground truth.
+            a zero-filled reconstruction from the masked image. Additionally, this zero-filled reconstruction can
+            be passed through the reconstruction network, [[self._model.netG]].
+            The score evaluates the difference between the final reconstruction and the current ground truth.
 
-            It is possible to pass alternate ground truth and mask.
+            It is possible to pass alternate ground truth and mask to compute the score with respect to, instead of
+            [[self._ground_truth]] and [[self._current_mask]].
 
             @:param use_reconstruction: specifies if the reconstruction network will be used or not.
             @:param ground_truth: specifies if the score has to be computed with respect to an alternate "ground truth".
@@ -148,11 +149,10 @@ class ReconstrunctionEnv:
             if mask_to_use is None:
                 mask_to_use = self._current_mask
             masked_rffts = ReconstrunctionEnv.compute_masked_rfft(ground_truth, mask_to_use)
+            image = ifft(masked_rffts)
             if use_reconstruction:
-                reconstructions, _, mask_embed = self._model.netG(ifft(masked_rffts), mask_to_use)
+                reconstructions, _, mask_embed = self._model.netG(image, mask_to_use)
                 image = reconstructions[-1]
-            else:
-                image = ifft(masked_rffts)
         return [ReconstrunctionEnv._compute_score(img.unsqueeze(0), ground_truth, kind) for img in image]
 
     def _compute_observation_and_score_spectral_maps(self):

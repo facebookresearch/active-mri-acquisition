@@ -83,13 +83,10 @@ class DDQN(nn.Module):
         super(DDQN, self).__init__()
         self.model = get_model(num_actions, opts.rl_model_type)
 
-        raise NotImplementedError
-        # TODO start by changing this data loader
-        # I think reward for env has to pass by the network again
         if memory is not None:
             self._data_loader = infinite_iterator(DataLoader(memory, batch_size=opts.rl_batch_size, num_workers=8))
-            self.optimizer = optim.Adam(self.parameters(), lr=6.25e-5)
 
+        self.optimizer = optim.Adam(self.parameters(), lr=6.25e-5)
         self.num_actions = num_actions
         self.memory = memory
         self.opts = opts
