@@ -2,7 +2,7 @@
 #SBATCH --job-name=train_activeacq
 #SBATCH --output=/private/home/lep/logs/active_acq/stdout/job%j.train_activeacq
 #SBATCH --error=/private/home/lep/logs/active_acq/stderr/job%j.train_activeacq
-#SBATCH --partition=dev
+#SBATCH --partition=learnfair
 #SBATCH --gres=gpu:volta:8
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks-per-node=1
@@ -11,8 +11,9 @@
 #SBATCH --comment="none"
 #SBATCH --nodes=1
 cd /private/home/lep/code/Active_Acquisition
-srun --label python train.py --dataroot KNEE --name knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_post_fix \
+srun --label python train.py --dataroot KNEE --name knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_mask_lowf \
     --model ft_pasgan --checkpoints_dir /checkpoint/lep/active_acq --batchSize 48 --gpu_ids 0,1,2,3,4,5,6,7 \
     --print_freq 50 --lambda_gan 0.1 --mask_cond --where_loss_weight logvar --use_fixed_weight 1,1,1 --lr 0.0006 \
     --use_mse_as_disc_energy --which_model_netG pasnetplus --pixelwise_loss_merge --grad_ctx --niter 50 \
-    --nThreads 16 --save_latest_freq 2000
+    --nThreads 16 --save_latest_freq 2000 \
+    --dynamic_mask_type random_lowfreq

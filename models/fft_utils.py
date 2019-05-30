@@ -76,7 +76,7 @@ class FFT(nn.Module):
 #     return mask_fft
 
 def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42, 
-                random_frac=False, random_full=False):
+                random_frac=False, random_full=False, random_lowfreq=False):
     assert random_frac <= 1
     if type(n) is int:
         b = 1
@@ -91,7 +91,7 @@ def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42,
                 mask_fraction = min(max(0.1, np.random.rand(1)), 0.9)
             else:
                 mask_fraction = min(max(0.1, np.random.rand(1)), 0.4)
-        if random_frac:
+        elif random_frac:
             # we sample fraction and mask_low_freqs lines
             ratio = np.random.rand(1) + 0.5
             mask_frac = mask_fraction * ratio
@@ -99,6 +99,10 @@ def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42,
             # mask_lf = int(mask_low_freqs * ratio)
             mask_lf = np.random.choice(range(int(mask_low_freqs * 0.5), int(mask_low_freqs * 1.5) + 1))
             seed = np.random.randint(10000)
+        elif random_lowfreq:
+            expected_num_lines = mask_fraction * (np.random.rand() + 0.5)
+            mask_frac = 0
+            mask_lf = np.random.binomial(n, expected_num_lines)
         else:
             mask_frac = mask_fraction
             mask_lf = mask_low_freqs

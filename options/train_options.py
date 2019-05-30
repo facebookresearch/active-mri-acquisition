@@ -45,7 +45,8 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--residual_loss', action='store_true', help='supervise the residual loss')
         parser.add_argument('--l2_weight', action='store_true', help='network l2 regularization')
 
-        parser.add_argument('--dynamic_mask_type', type=str, choices=['random', 'random_lines', 'random_full', 'None'],
+        parser.add_argument('--dynamic_mask_type', type=str,
+                            choices=['random', 'random_lines', 'random_full', 'random_lowfreq', 'None'],
                             default='None', help='changing mask during training')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
 

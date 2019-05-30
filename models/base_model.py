@@ -393,14 +393,28 @@ class BaseModel:
     def gen_random_mask(self, batchSize=1):
         if self.isTrain and self.opt.dynamic_mask_type != 'None' and not self.validation_phase:
             if self.opt.dynamic_mask_type == 'random':
-                mask = create_mask((batchSize, self.opt.fineSize), random_frac=True, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+                mask = create_mask((batchSize, self.opt.fineSize),
+                                   random_frac=True,
+                                   mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+            if self.opt.dynamic_mask_type == 'random_lowfreq':
+                mask = create_mask((batchSize, self.opt.fineSize),
+                                   random_lowfreq=True,
+                                   mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
             elif self.opt.dynamic_mask_type == 'random_full':
-                mask = create_mask((batchSize, self.opt.fineSize), random_frac=True, mask_fraction=self.opt.kspace_keep_ratio, random_full=True).to(self.device)
+                mask = create_mask((batchSize, self.opt.fineSize),
+                                   random_frac=True,
+                                   mask_fraction=self.opt.kspace_keep_ratio,
+                                   random_full=True).to(self.device)
             elif self.opt.dynamic_mask_type == 'random_lines':
                 seed = np.random.randint(10000)
-                mask = create_mask((batchSize, self.opt.fineSize), random_frac=False, mask_fraction=self.opt.kspace_keep_ratio, seed=seed).to(self.device)
+                mask = create_mask((batchSize, self.opt.fineSize),
+                                   random_frac=False,
+                                   mask_fraction=self.opt.kspace_keep_ratio,
+                                   seed=seed).to(self.device)
         else:
-            mask = create_mask((batchSize, self.opt.fineSize), random_frac=False, mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
+            mask = create_mask((batchSize, self.opt.fineSize),
+                               random_frac=False,
+                               mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
             
         return mask
     
