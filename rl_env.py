@@ -110,6 +110,9 @@ class ReconstrunctionEnv:
             score = F.mse_loss(reconstruction, ground_truth)
         elif kind == 'ssim':
             score = util.ssim_metric(reconstruction, ground_truth)
+        elif kind == 'psnr':
+            score = 20 * torch.log10(ground_truth.max() - ground_truth.min()) - \
+                    10 * torch.log10(F.mse_loss(reconstruction, ground_truth))
         else:
             raise ValueError
         return score

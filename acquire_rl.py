@@ -28,25 +28,28 @@ def update_statisics(value, episode_step, statistics):
 
 
 def test_policy(env, policy, writer, num_episodes, step, opts):
+    env.set_testing()
     average_total_reward = 0
     episode = 0
     statistics_mse = {}
     statistics_ssim = {}
+    statistics_psnr = {}
     import time
     start = time.time()
     all_actions = []
     while True:
-        episode += 1
         obs = env.reset()
         policy.init_episode()
         if episode == num_episodes or obs is None:
             break
+        episode += 1
         done = False
         total_reward = 0
         actions = []
         episode_step = 0
         update_statisics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
         update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
+        update_statisics(env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
         while not done:
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
@@ -58,22 +61,26 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
             episode_step += 1
             update_statisics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
             update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
+            update_statisics(env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
         average_total_reward += total_reward
         all_actions.append(actions)
+        logging.debug('Actions and reward: {}, {}'.format(actions, total_reward))
         if episode % opts.freq_save_test_stats == 0:
             logging.info('Episode {}. Saving statistics.'.format(episode))
             np.save(os.path.join(opts.tb_logs_dir, 'test_stats_mse_{}'.format(episode)), statistics_mse)
             np.save(os.path.join(opts.tb_logs_dir, 'test_stats_ssim_{}'.format(episode)), statistics_ssim)
+            np.save(os.path.join(opts.tb_logs_dir, 'test_stats_psnr_{}'.format(episode)), statistics_ssim)
             np.save(os.path.join(opts.tb_logs_dir, 'all_actions'), np.array(all_actions))
     end = time.time()
     logging.debug('Test run lasted {} seconds.'.format(end - start))
     writer.add_scalar('eval/average_reward', average_total_reward / episode, step)
+    env.set_training()
 
 
 def train_policy(env, policy, target_net, writer, opts):
     steps = 0
     for episode in range(opts.num_train_episodes):
-        logging.info('Episode {}'.format(episode))
+        logging.info('Episode {}'.format(episode + 1))
         obs = env.reset()
         done = False
         total_reward = 0
@@ -111,7 +118,9 @@ def train_policy(env, policy, target_net, writer, opts):
 
         # Evaluate the current policy
         if (episode + 1) % opts.agent_test_episode_freq == 0:
-            test_policy(env, policy, writer, 1, episode, opts)
+            test_policy(env, policy, writer, None, episode, opts)
+            policy.save(os.path.join(opts.tb_logs_dir, 'policy_checkpoint.pt'))
+            logging.info('Saved model to {}'.format(os.path.join(opts.tb_logs_dir, 'policy_checkpoint.pt')))
 
 
 def get_experiment_str(opts):
@@ -129,7 +138,7 @@ def get_experiment_str(opts):
 def get_policy(env, writer, opts):
     # Not a great policy specification protocol, but works for now.
     opts.use_reconstructions = (opts.policy[-2:] == '_r')
-    logging.info('Use reconstructions is'.format(opts.use_reconstructions))
+    logging.info('Use reconstructions is {}'.format(opts.use_reconstructions))
     if 'random' in opts.policy:
         policy = RandomPolicy(range(env.action_space.n))
     elif 'lowfirst' in opts.policy:

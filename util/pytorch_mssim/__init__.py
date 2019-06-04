@@ -1,4 +1,3 @@
-
 ## Modifed by ZZ
 ## Bugs when return full=True is fixed
 ## 8.16
@@ -132,6 +131,7 @@ class SSIM(torch.nn.Module):
             self.channel = channel
 
         return ssim(img1, img2, window=window, window_size=self.window_size, size_average=self.size_average)
+
 
 class MSSSIM(torch.nn.Module):
     def __init__(self, window_size=11, size_average=True, channel=3):

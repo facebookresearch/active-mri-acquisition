@@ -166,3 +166,6 @@ class DDQN(nn.Module):
 
     def init_episode(self):
         pass
+
+    def save(self, path):
+        torch.save(self.state_dict(), path)

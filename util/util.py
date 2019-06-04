@@ -6,9 +6,9 @@ import os
 from . import pytorch_mssim
 
 
-
 def ssim_metric(src, tar, full=False):
     return pytorch_mssim.ssim(src[:,:1,:,:], tar[:,:1,:,:], full=full)
+
 
 def sum_axes(input, axes=[], keepdim=False):
     # mu2, logvar2 are prior
@@ -39,6 +39,7 @@ def mri_denormalize(input_image, zscore=3):
 
     return input_image
 
+
 # Converts a Tensor into an image array (numpy)
 # |imtype|: the desired type of the converted numpy array
 def tensor2im(input_image, imtype=np.uint8, renormalize=True):
@@ -64,6 +65,7 @@ def tensor2im(input_image, imtype=np.uint8, renormalize=True):
     # image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.0
     image_numpy = np.transpose(image_numpy, (1, 2, 0))
     return image_numpy.astype(imtype)
+
 
 def diagnose_network(net, name='network'):
     mean = 0.0

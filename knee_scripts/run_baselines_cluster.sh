@@ -9,9 +9,7 @@ mkdir -p ${LOGS_DIR}/stderr
 
 queue=dev
 
-#for policy in "greedyfull1_r" "greedyfull1_gt_r" "random_r" "lowfirst_r"; do
-#for policy in "greedyfull1" "greedyfull1_gt" "random" "lowfirst"; do
-for policy in "evaluator_net" "evaluator_net_r"; do
+for policy in "greedyfull1_r" "greedyfull1_gt_r" "random_r" "lowfirst_r" "evaluator_net" "evaluator_net_r"; do
     job_name=active_acq_baselines_${policy}
 
     # This creates a slurm script to call training
@@ -32,10 +30,10 @@ for policy in "evaluator_net" "evaluator_net_r"; do
     echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
 
     echo srun python acquire_rl.py --dataroot KNEE \
-        --name knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_run2 --model ft_pasgan \
+        --name knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_post_fix --model ft_pasgan \
         --checkpoints_dir /checkpoint/lep/active_acq --batchSize 96 --which_model_netG pasnetplus --gpu_ids 0 \
-        --policy ${policy} --sequential_images --budget 1000 --num_test_images 1000 --freq_save_test_stats 20 \
-        --rl_logs_subdir all_baselines --seed 0 \
+        --policy ${policy} --sequential_images --budget 1000 --num_test_images 500 --freq_save_test_stats 50 \
+        --rl_logs_subdir all_baselines_post_fix --seed 0 \
         --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
 
     sbatch ${SLURM}
