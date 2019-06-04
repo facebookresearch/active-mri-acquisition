@@ -502,20 +502,21 @@ class GANLossKspace(nn.Module):
                     target_tensor[:] = degree
             else:
                 pred, gt = pred_gt 
-                h = gt.shape[3]
+                w = gt.shape[2]
                 ks_gt = self.RFFT(gt[:,:1,:,:], normalized=True) 
                 ks_input = self.RFFT(pred, normalized=True) 
-                ks_row_mse = F.mse_loss(ks_input, ks_gt, reduce=False).sum(1,keepdim=True).sum(3,keepdim=True).squeeze() / (2*h)
+                ks_row_mse = F.mse_loss(
+                    ks_input, ks_gt, reduce=False).sum(1, keepdim=True).sum(2, keepdim=True).squeeze() / (2*w)
                 energy = torch.exp(-ks_row_mse * self.gamma)
 
-                ## do some bin process
+                # do some bin process
                 # import pdb; pdb.set_trace()
                 # energy = torch.floor(energy * 10 / self.bin) * self.bin / 10
                 
                 target_tensor[:] = energy
             # force observed part to always
             for i in range(mask.shape[0]):
-                idx = torch.nonzero(mask[i,0,:,0])
+                idx = torch.nonzero(mask[i, 0, 0, :])
                 target_tensor[i,idx] = 1 
         return target_tensor
 
@@ -524,13 +525,14 @@ class GANLossKspace(nn.Module):
         # degree is the realistic degree of output
         # set updateG to True when training G.
         target_tensor = self.get_target_tensor(input, target_is_real, degree, mask, pred_gt)
-        b,h = target_tensor.shape
+        b,w = target_tensor.shape
         if updateG and not self.grad_ctx:
             mask_ = mask.squeeze()
             # maskout the observed part loss
             return self.loss(input * (1-mask_), target_tensor * (1-mask_)) / (1-mask_).sum()
         else:
-            return self.loss(input, target_tensor) / (b*h)
+            return self.loss(input, target_tensor) / (b*w)
+
 
 class GANLossKspaceAux(nn.Module):
     def __init__(self, use_lsgan=True, target_real_label=1.0, target_fake_label=0.0, use_mse_as_energy=False):

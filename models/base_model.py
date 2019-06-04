@@ -190,8 +190,9 @@ class BaseModel:
                 for param in net.parameters():
                     param.requires_grad = requires_grad
 
-
-    def validation(self, val_data_loader, how_many_to_display=64, how_many_to_valid=4096*4, n_samples=8, metasavepath=None):
+    def validation(self, val_data_loader, how_many_to_display=64,
+                   how_many_to_valid=4096*4, n_samples=8, metasavepath=None,
+                   set_validation_phase=True):
         
         if self.mri_data:
             tensor2im = functools.partial(util.tensor2im, renormalize=False)
@@ -218,7 +219,7 @@ class BaseModel:
         netG = getattr(self, 'netG')
         
         # turn on the validation sign
-        self.validation_phase = True
+        self.validation_phase = True and set_validation_phase
 
         # visualization for a fixed number of data
         if not hasattr(self, 'display_data') or self.display_data is None:

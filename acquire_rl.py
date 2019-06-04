@@ -14,7 +14,7 @@ from util.rl.replay_buffer import ReplayMemory
 from rl_env import ReconstrunctionEnv, device, generate_initial_mask, CONJUGATE_SYMMETRIC
 
 
-def update_statisics(value, episode_step, statistics):
+def update_statistics(value, episode_step, statistics):
     """ Updates a running mean and standard deviation for [[episode_step]], given [[value]].
         https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
     """
@@ -47,9 +47,9 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         total_reward = 0
         actions = []
         episode_step = 0
-        update_statisics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
-        update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
-        update_statisics(env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
+        update_statistics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
+        update_statistics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
+        update_statistics(env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
         while not done:
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
@@ -59,9 +59,9 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
             total_reward += reward
             obs = next_obs
             episode_step += 1
-            update_statisics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
-            update_statisics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
-            update_statisics(env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
+            update_statistics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
+            update_statistics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
+            update_statistics(env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
         average_total_reward += total_reward
         all_actions.append(actions)
         logging.debug('Actions and reward: {}, {}'.format(actions, total_reward))
