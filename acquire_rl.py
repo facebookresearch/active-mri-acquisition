@@ -8,10 +8,10 @@ import torch
 from options.rl_options import RLOptions
 from tensorboardX import SummaryWriter
 from util.rl.dqn import DDQN, get_epsilon
-from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy, GreedyMC, FullGreedyOneStep, EvaluatorNetwork
+from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy, GreedyMC, FullGreedy, EvaluatorNetwork
 from util.rl.replay_buffer import ReplayMemory
 
-from rl_env import ReconstrunctionEnv, device, generate_initial_mask, CONJUGATE_SYMMETRIC
+from rl_env import ReconstructionEnv, device, generate_initial_mask, CONJUGATE_SYMMETRIC
 
 
 def update_statistics(value, episode_step, statistics):
@@ -60,8 +60,10 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
             obs = next_obs
             episode_step += 1
             update_statistics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
-            update_statistics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
-            update_statistics(env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
+            update_statistics(
+                env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
+            update_statistics(
+                env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
         average_total_reward += total_reward
         all_actions.append(actions)
         logging.debug('Actions and reward: {}, {}'.format(actions, total_reward))
@@ -149,13 +151,17 @@ def get_policy(env, writer, opts):
                           samples=opts.greedymc_num_samples,
                           horizon=opts.greedymc_horizon,
                           use_reconstructions=opts.use_reconstructions,
-                          use_ground_truth='_gt_' in opts.policy)
+                          use_ground_truth='_gt' in opts.policy)
     elif 'greedyfull1' in opts.policy:
-        policy = FullGreedyOneStep(env,
-                                   use_ground_truth='_gt_' in opts.policy,
-                                   use_reconstructions=opts.use_reconstructions)
+        assert opts.use_reconstructions
+        policy = FullGreedy(env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=True)
+    elif 'greedyfull1nors' in opts.policy:
+        policy = FullGreedy(env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=False)
     elif 'evaluator_net' in opts.policy:
         policy = EvaluatorNetwork(env)
+    elif 'evaluator_net_offp' in opts.policy:
+        assert opts.evaluator_name is not None and opts.evaluator_name != opts.name
+        policy = EvaluatorNetwork(env, opts.evaluator_name)
     elif opts.policy == 'dqn':
         replay_memory = ReplayMemory(opts.replay_buffer_size, env.observation_space.shape, opts.rl_batch_size)
         policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
@@ -169,7 +175,7 @@ def get_policy(env, writer, opts):
 
 def main(opts):
     writer = SummaryWriter(opts.tb_logs_dir)
-    env = ReconstrunctionEnv(generate_initial_mask(opts.initial_num_lines), opts)
+    env = ReconstructionEnv(generate_initial_mask(opts.initial_num_lines), opts)
     env.set_training()
     logging.info('Created environment with {} actions'.format(env.action_space.n))
     policy = get_policy(env, writer, opts)

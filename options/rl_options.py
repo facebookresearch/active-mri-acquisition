@@ -4,30 +4,22 @@ from .base_options import BaseOptions
 class RLOptions(BaseOptions):
     def initialize(self, parser):
         parser = BaseOptions.initialize(self, parser)
+        parser.add_argument('--which_epoch', type=str, default='latest',
+                            help='which epoch to load? set to latest to use latest cached model')
 
         parser.add_argument('--results_dir', type=str, default='./results/', help='saves results here.')
         parser.add_argument('--rl_logs_subdir', type=str, default='debug',
                             help='sub-directory of opts.results_dir to store results of RL runs.')
 
-        # Options for the reconstruction model
-        parser.add_argument('--ntest', type=int, default=float("inf"), help='# of test examples.')
-        parser.add_argument('--aspect_ratio', type=float, default=1.0, help='aspect ratio of result images')
-        parser.add_argument('--phase', type=str, default='test', help='train, val, test, etc')
-        parser.add_argument('--which_epoch', type=str, default='latest',
-                            help='which epoch to load? set to latest to use latest cached model')
-        parser.add_argument('--how_many', type=int, default=50, help='how many test images to run')
-        parser.add_argument('--shuffle_testset_loader', action='store_true', help='if shuffle test set loader')
-        parser.set_defaults(model='test')
-        # To avoid cropping, the loadSize should be the same as fineSize
-        parser.set_defaults(loadSize=parser.get_default('fineSize'))
-
         # General options for all active acquisition algorithms
-        parser.add_argument('--policy', choices=['dqn',
-                                                 'random', 'random_r', 'lowfirst', 'lowfirst_r',
-                                                 'evaluator_net', 'evaluator_net_r',
-                                                 'greedymc', 'greedymc_gt', 'greedymc_r', 'greedymc_gt_r',
-                                                 'greedyfull1', 'greedyfull1_gt', 'greedyfull1_r', 'greedyfull1_gt_r'],
-                            default='random')
+        parser.add_argument(
+            '--policy',
+            choices=[
+                'dqn', 'random', 'random_r', 'lowfirst', 'lowfirst_r',
+                'evaluator_net', 'evaluator_net_r', 'evaluator_net_offp', 'evaluator_net_offp_r',
+                'greedymc', 'greedymc_gt', 'greedymc_r', 'greedymc_gt_r',
+                'greedyfull1_gt_r', 'greedyfull1_r', 'greedyfull1nors_gt','greedyfull1nors_gt_r'],
+            default='random')
         parser.add_argument('--initial_num_lines', type=int, default=10)
         parser.add_argument('--budget', type=int, default=5)
         parser.add_argument('--num_test_images', type=int, default=1000)
@@ -42,6 +34,8 @@ class RLOptions(BaseOptions):
         # Options for the simple baselines
         parser.add_argument('--greedymc_num_samples', type=int, default=10)
         parser.add_argument('--greedymc_horizon', type=int, default=1)
+        parser.add_argument('--evaluator_name', type=str, default=None,
+                            help='Specifies the experiment tag that was assigned to the evaluator that will be used.')
 
         # Reinforcement learning options
         parser.add_argument('--rl_model_type', type=str, default='two_streams')

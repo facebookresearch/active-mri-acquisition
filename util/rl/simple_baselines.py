@@ -97,14 +97,17 @@ class GreedyMC:
 
 
 # noinspection PyProtectedMember
-class FullGreedyOneStep:
+class FullGreedy:
     """ This policy takes the current reconstruction as if it was "ground truth",
-        and attempts to find the single action that decreases MSE the most with respected to the masked
+        and attempts to find the set of [[num_steps]] actions that decreases MSE the most with respected to the masked
         reconstruction. It uses exhaustive search of actions rather than Monte Carlo sampling.
 
         If [[use_ground_truth]] is True, the actual true image is used (rather than the reconstruction).
     """
-    def __init__(self, env, use_ground_truth=False, use_reconstructions=True):
+    def __init__(self, env, num_steps=1, use_ground_truth=False, use_reconstructions=True):
+        if num_steps > 1:
+            raise NotImplementedError
+
         self.env = env
         self.actions = list(range(env.action_space.n))
         self._valid_actions = list(self.actions)
@@ -113,6 +116,7 @@ class FullGreedyOneStep:
         self.actions_used = []
         self.use_reconstructions = use_reconstructions
         self.batch_size = 64
+        self.num_steps = num_steps
 
     def get_action(self, obs, _, __):
         original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
@@ -141,8 +145,10 @@ class FullGreedyOneStep:
 
 
 class EvaluatorNetwork:
-    def __init__(self, env):
+    def __init__(self, env, evaluator_name=None):
         self.env = env
+        if evaluator_name is not None:
+            self.env.set_evaluator(evaluator_name)
 
     def get_action(self, *_):
         return self.env.get_evaluator_action()

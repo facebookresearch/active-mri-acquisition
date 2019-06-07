@@ -100,9 +100,9 @@ def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42,
             mask_lf = np.random.choice(range(int(mask_low_freqs * 0.5), int(mask_low_freqs * 1.5) + 1))
             seed = np.random.randint(10000)
         elif random_lowfreq:
-            expected_num_lines = mask_fraction * (np.random.rand() + 0.5)
+            p_lines = mask_fraction * (np.random.rand() + 0.5)
             mask_frac = 0
-            mask_lf = np.random.binomial(n, expected_num_lines)
+            mask_lf = np.random.binomial(n, p_lines)
         else:
             mask_frac = mask_fraction
             mask_lf = mask_low_freqs
