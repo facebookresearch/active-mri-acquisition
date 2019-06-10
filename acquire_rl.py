@@ -153,10 +153,11 @@ def get_policy(env, writer, opts):
                           use_reconstructions=opts.use_reconstructions,
                           use_ground_truth='_gt' in opts.policy)
     elif 'greedyfull1' in opts.policy:
-        assert opts.use_reconstructions
-        policy = FullGreedy(env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=True)
-    elif 'greedyfull1nors' in opts.policy:
-        policy = FullGreedy(env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=False)
+        if 'nors' in opts.policy:
+            policy = FullGreedy(env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=False)
+        else:
+            assert opts.use_reconstructions
+            policy = FullGreedy(env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=True)
     elif 'evaluator_net' in opts.policy:
         policy = EvaluatorNetwork(env)
     elif 'evaluator_net_offp' in opts.policy:
