@@ -27,6 +27,14 @@ def update_statistics(value, episode_step, statistics):
     statistics[episode_step]['m2'] += delta * delta2
 
 
+def compute_test_score_from_stats(statistics):
+    """ Computes a single-value score from a set of time step statistics. """
+    score = 0
+    for episode_step, step_stats in statistics.items():
+        score += step_stats['mean']
+    return score
+
+
 def test_policy(env, policy, writer, num_episodes, step, opts):
     env.set_testing()
     average_total_reward = 0
@@ -78,9 +86,12 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
     writer.add_scalar('eval/average_reward', average_total_reward / episode, step)
     env.set_training()
 
+    return compute_test_score_from_stats(statistics_mse)
+
 
 def train_policy(env, policy, target_net, writer, opts):
     steps = 0
+    best_test_score = np.inf
     for episode in range(opts.num_train_episodes):
         logging.info('Episode {}'.format(episode + 1))
         obs = env.reset()
@@ -120,16 +131,18 @@ def train_policy(env, policy, target_net, writer, opts):
 
         # Evaluate the current policy
         if (episode + 1) % opts.agent_test_episode_freq == 0:
-            test_policy(env, policy, writer, None, episode, opts)
-            policy.save(os.path.join(opts.tb_logs_dir, 'policy_checkpoint.pt'))
-            logging.info('Saved model to {}'.format(os.path.join(opts.tb_logs_dir, 'policy_checkpoint.pt')))
+            test_score = test_policy(env, policy, writer, None, episode, opts)
+            if test_score < best_test_score:
+                policy.save(os.path.join(opts.tb_logs_dir, 'policy_best.pt'))
+                best_test_score = test_score
+                logging.info('Saved model to {}'.format(os.path.join(opts.tb_logs_dir, 'policy_checkpoint.pt')))
 
 
 def get_experiment_str(opts):
     if opts.policy == 'dqn':
-        policy_str = '{}.bu{}.tupd{}.bs{}.edecay{}.gamma{}.norepl{}.npetr{}_'.format(
+        policy_str = '{}.bu{}.tupd{}.bs{}.edecay{}.gamma{}.norepl{}.nimgtr{}.nimgtest{}_'.format(
             opts.rl_model_type, opts.budget, opts.target_net_update_freq, opts.rl_batch_size, opts.epsilon_decay,
-            opts.gamma, int(opts.no_replacement_policy), opts.num_train_episodes)
+            opts.gamma, int(opts.no_replacement_policy), opts.num_train_images, opts.num_test_images)
     else:
         policy_str = opts.policy
         if 'greedymc' in opts.policy:
@@ -164,10 +177,18 @@ def get_policy(env, writer, opts):
         assert opts.evaluator_name is not None and opts.evaluator_name != opts.name
         policy = EvaluatorNetwork(env, opts.evaluator_name)
     elif opts.policy == 'dqn':
+
         replay_memory = ReplayMemory(opts.replay_buffer_size, env.observation_space.shape, opts.rl_batch_size)
         policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
         target_net = DDQN(env.action_space.n, device, None, opts).to(device)
-        train_policy(env, policy, target_net, writer, opts)
+
+        if opts.dqn_resume:
+            # TODO to be able to resume training need some code to store the replay buffer
+            raise NotImplementedError
+        if opts.dqn_only_test:
+            policy.load(os.path.join(opts.tb_logs_dir, 'policy_best.pt'))
+        else:
+            train_policy(env, policy, target_net, writer, opts)
     else:
         raise ValueError
 

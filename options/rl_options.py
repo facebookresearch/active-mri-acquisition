@@ -38,6 +38,8 @@ class RLOptions(BaseOptions):
                             help='Specifies the experiment tag that was assigned to the evaluator that will be used.')
 
         # Reinforcement learning options
+        parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
+        parser.add_argument('--dqn_only_test', dest='dqn_only_test', action='store_true')
         parser.add_argument('--rl_model_type', type=str, default='two_streams')
         parser.add_argument('--replay_buffer_size', type=int, default=100000)
         parser.add_argument('--epsilon_start', type=float, default=0.99)
