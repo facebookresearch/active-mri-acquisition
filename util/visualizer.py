@@ -51,17 +51,18 @@ def save_images(webpage, visuals, name, aspect_ratio=1.0, width=256):
     # webpage.add_images(ims, txts, links, width=width)
     webpage.add_images_videos_files(ims, txts, links, width=width)
 
+
 class Visualizer():
-    def __init__(self, opt, use_html=False):
+    def __init__(self, options, use_html=False):
         self.use_html = use_html
         self.win_size = 256
-        self.no_tb = opt.debug
+        self.no_tb = options.debug
         # self.name = name
         # self.opt = opt
         self.saved = False
-        self.checkpoints_dir = os.path.join(opt.checkpoints_dir, opt.name)
+        self.checkpoints_dir = os.path.join(options.checkpoints_dir, options.name)
         self.log_name = os.path.join(self.checkpoints_dir, 'logfile.txt')
-        self.name = opt.name
+        self.name = options.name
         if self.use_html:
             self.web_dir = os.path.join(self.checkpoints_dir, 'web')
             self.img_dir = os.path.join(self.web_dir, 'images')
@@ -72,7 +73,7 @@ class Visualizer():
         self.ncols = 4
         if not self.no_tb:
             # remove existing 
-            if not opt.continue_train:
+            if not options.continue_train:
                 for filename in glob.glob(self.checkpoints_dir+"/events*"):
                     os.remove(filename)
             self.writer = SummaryWriter(self.checkpoints_dir)

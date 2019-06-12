@@ -51,4 +51,10 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
 
         self.isTrain = True
+
+        # ########################
+        # New options
+        # ########################
+        parser.add_argument('--validation_train_split_ratio', type=float, default=0.9)
+
         return parser

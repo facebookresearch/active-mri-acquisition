@@ -13,14 +13,14 @@ if __name__ == '__main__':
     if opt.eval_full_valid:
         # use validation data
         val_data_loader = CreateFtTLoader(opt, is_test=True)
-        train_data_loader, _ = CreateFtTLoader(opt, valid_size=0.001) # use all as training
+        train_data_loader, _ = CreateFtTLoader(opt) # use all as training
     else:
-        train_data_loader, val_data_loader = CreateFtTLoader(opt, valid_size=0.9 if not opt.debug else 0.99)
+        train_data_loader, val_data_loader = CreateFtTLoader(opt)
 
     dataset_size = len(train_data_loader)
     model = create_model(opt)
     model.setup(opt)
-    visualizer = Visualizer(opt=opt, use_html=True)
+    visualizer = Visualizer(options=opt, use_html=True)
     total_steps = 0
     
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):

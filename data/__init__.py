@@ -50,34 +50,28 @@ def CreateDataLoader(opt):
 
 
 # Create Kspace Data
-def CreateFtTLoader(opt, valid_size=0.1, is_test=False):
+def CreateFtTLoader(options, is_test=False):
     
     if not is_test:
         trainloader, validloader = ft_data_loader.get_train_valid_loader(
-            batch_size=opt.batchSize,
-            load_size=opt.loadSize,
-            fine_size=opt.fineSize,
-            keep_ratio=opt.kspace_keep_ratio,
-            augment=True,
-            valid_size=valid_size, # a larger value to acculerate training
-            shuffle=True,
-            num_workers=opt.nThreads,
+            batch_size=options.batchSize,
+            validation_train_split_ratio=options.validation_train_split_ratio,
+            num_workers=options.nThreads,
             pin_memory=True,
-            normalize=opt.normalize_type,
-            which_dataset=opt.dataroot
+            which_dataset=options.dataroot
         )
         return trainloader, validloader
     else:
         testloader = ft_data_loader.get_test_loader(
-            batch_size=opt.batchSize,
-            load_size=opt.loadSize,
-            fine_size=opt.fineSize,
-            keep_ratio=opt.kspace_keep_ratio,
+            batch_size=options.batchSize,
+            load_size=options.loadSize,
+            fine_size=options.fineSize,
+            keep_ratio=options.kspace_keep_ratio,
             shuffle=True,
             num_workers=0,
             pin_memory=True,
-            normalize=opt.normalize_type,
-            which_dataset=opt.dataroot
+            normalize=options.normalize_type,
+            which_dataset=options.dataroot
         )
         return testloader
 

@@ -92,7 +92,6 @@ class FTPASGANModel(BaseModel):
         parser.add_argument('--set_sampling_at_stage', type=int, default=None, help='sampling from the model')
         parser.add_argument('--grad_ctx', action='store_true',
                             help='gan criterion computes adversarial loss signal at provided kspace lines')
-        parser.add_argument('--no_zscore_clamp', action='store_true', help='clamp data using z_score')
         parser.add_argument('--pixelwise_loss_merge', action='store_true', help='no uncertainty analysis')
 
         parser.set_defaults(pool_size=0)
@@ -182,7 +181,7 @@ class FTPASGANModel(BaseModel):
             # the imagnary part of reconstrued data
             self.imag_gt = torch.cuda.FloatTensor(opt.batchSize, 1, opt.fineSize, opt.fineSize)
 
-        self.zscore = 3 if not opt.no_zscore_clamp else 0
+        self.zscore = 3
 
         self.betas = [float(a) for a in self.opt.betas.split(',')]
         assert len(self.betas) == self.num_stage, 'beta length is euqal to the module #'
@@ -267,7 +266,7 @@ class FTPASGANModel(BaseModel):
         pred_fake = self.netD(fake, self.mask)
         self.loss_G_GAN = self.criterionGAN(
             pred_fake, True, self.mask, degree=1, updateG=True,
-            pred_gt=(fake[:,:1,:,:],self.real_B)) * self.opt.lambda_gan
+            pred_and_gt=(fake[:,:1,:,:],self.real_B)) * self.opt.lambda_gan
 
         self.loss_G_all = self.loss_G_GAN + self.loss_G
         self.loss_G_all.backward()
@@ -314,13 +313,13 @@ class FTPASGANModel(BaseModel):
         pred_fake = self.netD(fake, self.mask) 
 
         degree = 0 if not self.opt.use_allgen_for_disc else 0.2
-        self.loss_D_fake = self.criterionGAN(pred_fake, False, self.mask, degree=degree, pred_gt=(fake[:,:1,:,:],self.real_B))
+        self.loss_D_fake = self.criterionGAN(pred_fake, False, self.mask, degree=degree, pred_and_gt=(fake[:,:1,:,:],self.real_B))
         self.mask_disc_score(pred_fake, self.mask.squeeze())
 
         # Real
         real = self.create_D_input(self.real_B)
         pred_real = self.netD(real, self.mask)
-        self.loss_D_real = self.criterionGAN(pred_real, True, self.mask, degree=1, pred_gt=(fake[:,:1,:,:],self.real_B))
+        self.loss_D_real = self.criterionGAN(pred_real, True, self.mask, degree=1, pred_and_gt=(fake[:,:1,:,:],self.real_B))
 
         # Combined loss
         self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
