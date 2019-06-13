@@ -2,7 +2,7 @@ import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fft_utils import RFFT, IFFT, FFT
+from .fft_utils import RFFT, IFFT, FFT
 from torch.nn import init
 
 
@@ -265,3 +265,139 @@ class PasNetPlus(nn.Module):
             out3 = self.reparam(out3, logvar3)
 
         return [out1, out2, out3], [logvar1, logvar2, logvar3],  mask_embed
+
+
+class ReconstructorNetwork(nn.Module):
+
+    def __init__(self, number_of_encoder_input_channels, number_of_decoder_output_channels, number_of_filters=64, norm_layer=nn.BatchNorm2d, use_dropout=False,
+                 number_of_layers_residual_bottleneck=6, number_of_cascade_blocks=3, mask_embed_dim=6, padding_type='reflect', n_downsampling=3, img_width=128,
+                 use_mask_embedding=True, use_deconv=True):
+        assert(number_of_layers_residual_bottleneck >= 0)
+        super(ReconstructorNetwork, self).__init__()
+        self.number_of_encoder_input_channels = number_of_encoder_input_channels
+        self.number_of_decoder_output_channels = number_of_decoder_output_channels
+        self.number_of_filters = number_of_filters
+        self.use_deconv = use_deconv
+        if type(norm_layer) == functools.partial:
+            use_bias = norm_layer.func == nn.InstanceNorm2d
+        else:
+            use_bias = norm_layer == nn.InstanceNorm2d
+
+        self.number_of_cascade_blocks = number_of_cascade_blocks
+        self.use_mask_embedding = use_mask_embedding
+
+        if use_mask_embedding:
+            number_of_encoder_input_channels += mask_embed_dim
+            print('[Reconstructor Network] -> use masked embedding condition')
+
+        # Lists of encoder, residual bottleneck and decoder blocks for all cascade blocks
+        self.encoders_all_cascade_blocks = []
+        self.residual_bottlenecks_all_cascade_blocks = []
+        self.decoders_all_cascade_blocks = []
+
+        # Architecture for the Cascade Blocks
+        for iii in range(1, self.number_of_cascade_blocks + 1):
+            #TODO : may be clean up the local model variables
+
+            # Encoder for iii_th cascade block
+            encoder = [nn.ReflectionPad2d(1),
+                     nn.Conv2d(number_of_encoder_input_channels, number_of_filters * 2, kernel_size=3,
+                               stride=2, padding=0, bias=use_bias),
+                     norm_layer(number_of_filters * 2),
+                     nn.ReLU(True)]
+
+            for i in range(1, n_downsampling):
+                mult = 2** i
+                encoder += [nn.ReflectionPad2d(1),
+                          nn.Conv2d(number_of_filters * mult, number_of_filters * mult * 2, kernel_size=3,
+                                    stride=2, padding=0, bias=use_bias),
+                          norm_layer(number_of_filters * mult * 2),
+                          nn.ReLU(True)]
+            # setattr(self, 'model_encode' + str(iii), nn.Sequential(*encoder)) #TODO remove this renaming
+            self.encoders_all_cascade_blocks.append(nn.Sequential(*encoder))
+
+            # Bottleneck for iii_th cascade block
+            residual_bottleneck = []
+            mult = 2 ** n_downsampling
+            for i in range(number_of_layers_residual_bottleneck):
+                residual_bottleneck += [ResnetBlock(number_of_filters * mult, padding_type=padding_type, norm_layer=norm_layer,
+                                                    use_dropout=use_dropout, use_bias=use_bias)]
+
+            # setattr(self, 'model' + str(iii), nn.Sequential(*residual_bottleneck)) #TODO : remove
+            self.residual_bottlenecks_all_cascade_blocks.append(nn.Sequential(*residual_bottleneck))
+
+            # Decoder for iii_th cascade block
+            decoder = []
+            for i in range(n_downsampling):
+                mult = 2 ** (n_downsampling - i)
+                if self.use_deconv:
+                    decoder += [nn.ConvTranspose2d(number_of_filters * mult, int(number_of_filters * mult / 2),
+                                                   kernel_size=4, stride=2,
+                                                   padding=1,
+                                                   bias=use_bias),
+                              norm_layer(int(number_of_filters * mult / 2)),
+                              nn.ReLU(True)]
+                else:
+                    decoder += [nn.Upsample(scale_factor=2),
+                              nn.ReflectionPad2d(1)] + \
+                             [nn.Conv2d(number_of_filters * mult, int(number_of_filters * mult / 2),
+                                        kernel_size=3, stride=1,
+                                        padding=0,
+                                        bias=use_bias),
+                              norm_layer(int(number_of_filters * mult / 2)),
+                              nn.ReLU(True)]
+
+                    # model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
+            decoder += [nn.Conv2d(number_of_filters, number_of_decoder_output_channels, kernel_size=1, padding=0, bias=False)]  # better
+
+            # setattr(self, 'model_decode' + str(iii), nn.Sequential(*decoder)) #TODO
+            self.decoders_all_cascade_blocks.append(nn.Sequential(*decoder))
+
+        if use_mask_embedding:
+            self.mask_embedding_layer = nn.Sequential(nn.Conv2d(img_width, mask_embed_dim, 1, 1))
+
+        self.IFFT = IFFT()
+        self.FFT = FFT()
+
+    def data_consistency(self, x, input, mask):
+        ft_x = self.FFT(x)
+        fuse = self.IFFT((1 - mask) * ft_x) + input
+        return fuse
+
+    def embed_mask(self, mask):
+        b, c, h, w = mask.shape
+        mask = mask.view(b, w, 1, 1)
+        cond_embed = self.mask_embedding_layer(mask)
+        # cond_embed = cond_embed.repeat(1,1,w,w)
+
+        return cond_embed
+
+    def forward(self, zero_filled_input, mask):
+        # mask in [B,1,H,1]
+        if self.use_mask_embedding:
+            mask_embedding = self.embed_mask(mask)
+            mask_embedding = mask_embedding.repeat(1, 1, zero_filled_input.shape[2], zero_filled_input.shape[3])
+            encoder_input = torch.cat([zero_filled_input, mask_embedding], 1)
+        else:
+            encoder_input = zero_filled_input
+
+        for cascade_block, (encoder, residual_bottleneck, decoder) in enumerate(zip(self.encoders_all_cascade_blocks, self.residual_bottlenecks_all_cascade_blocks, self.decoders_all_cascade_blocks)):
+            encoder_output = encoder(encoder_input)
+            if cascade_block > 0:
+                encoder_output += residual_bottleneck_output    #Skip connection from previous residual block
+
+            residual_bottleneck_output = residual_bottleneck(encoder_output)
+
+            decoder_output = decoder(residual_bottleneck_output)
+
+            reconstructed_image = self.data_consistency(decoder_output[:,:2,:,:], zero_filled_input, mask)
+            uncertainty_map = decoder_output[:, 2:, :, :]
+
+            if self.use_mask_embedding:
+                encoder_input = torch.cat([reconstructed_image, mask_embedding], 1)
+            else:
+                encoder_input = reconstructed_image
+
+        return reconstructed_image, uncertainty_map, mask_embedding #TODO do we need to return mask embedding?
+
+        # #TODO: write a test with one dicom (128 x 128) and one raw (640 x 368) noise and try random parameters
