@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from data import CreateFtTLoader
+from data import create_data_loaders
 from models import create_model
 from models.fft_utils import RFFT, IFFT, FFT
 from util import util
@@ -57,8 +57,8 @@ class ReconstructionEnv:
     """ RL environment representing the active acquisition process with reconstruction model. """
     def __init__(self, initial_mask, opts):
         self.opts = opts
-        train_loader, valid_loader = CreateFtTLoader(opts, is_test=False)
-        test_loader = CreateFtTLoader(opts, is_test=True)
+        train_loader, valid_loader = create_data_loaders(opts, is_test=False)
+        test_loader = create_data_loaders(opts, is_test=True)
         self._dataset_train = train_loader.dataset
         self._dataset_test = test_loader.dataset
 

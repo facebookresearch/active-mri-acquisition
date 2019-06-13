@@ -11,7 +11,6 @@
 #SBATCH --comment="none"
 #SBATCH --nodes=1
 cd /private/home/lep/code/Active_Acquisition
-# srun --label python train.py --dataroot KNEE --name knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm_refactor \
 srun --label python run.py --dataroot KNEE --name full_test_run_py \
     --model ft_pasgan --checkpoints_dir /checkpoint/lep/active_acq --batchSize 48 --gpu_ids 0,1,2,3,4,5,6,7 \
     --print_freq 50 --lambda_gan 0.1 --mask_cond --where_loss_weight logvar --use_fixed_weight 1,1,1 --lr 0.0006 \

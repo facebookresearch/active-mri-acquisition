@@ -24,31 +24,6 @@ from .ft_util_vaes import MaskFunc, DicomDataTransform, Slice, FixedAcceleration
 import random
 
 
-def get_norm_transform(normalize):
-    if normalize == 'gan':
-        normalize_tf = transforms.Normalize(
-            mean=[0.5, 0.5, 0.5],
-            std=[0.5, 0.5, 0.5],
-        )
-    elif normalize == 'zero_one':  # channel = (channel - mean)/std
-        normalize_tf = transforms.Normalize(
-            mean=[0, 0, 0],
-            std=[1, 1, 1],
-        )
-    elif normalize == 'cae':  # channel = (channel - mean)/std
-        normalize_tf = transforms.Normalize(
-            mean=[0.5, 0.5, 0.5],
-            std=[1, 1, 1],
-        )
-    elif normalize == 'imagenet':  # channel = (channel - mean)/std
-        normalize_tf = transforms.Normalize(
-            mean=[0.43, 0.43, 0.43],
-            std=[0.23, 0.23, 0.23],
-        )
-    return normalize_tf
-
-
-# if fine_size is 128, load_size can be 144
 def get_train_valid_loader(batch_size,
                            num_workers=4,
                            pin_memory=False,
@@ -112,20 +87,8 @@ class SequentialSampler2(Sampler):
     def __len__(self):
         return len(self.data_source)
 
-def get_test_loader(batch_size,
-                    load_size,
-                    fine_size,
-                    keep_ratio,
-                    shuffle=True,
-                    num_workers=2,
-                    pin_memory=False,
-                    normalize='gan',
-                    which_dataset='MNIST',
-                    data_dir='/private/home/zizhao/work/data/'
-                    ):
 
-    print('load {} test dataset'.format(which_dataset))
-
+def get_test_loader(batch_size, num_workers=2, pin_memory=False, which_dataset='KNEE'):
     if which_dataset in ('KNEE'):
         mask_func = FixedAccelerationMaskFunc([0.125], [4])
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
@@ -148,66 +111,7 @@ def get_test_loader(batch_size,
         )
     elif which_dataset == 'KNEE_RAW':
         raise NotImplementedError
-
-        # from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
-        # sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
-        # print(f'KNEE_RAW >> subsampling_ratio: {keep_ratio}' )
-        # mask_func = Mask(reuse_mask=True, subsampling_ratio=keep_ratio, random=False)
-        # root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
-        # dataset = PCASingleCoilSlice(mask_func, root, which='val')
-        # print(f'{which_dataset} val has {len(dataset)} samples')
-        # num_workers = 8
     else:
-        normalize_tf = get_norm_transform(normalize)
-        # define transform
-        transform = transforms.Compose(
-            ([transforms.Grayscale()] if which_dataset == 'TinyImageNet' else []) + \
-            [
-                transforms.Resize(size=(load_size, load_size), interpolation=PIL.Image.NEAREST),
-                transforms.CenterCrop(fine_size),
-                transforms.ToTensor(),
-                normalize_tf,
-            ])
-
-        dataset = None
-        if which_dataset == 'CIFAR10':
-            dataset = FT_CIFAR10
-        elif which_dataset == 'ImageNet':
-            dataset = FT_ImageNet
-            data_dir = '/datasets01/imagenet_resized_144px/060718/061417'
-        elif which_dataset == 'MNIST':
-            dataset = FT_MNIST
-        elif which_dataset == 'TinyImageNet':
-            test_dir = '/datasets01/tinyimagenet/081318/test'
-            dataset = datasets.ImageFolder(test_dir, transform=transform)
-    
-        dataset = dataset(
-            root=data_dir, train=False, normalize=normalize,
-            transform=transform,  unmask_ratio=keep_ratio,
-        )
-
-        if shuffle:
-            random_seed = 1234
-
-            # TODO these seed setting may not really useful
-            # torch.manual_seed(random_seed)
-            # torch.cuda.manual_seed_all(random_seed)
-            random.seed(random_seed)
-            np.random.seed(random_seed)
-            # torch.backends.cudnn.deterministic = True
-
-            indices = list(range(len(dataset)))
-            np.random.shuffle(indices)
-            test_sampler = SequentialSampler2(indices)
-            data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=batch_size, shuffle=False,
-                num_workers=num_workers, pin_memory=pin_memory, sampler=test_sampler, drop_last=True
-            )
-        else:
-            data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=batch_size, shuffle=False,
-                num_workers=num_workers, pin_memory=pin_memory, drop_last=True
-            )
-
+        raise ValueError
     return data_loader
 

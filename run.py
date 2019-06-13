@@ -1,4 +1,4 @@
-from data import CreateFtTLoader
+from data import create_data_loaders
 from models.fft_utils import RFFT, IFFT, create_mask
 from models import create_model
 from models.networks import GANLossKspace
@@ -117,7 +117,8 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
 # TODO Add tensorboard visualization
 def main(options):
     max_epochs = options.niter + options.niter_decay + 1
-    train_data_loader, val_data_loader = CreateFtTLoader(options)
+    max_epochs = 1
+    train_data_loader, val_data_loader = create_data_loaders(options)
 
     model = create_model(options)
     model.setup(options)

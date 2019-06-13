@@ -1,11 +1,11 @@
 from options.test_options import TestOptions
-from data import CreateFtTLoader
+from data import create_data_loaders
 from models import create_model
 
 if __name__ == '__main__':
     opts = TestOptions().parse()
 
-    train_data_loader, val_data_loader = CreateFtTLoader(opts, valid_size=0.9)
+    train_data_loader, val_data_loader = create_data_loaders(opts, valid_size=0.9)
 
     dataset_size = len(train_data_loader)
     # Load model
