@@ -2,7 +2,7 @@ import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .fft_utils import RFFT, IFFT, FFT
+from fft_utils import RFFT, IFFT, FFT
 from torch.nn import init
 
 
@@ -269,10 +269,9 @@ class PasNetPlus(nn.Module):
 
 class ReconstructorNetwork(nn.Module):
 
-    def __init__(self, number_of_encoder_input_channels, number_of_decoder_output_channels, number_of_filters=64, norm_layer=nn.BatchNorm2d, use_dropout=False,
+    def __init__(self, number_of_encoder_input_channels=2, number_of_decoder_output_channels=3, number_of_filters=128, norm_layer=nn.BatchNorm2d, use_dropout=False,
                  number_of_layers_residual_bottleneck=6, number_of_cascade_blocks=3, mask_embed_dim=6, padding_type='reflect', n_downsampling=3, img_width=128,
-                 use_mask_embedding=True, use_deconv=True):
-        assert(number_of_layers_residual_bottleneck >= 0)
+                 use_deconv=True):
         super(ReconstructorNetwork, self).__init__()
         self.number_of_encoder_input_channels = number_of_encoder_input_channels
         self.number_of_decoder_output_channels = number_of_decoder_output_channels
@@ -284,9 +283,9 @@ class ReconstructorNetwork(nn.Module):
             use_bias = norm_layer == nn.InstanceNorm2d
 
         self.number_of_cascade_blocks = number_of_cascade_blocks
-        self.use_mask_embedding = use_mask_embedding
+        self.use_mask_embedding = True if mask_embed_dim > 0 else False
 
-        if use_mask_embedding:
+        if self.use_mask_embedding:
             number_of_encoder_input_channels += mask_embed_dim
             print('[Reconstructor Network] -> use masked embedding condition')
 
@@ -301,24 +300,24 @@ class ReconstructorNetwork(nn.Module):
 
             # Encoder for iii_th cascade block
             encoder = [nn.ReflectionPad2d(1),
-                     nn.Conv2d(number_of_encoder_input_channels, number_of_filters * 2, kernel_size=3,
+                     nn.Conv2d(number_of_encoder_input_channels, number_of_filters, kernel_size=3,
                                stride=2, padding=0, bias=use_bias),
-                     norm_layer(number_of_filters * 2),
+                     norm_layer(number_of_filters),
                      nn.ReLU(True)]
 
             for i in range(1, n_downsampling):
-                mult = 2** i
+                mult = 2 ** i
                 encoder += [nn.ReflectionPad2d(1),
-                          nn.Conv2d(number_of_filters * mult, number_of_filters * mult * 2, kernel_size=3,
+                          nn.Conv2d(number_of_filters * mult // 2, number_of_filters * mult, kernel_size=3,
                                     stride=2, padding=0, bias=use_bias),
-                          norm_layer(number_of_filters * mult * 2),
+                          norm_layer(number_of_filters * mult),
                           nn.ReLU(True)]
             # setattr(self, 'model_encode' + str(iii), nn.Sequential(*encoder)) #TODO remove this renaming
             self.encoders_all_cascade_blocks.append(nn.Sequential(*encoder))
 
             # Bottleneck for iii_th cascade block
             residual_bottleneck = []
-            mult = 2 ** n_downsampling
+            mult = 2 ** (n_downsampling - 1)
             for i in range(number_of_layers_residual_bottleneck):
                 residual_bottleneck += [ResnetBlock(number_of_filters * mult, padding_type=padding_type, norm_layer=norm_layer,
                                                     use_dropout=use_dropout, use_bias=use_bias)]
@@ -329,7 +328,7 @@ class ReconstructorNetwork(nn.Module):
             # Decoder for iii_th cascade block
             decoder = []
             for i in range(n_downsampling):
-                mult = 2 ** (n_downsampling - i)
+                mult = 2 ** (n_downsampling - 1 - i)
                 if self.use_deconv:
                     decoder += [nn.ConvTranspose2d(number_of_filters * mult, int(number_of_filters * mult / 2),
                                                    kernel_size=4, stride=2,
@@ -348,12 +347,12 @@ class ReconstructorNetwork(nn.Module):
                               nn.ReLU(True)]
 
                     # model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
-            decoder += [nn.Conv2d(number_of_filters, number_of_decoder_output_channels, kernel_size=1, padding=0, bias=False)]  # better
+            decoder += [nn.Conv2d(number_of_filters // 2, number_of_decoder_output_channels, kernel_size=1, padding=0, bias=False)]  # better
 
             # setattr(self, 'model_decode' + str(iii), nn.Sequential(*decoder)) #TODO
             self.decoders_all_cascade_blocks.append(nn.Sequential(*decoder))
 
-        if use_mask_embedding:
+        if self.use_mask_embedding:
             self.mask_embedding_layer = nn.Sequential(nn.Conv2d(img_width, mask_embed_dim, 1, 1))
 
         self.IFFT = IFFT()
@@ -373,13 +372,26 @@ class ReconstructorNetwork(nn.Module):
         return cond_embed
 
     def forward(self, zero_filled_input, mask):
-        # mask in [B,1,H,1]
+        '''
+
+        Args:
+                    zero_filled_input:  masked input image
+                                        shape = (batch_size, 2, height, width)
+                    mask: mask used in creating the zero filled image from ground truth image
+                                        shape = (batch_size, 1, 1, width)
+
+        Returns:    reconstructed high resolution image
+                    uncertainy map
+                    mask_embedding
+
+        '''
         if self.use_mask_embedding:
             mask_embedding = self.embed_mask(mask)
             mask_embedding = mask_embedding.repeat(1, 1, zero_filled_input.shape[2], zero_filled_input.shape[3])
             encoder_input = torch.cat([zero_filled_input, mask_embedding], 1)
         else:
             encoder_input = zero_filled_input
+            mask_embedding = None
 
         for cascade_block, (encoder, residual_bottleneck, decoder) in enumerate(zip(self.encoders_all_cascade_blocks, self.residual_bottlenecks_all_cascade_blocks, self.decoders_all_cascade_blocks)):
             encoder_output = encoder(encoder_input)
@@ -390,14 +402,70 @@ class ReconstructorNetwork(nn.Module):
 
             decoder_output = decoder(residual_bottleneck_output)
 
-            reconstructed_image = self.data_consistency(decoder_output[:,:2,:,:], zero_filled_input, mask)
-            uncertainty_map = decoder_output[:, 2:, :, :]
+            reconstructed_image = self.data_consistency(decoder_output[:,:-1,:,:], zero_filled_input, mask)
+            uncertainty_map = decoder_output[:, -1:, :, :]
 
             if self.use_mask_embedding:
                 encoder_input = torch.cat([reconstructed_image, mask_embedding], 1)
             else:
                 encoder_input = reconstructed_image
 
-        return reconstructed_image, uncertainty_map, mask_embedding #TODO do we need to return mask embedding?
+        return reconstructed_image, uncertainty_map, mask_embedding
 
         # #TODO: write a test with one dicom (128 x 128) and one raw (640 x 368) noise and try random parameters
+def test(data):
+    batch = 4
+
+    if data == 'dicom':
+        # DICOM
+        dicom = torch.rand(batch, 2, 128, 128)
+        dicom = dicom.type(torch.FloatTensor)
+
+        mask_dicom = torch.rand(batch, 1, 1, 128)
+        mask_dicom.type(torch.FloatTensor)
+
+        net_dicom = ReconstructorNetwork(number_of_encoder_input_channels=2,
+                                         number_of_decoder_output_channels=3,
+                                         number_of_filters=64,
+                                         number_of_layers_residual_bottleneck=6,
+                                         number_of_cascade_blocks=4,
+                                         mask_embed_dim=0,
+                                         n_downsampling=4,
+                                         img_width=dicom.shape[3]
+                                         )
+
+        out = net_dicom.forward(dicom, mask_dicom)
+
+    elif data == 'raw':
+        # RAW
+        raw = torch.rand(batch, 2, 640,368)
+        raw = raw.type(torch.FloatTensor)
+
+        mask_raw = torch.randint(0, 1, (batch, 1, 1, 368))
+        mask_raw = mask_raw.type(torch.FloatTensor)
+
+
+        net_raw = ReconstructorNetwork(number_of_encoder_input_channels=2,
+                                         number_of_decoder_output_channels=3,
+                                         number_of_filters=128,
+                                         number_of_layers_residual_bottleneck=3,
+                                         number_of_cascade_blocks=3,
+                                         mask_embed_dim=6,
+                                         n_downsampling=3,
+                                         img_width=raw.shape[3]
+                                         )
+
+        out = net_raw.forward(raw, mask_raw)
+
+    print('reconstruction shape :', out[0].shape)
+    print('uncertainty shape :', out[1].shape)
+
+    if out[2] is not None:
+        print('embedding shape :', out[2].shape)
+
+
+if __name__ == '__main__':
+    test(data='raw')
+    test(data='dicom')
+
+
