@@ -1,7 +1,7 @@
 from data import CreateFtTLoader
-from models.fft_utils import RFFT, IFFT
+from models.fft_utils import RFFT, IFFT, create_mask
 from models import create_model
-from networks import GANLossKspace
+from models.networks import GANLossKspace
 from options.train_options import TrainOptions
 from util import util
 
@@ -34,10 +34,16 @@ def certainty_loss(reconstruction, target, logvar):
     return 0.5 * (one_over_var * l2 + logvar)
 
 
-def prepare_inputs(target, mask, fft_functions, options):
+def get_mask(mask, batch_size, options):
+    if options.dynamic_mask_type == 'loader':
+        return mask.to(options.device)
+    return create_mask(batch_size, mask_type=options.dynamic_mask_type).to(options.device)
+
+
+def preprocess_inputs(target, mask, fft_functions, options):
     # TODO move all the clamp calls to data pre-processing
     target = clamp(target.to(options.device)).detach()
-    mask = mask.to(options.device)
+    mask = get_mask(mask, target.shape[0], options)
 
     kspace_ground_truth = fft_functions['rfft'](target)
     zero_filled_reconstruction = fft_functions['ifft'](kspace_ground_truth * mask)
@@ -50,7 +56,7 @@ def prepare_inputs(target, mask, fft_functions, options):
 def inference(batch, reconstructor, fft_functions, options):
     reconstructor.eval()
     with torch.no_grad():
-        zero_filled_reconstruction, target, mask = prepare_inputs(batch[1], batch[0], fft_functions, options)
+        zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0], fft_functions, options)
 
         # Get reconstructor output
         reconstructions_all_stages, logvars, mask_cond = reconstructor(zero_filled_reconstruction, mask)
@@ -63,8 +69,7 @@ def inference(batch, reconstructor, fft_functions, options):
 
 
 def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
-    # TODO make sure this makes comes correctly from the data loader (ie., random, low-to-high, etc.).
-    zero_filled_reconstruction, target, mask = prepare_inputs(batch[1], batch[0], fft_functions, options)
+    zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0], fft_functions, options)
 
     # Get reconstructor output
     reconstructions_all_stages, logvars, mask_cond = reconstructor(zero_filled_reconstruction, mask)
@@ -109,6 +114,7 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
     }
 
 
+# TODO Add tensorboard visualization
 def main(options):
     max_epochs = options.niter + options.niter_decay + 1
     train_data_loader, val_data_loader = CreateFtTLoader(options)
@@ -127,7 +133,7 @@ def main(options):
                                   use_mse_as_energy=options.use_mse_as_disc_energy,
                                   grad_ctx=model.opt.grad_ctx).to(model.device)
 
-    # TODO replace certainty loss by the library Gaussial NLL
+    # TODO replace certainty loss by the library Gaussian NLL
     losses = {'GAN': criterion_gan, 'NLL': certainty_loss}
 
     fft_functions = {'rfft': RFFT().to(options.device), 'ifft': IFFT().to(options.device)}

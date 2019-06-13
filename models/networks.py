@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
 from torch.optim import lr_scheduler
-from fft_utils import RFFT, IFFT, FFT
+from .fft_utils import RFFT, IFFT, FFT
 
 ###############################################################################
 # Helper Functions

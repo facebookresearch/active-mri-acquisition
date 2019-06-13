@@ -47,30 +47,25 @@ class FFT(nn.Module):
         return 'FFT()'
 
 
-def create_mask(n=128, mask_fraction=0.25, mask_low_freqs=5, seed=42, 
-                random_frac=False, random_full=False, random_lowfreq=False):
-    assert random_frac <= 1
-    if type(n) is int:
-        b = 1
-    else:
-        b, n = n[0], n[1]
-    
-    mask_fft = np.zeros((b,n)).astype(np.float32)
-    for i in range(b):
-        if random_frac:
+def create_mask(batch_size, num_entries=128, mask_type='random'):
+    mask = np.zeros((batch_size, num_entries)).astype(np.float32)
+    for i in range(batch_size):
+        if mask_type == 'random_zz':
+            mask_fraction = 0.25
+            mask_low_freqs = 5
             # we sample fraction and mask_low_freqs lines
             ratio = np.random.rand(1) + 0.5
             mask_frac = mask_fraction * ratio
             mask_lf = np.random.choice(range(int(mask_low_freqs * 0.5), int(mask_low_freqs * 1.5) + 1))
             seed = np.random.randint(10000)
-        elif random_lowfreq:
-            p_lines = mask_fraction * (np.random.rand() + 0.5)
-            mask_frac = 0
-            mask_lf = np.random.binomial(n, p_lines)
-        s_fft = (np.random.RandomState(seed).rand(n) < mask_frac).astype(np.float32)
-        mask_fft[i,:] = s_fft
-        mask_fft[i,:mask_lf] = mask_fft[i,-mask_lf:] = 1
+            s_fft = (np.random.RandomState(seed).rand(num_entries) < mask_frac).astype(np.float32)
+            mask[i, :] = s_fft
+            mask[i, :mask_lf] = mask[i,-mask_lf:] = 1
+        elif mask_type == 'random_lowfreq':
+            p_lines = 0.25 * np.random.random() + 0.125     # ~U(0.125, 0/375)
+            num_low_freq_lines = np.random.binomial(num_entries, p_lines)
+            mask[i, :num_low_freq_lines] = mask[i, -num_low_freq_lines:] = 1
+        else:
+            raise ValueError('Invalid mask type: {}.'.format(mask_type))
 
-    mask_fft = torch.from_numpy(mask_fft).view(b, 1, 1, n)
-
-    return mask_fft
+    return torch.from_numpy(mask).view(batch_size, 1, 1, num_entries)

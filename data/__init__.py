@@ -55,7 +55,6 @@ def CreateFtTLoader(options, is_test=False):
     if not is_test:
         trainloader, validloader = ft_data_loader.get_train_valid_loader(
             batch_size=options.batchSize,
-            validation_train_split_ratio=options.validation_train_split_ratio,
             num_workers=options.nThreads,
             pin_memory=True,
             which_dataset=options.dataroot

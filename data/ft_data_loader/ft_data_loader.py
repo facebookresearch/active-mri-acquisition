@@ -50,24 +50,18 @@ def get_norm_transform(normalize):
 
 # if fine_size is 128, load_size can be 144
 def get_train_valid_loader(batch_size,
-                           validation_train_split_ratio=0.1,
                            num_workers=4,
                            pin_memory=False,
                            which_dataset='KNEE'):
-    
-    error_msg = "[!] valid_size should be in the range [0, 1]."
-    assert ((validation_train_split_ratio >= 0) and (validation_train_split_ratio <= 1)), error_msg
 
-    print('load {} train/val (val ratio {:.4f}) dataset'.format(which_dataset, validation_train_split_ratio))
     if which_dataset == 'KNEE':
         mask_func = FixedAccelerationMaskFunc([0.125], [4])
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
         data_transform = DicomDataTransform(mask_func, None)
-        # TODO make sure you remove num_volumes and set it back to None
         train_data = Slice(data_transform, dicom_root, which='train', resolution=128,
-                           scan_type='all', num_volumes=10, num_rand_slices=None)
+                           scan_type='all', num_volumes=None, num_rand_slices=None)
         valid_data = Slice(data_transform, dicom_root, which='val', resolution=128,
-                           scan_type='all', num_volumes=10, num_rand_slices=None)
+                           scan_type='all', num_volumes=None, num_rand_slices=None)
 
         def init_fun(_):
             return np.random.seed()

@@ -102,7 +102,7 @@ class FTPASGANModel(BaseModel):
         parser.set_defaults(niter_decay=50)
         parser.set_defaults(print_freq=100)
         parser.set_defaults(norm='instance')
-        parser.set_defaults(dynamic_mask_type='random')
+        parser.set_defaults(dynamic_mask_type='random_zz')
         parser.set_defaults(no_dropout=True)
         parser.set_defaults(loadSize=144)
         parser.set_defaults(fineSize=128)
