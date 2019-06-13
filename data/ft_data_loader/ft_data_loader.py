@@ -103,15 +103,40 @@ def get_train_valid_loader(batch_size,
         )
 
     elif which_dataset == 'KNEE_RAW':
-        raise NotImplementedError
-        # from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
-        # mask_func = Mask(reuse_mask=False, subsampling_ratio=keep_ratio, random=True)
-        # root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
-        # if not os.path.isdir(root):
-        #     raise ImportError(path+' not exists. Change to the right path.')
-        # dataset = PCASingleCoilSlice(mask_func, root, which='train')
-        # print(f'{which_dataset} train has {len(dataset)} samples')
-        # num_workers = 8
+        mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4])
+        raw_root = '/datasets01_101/fastMRI/112718'  # TODO: datasource changed to 01_101 since dataset01 is offline (H2 being down). Revert when dataset01 is up.
+        if not os.path.isdir(raw_root):
+            raise ImportError(raw_root + ' not exists. Change to the right path.')
+        data_transform = RawDataTransform(mask_func)
+        train_data = RawSliceData(raw_root + '/singlecoil_train', transform=data_transform, num_cols=368)
+        valid_data = RawSliceData(raw_root + '/singlecoil_val', transform=data_transform, num_cols=368)
+
+        def init_fun(_):
+            return np.random.seed()
+
+        train_loader = torch.utils.data.DataLoader(
+            train_data,
+            batch_size=batch_size,
+            sampler=None,
+            shuffle=True,
+            num_workers=num_workers,
+            worker_init_fn=init_fun,
+            pin_memory=pin_memory,
+            drop_last=True
+        )
+
+        valid_loader = torch.utils.data.DataLoader(
+            valid_data,
+            batch_size=batch_size,
+            sampler=None,
+            shuffle=True,
+            num_workers=num_workers,
+            worker_init_fn=init_fun,
+            pin_memory=pin_memory,
+            drop_last=True
+        )
+        # raise NotImplementedError
+
     else:
         # define transforms
         valid_transform = transforms.Compose(
@@ -230,16 +255,28 @@ def get_test_loader(batch_size,
             drop_last=True
         )
     elif which_dataset == 'KNEE_RAW':
-        raise NotImplementedError
+        mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4])
+        raw_root = '/datasets01_101/fastMRI/112718'  # TODO: datasource changed to 01_101 since dataset01 is offline (H2 being down). Revert when dataset01 is up.
+        if not os.path.isdir(raw_root):
+            raise ImportError(raw_root + ' not exists. Change to the right path.')
+        data_transform = RawDataTransform(mask_func)
+        test_data = RawSliceData(raw_root + '/singlecoil_test', transform=data_transform, num_cols=368)
 
-        # from .parallel_data_loader_raw import PCASingleCoilSlice, Mask
-        # sys.path.insert(0, '/private/home/zizhao/work/fast_mri_master')
-        # print(f'KNEE_RAW >> subsampling_ratio: {keep_ratio}' )
-        # mask_func = Mask(reuse_mask=True, subsampling_ratio=keep_ratio, random=False)
-        # root = '/private/home/zizhao/work/mri_data/multicoil/raw_mmap/FBAI_Knee/'
-        # dataset = PCASingleCoilSlice(mask_func, root, which='val')
-        # print(f'{which_dataset} val has {len(dataset)} samples')
-        # num_workers = 8
+        def init_fun(_):
+            return np.random.seed()
+
+        data_loader = torch.utils.data.DataLoader(
+            test_data,
+            batch_size=batch_size,
+            sampler=None,
+            shuffle=False,
+            num_workers=num_workers,
+            worker_init_fn=init_fun,
+            pin_memory=pin_memory,
+            drop_last=True
+        )
+        # raise NotImplementedError
+
     else:
         normalize_tf = get_norm_transform(normalize)
         # define transform
