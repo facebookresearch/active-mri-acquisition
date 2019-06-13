@@ -401,17 +401,6 @@ class BaseModel:
                 mask = create_mask((batchSize, self.opt.fineSize),
                                    random_lowfreq=True,
                                    mask_fraction=self.opt.kspace_keep_ratio).to(self.device)
-            elif self.opt.dynamic_mask_type == 'random_full':
-                mask = create_mask((batchSize, self.opt.fineSize),
-                                   random_frac=True,
-                                   mask_fraction=self.opt.kspace_keep_ratio,
-                                   random_full=True).to(self.device)
-            elif self.opt.dynamic_mask_type == 'random_lines':
-                seed = np.random.randint(10000)
-                mask = create_mask((batchSize, self.opt.fineSize),
-                                   random_frac=False,
-                                   mask_fraction=self.opt.kspace_keep_ratio,
-                                   seed=seed).to(self.device)
         else:
             mask = create_mask((batchSize, self.opt.fineSize),
                                random_frac=False,

@@ -45,10 +45,15 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--residual_loss', action='store_true', help='supervise the residual loss')
         parser.add_argument('--l2_weight', action='store_true', help='network l2 regularization')
 
-        parser.add_argument('--dynamic_mask_type', type=str,
-                            choices=['random', 'random_lines', 'random_full', 'random_lowfreq', 'None'],
-                            default='None', help='changing mask during training')
+        parser.add_argument('--dynamic_mask_type', type=str, choices=['None', 'random_zz', 'random_lowfreq'],
+                            default='random_zz', help='Allows changing the mask during training')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
 
         self.isTrain = True
+
+        # ########################
+        # New options
+        # ########################
+        parser.add_argument('--validation_train_split_ratio', type=float, default=0.9)
+
         return parser

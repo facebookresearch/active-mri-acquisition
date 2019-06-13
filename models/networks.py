@@ -2,9 +2,9 @@ import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fft_utils import RFFT, IFFT, FFT
 from torch.nn import init
 from torch.optim import lr_scheduler
+from .fft_utils import RFFT, IFFT, FFT
 
 ###############################################################################
 # Helper Functions
@@ -158,11 +158,11 @@ class GANLossKspace(nn.Module):
                 target_tensor[i,idx] = 1 
         return target_tensor
 
-    def __call__(self, input, target_is_real, mask, degree=1, updateG=False, pred_gt=None):
+    def __call__(self, input, target_is_real, mask, degree=1, updateG=False, pred_and_gt=None):
         # input [B, imSize]
         # degree is the realistic degree of output
         # set updateG to True when training G.
-        target_tensor = self.get_target_tensor(input, target_is_real, degree, mask, pred_gt)
+        target_tensor = self.get_target_tensor(input, target_is_real, degree, mask, pred_and_gt)
         b,w = target_tensor.shape
         if updateG and not self.grad_ctx:
             mask_ = mask.squeeze()

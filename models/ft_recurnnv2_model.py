@@ -1,5 +1,5 @@
+import torch
 import torch.nn.functional as F
-from fft_utils import *
 from torch import nn
 from torch.nn.parameter import Parameter
 
