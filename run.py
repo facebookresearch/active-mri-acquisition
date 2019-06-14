@@ -1,5 +1,5 @@
 from data import create_data_loaders
-from models.fft_utils import RFFT, IFFT, create_mask
+from models.fft_utils import RFFT, IFFT, clamp, preprocess_inputs, gaussian_nll_loss
 from models import create_model
 from models.networks import GANLossKspace
 from options.train_options import TrainOptions
@@ -14,43 +14,6 @@ import warnings
 from ignite.contrib.handlers import ProgressBar
 from ignite.engine import Engine, Events
 from ignite.handlers import ModelCheckpoint, Timer
-
-
-def clamp(tensor):
-    # TODO: supposed to be clamping to zscore 3, make option for this
-    return tensor.clamp(-3, 3)
-
-
-def certainty_loss(reconstruction, target, logvar):
-    # gaussian nll loss
-    l2 = F.mse_loss(reconstruction[:, :1, :, :], target[:, :1, :, :], reduce=False)
-
-    # Clip logvar to make variance in [0.01, 5], for numerical stability
-    logvar = logvar.clamp(-4.605, 1.609)
-    one_over_var = torch.exp(-logvar)
-
-    # uncertainty loss
-    assert len(l2) == len(logvar)
-    return 0.5 * (one_over_var * l2 + logvar)
-
-
-def get_mask(mask, batch_size, options):
-    if options.dynamic_mask_type == 'loader':
-        return mask.to(options.device)
-    return create_mask(batch_size, mask_type=options.dynamic_mask_type).to(options.device)
-
-
-def preprocess_inputs(target, mask, fft_functions, options):
-    # TODO move all the clamp calls to data pre-processing
-    target = clamp(target.to(options.device)).detach()
-    mask = get_mask(mask, target.shape[0], options)
-
-    kspace_ground_truth = fft_functions['rfft'](target)
-    zero_filled_reconstruction = fft_functions['ifft'](kspace_ground_truth * mask)
-
-    target = torch.cat([target, torch.zeros_like(target)], dim=1)
-
-    return zero_filled_reconstruction, target, mask
 
 
 def inference(batch, reconstructor, fft_functions, options):
@@ -117,7 +80,8 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
 # TODO Add tensorboard visualization
 def main(options):
     max_epochs = options.niter + options.niter_decay + 1
-    max_epochs = 1
+    # TODO remove this
+    max_epochs = 10
     train_data_loader, val_data_loader = create_data_loaders(options)
 
     model = create_model(options)
@@ -125,17 +89,15 @@ def main(options):
     reconstructor = model.netG
     evaluator = model.netD
 
+    # Optimizers and losses
     optimizers = {
         'G': optim.Adam(reconstructor.parameters(), lr=options.lr, betas=(options.beta1, 0.999)),
         'D': optim.Adam(evaluator.parameters(), lr=options.lr, betas=(options.beta1, 0.999))
     }
-
     criterion_gan = GANLossKspace(use_lsgan=not options.no_lsgan,
                                   use_mse_as_energy=options.use_mse_as_disc_energy,
                                   grad_ctx=model.opt.grad_ctx).to(model.device)
-
-    # TODO replace certainty loss by the library Gaussian NLL
-    losses = {'GAN': criterion_gan, 'NLL': certainty_loss}
+    losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}
 
     fft_functions = {'rfft': RFFT().to(options.device), 'ifft': IFFT().to(options.device)}
 
@@ -143,11 +105,19 @@ def main(options):
         lambda engine, batch: update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, options))
     validation_engine = Engine(lambda engine, batch: inference(batch, reconstructor, fft_functions, options))
 
-    # TODO implement code to save the best model
-    checkpoint_handler = ModelCheckpoint(os.path.join(options.checkpoints_dir, options.name), 'networks',
-                                         save_interval=1, n_saved=1, require_empty=True)
-    trainer.add_event_handler(event_name=Events.EPOCH_COMPLETED, handler=checkpoint_handler,
+    # Checkpoint event handlers
+    regular_checkpoint_handler = ModelCheckpoint(os.path.join(options.checkpoints_dir, options.name), 'networks',
+                                                 save_interval=1, n_saved=1, require_empty=True)
+    trainer.add_event_handler(event_name=Events.EPOCH_COMPLETED, handler=regular_checkpoint_handler,
                               to_save={'reconstructor': reconstructor, 'evaluator': evaluator})
+
+    best_checkpoint_handler = ModelCheckpoint(os.path.join(options.checkpoints_dir, options.name), 'networks',
+                                              score_function=lambda ev: -ev.state.output['MSE'],
+                                              score_name='mse',
+                                              n_saved=1,
+                                              require_empty=False)
+    validation_engine.add_event_handler(event_name=Events.COMPLETED, handler=best_checkpoint_handler,
+                                        to_save={'reconstructor': reconstructor, 'evaluator': evaluator})
 
     timer = Timer(average=True)
     timer.attach(trainer, start=Events.EPOCH_STARTED, resume=Events.ITERATION_STARTED,
@@ -187,7 +157,7 @@ def main(options):
             engine.terminate()
             warnings.warn('KeyboardInterrupt caught. Exiting gracefully.')
 
-            checkpoint_handler(engine, {
+            regular_checkpoint_handler(engine, {
                 'reconstructor_exception': reconstructor,
                 'evaluator_exception': evaluator
             })

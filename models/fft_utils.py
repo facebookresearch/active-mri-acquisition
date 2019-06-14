@@ -1,7 +1,7 @@
-
-import torch
-from torch import nn
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 # note that for IFFT we do not use irfft
@@ -45,6 +45,37 @@ class FFT(nn.Module):
 
     def __repr__(self):
         return 'FFT()'
+
+
+def clamp(tensor):
+    # TODO: supposed to be clamping to zscore 3, make option for this
+    return tensor.clamp(-3, 3)
+
+
+def gaussian_nll_loss(reconstruction, target, logvar):
+    l2 = F.mse_loss(reconstruction[:, :1, :, :], target[:, :1, :, :], reduce=False)
+    # Clip logvar to make variance in [0.01, 5], for numerical stability
+    logvar = logvar.clamp(-4.605, 1.609)
+    one_over_var = torch.exp(-logvar)
+
+    assert len(l2) == len(logvar)
+    return 0.5 * (one_over_var * l2 + logvar)
+
+
+def preprocess_inputs(target, mask, fft_functions, options):
+    # TODO move all the clamp calls to data pre-processing
+    target = clamp(target.to(options.device)).detach()
+
+    if options.dynamic_mask_type != 'loader':
+        mask = create_mask(target.shape[0], mask_type=options.dynamic_mask_type)
+    mask = mask.to(options.device)
+
+    kspace_ground_truth = fft_functions['rfft'](target)
+    zero_filled_reconstruction = fft_functions['ifft'](kspace_ground_truth * mask)
+
+    target = torch.cat([target, torch.zeros_like(target)], dim=1)
+
+    return zero_filled_reconstruction, target, mask
 
 
 def create_mask(batch_size, num_entries=128, mask_type='random'):
