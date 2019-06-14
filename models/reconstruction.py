@@ -399,7 +399,7 @@ class ReconstructorNetwork(nn.Module):
         for cascade_block, (encoder, residual_bottleneck, decoder) in enumerate(zip(self.encoders_all_cascade_blocks, self.residual_bottlenecks_all_cascade_blocks, self.decoders_all_cascade_blocks)):
             encoder_output = encoder(encoder_input)
             if cascade_block > 0:
-                encoder_output += residual_bottleneck_output    #Skip connection from previous residual block
+                encoder_output = encoder_output + residual_bottleneck_output    #Skip connection from previous residual block
 
             residual_bottleneck_output = residual_bottleneck(encoder_output)
 
