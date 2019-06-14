@@ -2,6 +2,7 @@ from data import create_data_loaders
 from models.fft_utils import RFFT, IFFT, create_mask
 from models import create_model
 from models.networks import GANLossKspace
+from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
 from util import util
 
@@ -60,7 +61,7 @@ def inference(batch, reconstructor, fft_functions, options):
 
         # Get reconstructor output
         reconstructions_all_stages, logvars, mask_cond = reconstructor(zero_filled_reconstruction, mask)
-        reconstruction_last_stage = reconstructions_all_stages[-1]
+        reconstruction_last_stage = reconstructions_all_stages
 
         mse = F.mse_loss(reconstruction_last_stage[:, :1, ...], target[:, :1, ...], size_average=True)
         ssim = util.ssim_metric(reconstruction_last_stage[:, :1, ...], target[:, :1, ...])
@@ -72,14 +73,14 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
     zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0], fft_functions, options)
 
     # Get reconstructor output
-    reconstructions_all_stages, logvars, mask_cond = reconstructor(zero_filled_reconstruction, mask)
-    reconstruction_last_stage = reconstructions_all_stages[-1]
+    reconstruction_last_stage, uncertainty_last_stage, mask_cond = reconstructor(zero_filled_reconstruction, mask)
+    # reconstruction_last_stage = reconstructions_all_stages
 
     # ------------------------------------------------------------------------
     # Update evaluator
     # ------------------------------------------------------------------------
     optimizers['D'].zero_grad()
-    fake = torch.cat([clamp(reconstruction_last_stage[:, :1, :, :]), mask_cond.detach()], dim=1)
+    fake = torch.cat([clamp(reconstruction_last_stage[:, :1, :, :]), mask_cond.detach()], dim=1) # considering only the real component of reconstruction
     detached_fake = fake.detach()
     output = evaluator(detached_fake, mask)
     loss_D_fake = losses['GAN'](output, False, mask, degree=0, pred_and_gt=(detached_fake[:, :1, ...], target))
@@ -97,8 +98,8 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
     # ------------------------------------------------------------------------
     optimizers['G'].zero_grad()
     loss_G = 0
-    for stage, (reconstruction, logvar) in enumerate(zip(reconstructions_all_stages, logvars)):
-        loss_G += losses['NLL'](reconstruction, target, logvar)
+    # for stage, (reconstruction, logvar) in enumerate(zip(reconstructions_all_stages, logvars)):
+    loss_G += losses['NLL'](reconstruction_last_stage, target, uncertainty_last_stage)
     loss_G = loss_G.mean()
     output = evaluator(fake, mask)
     loss_G_GAN = losses['GAN'](output, True, mask, degree=1, updateG=True, pred_and_gt=(fake[:, :1, ...], target))
@@ -122,7 +123,20 @@ def main(options):
 
     model = create_model(options)
     model.setup(options)
-    reconstructor = model.netG
+
+    # Create Reconstructor Model
+    reconstructor = ReconstructorNetwork(number_of_cascade_blocks=options.number_of_cascade_blocks,
+                                         n_downsampling=options.n_downsampling,
+                                         number_of_filters=options.number_of_filters,
+                                         number_of_layers_residual_bottleneck=options.number_of_layers_residual_bottleneck,
+                                         mask_embed_dim=options.mask_embed_dim,
+                                         dropout_probability=options.dropout_probability,
+                                         img_width=128,   # TODO : CHANGE!
+                                         use_deconv=options.use_deconv
+                                         )
+    reconstructor = torch.nn.DataParallel(reconstructor).cuda()
+
+    # Create Evaluator Model
     evaluator = model.netD
 
     optimizers = {
