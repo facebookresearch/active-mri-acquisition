@@ -56,4 +56,13 @@ class TrainOptions(BaseOptions):
         # ########################
         parser.add_argument('--validation_train_split_ratio', type=float, default=0.9)
 
+        # Options for Reconstruction Model
+        parser.add_argument('--number_of_filters', type=int, default=128)
+        parser.add_argument('--dropout_probability', type=float, default=0)
+        parser.add_argument('--number_of_cascade_blocks', type=int, default=3)
+        parser.add_argument('--number_of_layers_residual_bottleneck', type=int, default=6)
+        parser.add_argument('--mask_embed_dim', type=int, default=6)
+        parser.add_argument('--n_downsampling', type=int, default=3)
+        parser.add_argument('--use_deconv', type=bool, default=True)
+
         return parser
