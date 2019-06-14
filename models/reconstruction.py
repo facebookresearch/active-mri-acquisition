@@ -2,7 +2,7 @@ import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fft_utils import RFFT, IFFT, FFT
+from .fft_utils import RFFT, IFFT, FFT
 from torch.nn import init
 
 
@@ -22,28 +22,30 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 
-def init_weights(net, init_type='normal', gain=0.02):
-    def init_func(m):
-        classname = m.__class__.__name__
-        if hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
-            if init_type == 'normal':
-                init.normal_(m.weight.data, 0.0, gain)
-            elif init_type == 'xavier':
-                init.xavier_normal_(m.weight.data, gain=gain)
-            elif init_type == 'kaiming':
-                init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
-            elif init_type == 'orthogonal':
-                init.orthogonal_(m.weight.data, gain=gain)
-            else:
-                raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
-            if hasattr(m, 'bias') and m.bias is not None:
-                init.constant_(m.bias.data, 0.0)
-        elif classname.find('BatchNorm2d') != -1:
-            init.normal_(m.weight.data, 1.0, gain)
+# def init_weights(net, init_type='normal', gain=0.02):
+def init_func(m):
+    init_type = 'normal'
+    gain = 0.02
+    classname = m.__class__.__name__
+    if hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
+        if init_type == 'normal':
+            init.normal_(m.weight.data, 0.0, gain)
+        elif init_type == 'xavier':
+            init.xavier_normal_(m.weight.data, gain=gain)
+        elif init_type == 'kaiming':
+            init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+        elif init_type == 'orthogonal':
+            init.orthogonal_(m.weight.data, gain=gain)
+        else:
+            raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
+        if hasattr(m, 'bias') and m.bias is not None:
             init.constant_(m.bias.data, 0.0)
+    elif classname.find('BatchNorm2d') != -1:
+        init.normal_(m.weight.data, 1.0, gain)
+        init.constant_(m.bias.data, 0.0)
 
     print('initialize network with %s' % init_type)
-    net.apply(init_func)
+    # net.apply(init_func)
 
 #TODO: DataParallel should not be here...
 def init_net(net, init_type='normal', gpu_ids=[]):
@@ -66,11 +68,11 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
 
 # Define a resnet block
 class ResnetBlock(nn.Module):
-    def __init__(self, dim, padding_type, norm_layer, use_dropout, use_bias):
+    def __init__(self, dim, padding_type, norm_layer, dropout_probability, use_bias):
         super(ResnetBlock, self).__init__()
-        self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, use_dropout, use_bias)
+        self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, dropout_probability, use_bias)
 
-    def build_conv_block(self, dim, padding_type, norm_layer, use_dropout, use_bias):
+    def build_conv_block(self, dim, padding_type, norm_layer, dropout_probability, use_bias):
         conv_block = []
         p = 0
         if padding_type == 'reflect':
@@ -85,8 +87,8 @@ class ResnetBlock(nn.Module):
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p, bias=use_bias),
                        norm_layer(dim),
                        nn.ReLU(True)]
-        if use_dropout:
-            conv_block += [nn.Dropout(0.5)]
+        if dropout_probability > 0:
+            conv_block += [nn.Dropout(dropout_probability)]
 
         p = 0
         if padding_type == 'reflect':
@@ -269,7 +271,7 @@ class PasNetPlus(nn.Module):
 
 class ReconstructorNetwork(nn.Module):
 
-    def __init__(self, number_of_encoder_input_channels=2, number_of_decoder_output_channels=3, number_of_filters=128, norm_layer=nn.BatchNorm2d, use_dropout=False,
+    def __init__(self, number_of_encoder_input_channels=2, number_of_decoder_output_channels=3, number_of_filters=128, dropout_probability=0,
                  number_of_layers_residual_bottleneck=6, number_of_cascade_blocks=3, mask_embed_dim=6, padding_type='reflect', n_downsampling=3, img_width=128,
                  use_deconv=True):
         super(ReconstructorNetwork, self).__init__()
@@ -277,10 +279,13 @@ class ReconstructorNetwork(nn.Module):
         self.number_of_decoder_output_channels = number_of_decoder_output_channels
         self.number_of_filters = number_of_filters
         self.use_deconv = use_deconv
+        norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
+
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
+
 
         self.number_of_cascade_blocks = number_of_cascade_blocks
         self.use_mask_embedding = True if mask_embed_dim > 0 else False
@@ -290,9 +295,9 @@ class ReconstructorNetwork(nn.Module):
             print('[Reconstructor Network] -> use masked embedding condition')
 
         # Lists of encoder, residual bottleneck and decoder blocks for all cascade blocks
-        self.encoders_all_cascade_blocks = []
-        self.residual_bottlenecks_all_cascade_blocks = []
-        self.decoders_all_cascade_blocks = []
+        self.encoders_all_cascade_blocks = nn.ModuleList()
+        self.residual_bottlenecks_all_cascade_blocks = nn.ModuleList()
+        self.decoders_all_cascade_blocks = nn.ModuleList()
 
         # Architecture for the Cascade Blocks
         for iii in range(1, self.number_of_cascade_blocks + 1):
@@ -312,7 +317,7 @@ class ReconstructorNetwork(nn.Module):
                                     stride=2, padding=0, bias=use_bias),
                           norm_layer(number_of_filters * mult),
                           nn.ReLU(True)]
-            # setattr(self, 'model_encode' + str(iii), nn.Sequential(*encoder)) #TODO remove this renaming
+
             self.encoders_all_cascade_blocks.append(nn.Sequential(*encoder))
 
             # Bottleneck for iii_th cascade block
@@ -320,9 +325,8 @@ class ReconstructorNetwork(nn.Module):
             mult = 2 ** (n_downsampling - 1)
             for i in range(number_of_layers_residual_bottleneck):
                 residual_bottleneck += [ResnetBlock(number_of_filters * mult, padding_type=padding_type, norm_layer=norm_layer,
-                                                    use_dropout=use_dropout, use_bias=use_bias)]
+                                                    dropout_probability=dropout_probability, use_bias=use_bias)]
 
-            # setattr(self, 'model' + str(iii), nn.Sequential(*residual_bottleneck)) #TODO : remove
             self.residual_bottlenecks_all_cascade_blocks.append(nn.Sequential(*residual_bottleneck))
 
             # Decoder for iii_th cascade block
@@ -349,7 +353,6 @@ class ReconstructorNetwork(nn.Module):
                     # model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
             decoder += [nn.Conv2d(number_of_filters // 2, number_of_decoder_output_channels, kernel_size=1, padding=0, bias=False)]  # better
 
-            # setattr(self, 'model_decode' + str(iii), nn.Sequential(*decoder)) #TODO
             self.decoders_all_cascade_blocks.append(nn.Sequential(*decoder))
 
         if self.use_mask_embedding:
@@ -357,6 +360,8 @@ class ReconstructorNetwork(nn.Module):
 
         self.IFFT = IFFT()
         self.FFT = FFT()
+
+        self.apply(init_func)
 
     def data_consistency(self, x, input, mask):
         ft_x = self.FFT(x)
@@ -367,8 +372,6 @@ class ReconstructorNetwork(nn.Module):
         b, c, h, w = mask.shape
         mask = mask.view(b, w, 1, 1)
         cond_embed = self.mask_embedding_layer(mask)
-        # cond_embed = cond_embed.repeat(1,1,w,w)
-
         return cond_embed
 
     def forward(self, zero_filled_input, mask):
@@ -412,7 +415,6 @@ class ReconstructorNetwork(nn.Module):
 
         return reconstructed_image, uncertainty_map, mask_embedding
 
-        # #TODO: write a test with one dicom (128 x 128) and one raw (640 x 368) noise and try random parameters
 def test(data):
     batch = 4
 
@@ -431,7 +433,8 @@ def test(data):
                                          number_of_cascade_blocks=4,
                                          mask_embed_dim=0,
                                          n_downsampling=4,
-                                         img_width=dicom.shape[3]
+                                         img_width=dicom.shape[3],
+                                         dropout_probability=0.5
                                          )
 
         out = net_dicom.forward(dicom, mask_dicom)
