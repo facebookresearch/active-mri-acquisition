@@ -44,7 +44,7 @@ def init_func(m):
         init.normal_(m.weight.data, 1.0, gain)
         init.constant_(m.bias.data, 0.0)
 
-    print('initialize network with %s' % init_type)
+    # print('initialize network with %s' % init_type)
     # net.apply(init_func)
 
 #TODO: DataParallel should not be here...
