@@ -7,49 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class kspaceMap(nn.Module):
-    def __init__(self, height=128, width=128, mask_embed_dim=6):
-        super(kspaceMap, self).__init__()
-
-        self.RFFT = RFFT()
-        self.IFFT = IFFT()
-
-        self.height = height
-        self.width = width
-
-        # seperate image to spectral maps
-        self.register_buffer('separate_mask', torch.FloatTensor(1, width, 1, 1, width))
-        self.separate_mask.fill_(0)
-        for i in range(width):
-            self.separate_mask[0, i, 0, 0, i] = 1
-
-        if mask_embed_dim > 0:
-            self.embed = nn.Sequential(
-                nn.Conv2d(height, width, 1, 1, padding=0, bias=False),
-                nn.LeakyReLU(0.2, True)
-            )
-        else:
-            print(f'[kspaceMap] -> do not use kspace embedding')
-
-    def forward(self, reconstructed_image, mask_embedding):
-        batch_size = reconstructed_image.shape[0]
-
-        kspace = self.RFFT(reconstructed_image)
-        kspace = kspace.unsqueeze(1).repeat(1, self.width, 1, 1, 1)
-        masked_kspace = self.separate_mask * kspace
-        masked_kspace = masked_kspace.view(batch_size * self.width, 2, self.height, self.width)
-
-        # discard the imaginary part [B,imsize,imsize, imsize]
-        separate_images = self.IFFT(masked_kspace)[:, 0, :, :].view(batch_size, self.width, self.height, self.width)
-
-        if mask_embedding is not None:
-            spectral_map = torch.cat([separate_images, mask_embedding], dim=1)
-        else:
-            spectral_map = separate_images
-
-        return spectral_map
-
-
 class SimpleSequential(nn.Module):
     def __init__(self, net1, net2):
         super(SimpleSequential, self).__init__()
@@ -74,17 +31,65 @@ def define_D(input_nc, ndf, which_model_netD,
     return init_net(netD, init_type, gpu_ids)
 
 
+class SpectralMapDecomposition(nn.Module):
+    def __init__(self):
+        super(SpectralMapDecomposition, self).__init__()
+
+        self.RFFT = RFFT()
+        self.IFFT = IFFT()
+
+    def forward(self, reconstructed_image, mask_embedding):
+        """
+
+        Args:
+            reconstructed_image: image reconstructed by ReconstructorNetwork
+                                    shape   :   (batch_size, 1, height, width)
+            mask_embedding: mask embedding created by ReconstructorNetwork (Replicated along height and width)
+                                    shape   :   (batch_size, embedding_dimension, height, width)
+
+        Returns:    spectral map concatenated with mask embedding
+                        shape   : (batch_size, width + embedding_dimension, height, width)
+
+        """
+        batch_size = reconstructed_image.shape[0]
+        height = reconstructed_image.shape[2]
+        width = reconstructed_image.shape[3]
+
+        # create spectral maps in kspace
+        kspace = self.RFFT(reconstructed_image)
+        kspace = kspace.unsqueeze(1).repeat(1, width, 1, 1, 1)
+
+        # seperate image into spectral maps
+        separate_mask = torch.zeros([1, width, 1, 1, width], dtype=torch.float32)
+        for i in range(width):
+            separate_mask[0, i, 0, 0, i] = 1
+
+        masked_kspace = separate_mask * kspace
+        masked_kspace = masked_kspace.view(batch_size * width, 2, height, width)
+
+        # convert spectral maps to image space
+        # discard the imaginary part
+        separate_images = self.IFFT(masked_kspace)[:, 0, :, :].view(batch_size, width, height, width)
+
+        # concatenate mask embedding
+        if mask_embedding is not None:
+            spectral_map = torch.cat([separate_images, mask_embedding], dim=1)
+        else:
+            spectral_map = separate_images
+
+        return spectral_map
+
+
 class EvaluatorNetwork(nn.Module):
     def __init__(self, number_of_filters=256,
                  number_of_conv_layers=4,
                  use_sigmoid=False,
-                 height=128,
                  width=128,
                  mask_embed_dim=6):
         print(f'[NLayerDiscriminatorChannel] -> n_layers = {number_of_conv_layers}')
         super(EvaluatorNetwork, self).__init__()
 
-        self.spectral_map = kspaceMap(height, width) #TODO: clean up kspaceMap function
+        self.spectral_map = SpectralMapDecomposition()
         self.mask_embed_dim = mask_embed_dim
 
         number_of_input_channels = width + mask_embed_dim
@@ -137,7 +142,8 @@ class EvaluatorNetwork(nn.Module):
             mask_embedding:     mask embedding returned by the reconstructor
                         shape   :   (batch_size, embedding_dimension, height, width)
 
-        Returns:
+        Returns: evaluator score for each measurement
+                    shape   :   (batch_size, width)
 
         """
 
@@ -208,7 +214,7 @@ class GANLossKspace(nn.Module):
             return self.loss(input, target_tensor) / (b*w)
 
 def test_evaluator(height, width, number_of_filters, number_of_conv_layers, use_sigmoid, mask_embed_dim):
-    batch = 2
+    batch = 4
 
     image = torch.rand(batch, 1, height, width)
     image = image.type(torch.FloatTensor)
@@ -222,7 +228,6 @@ def test_evaluator(height, width, number_of_filters, number_of_conv_layers, use_
     evaluator = EvaluatorNetwork(number_of_filters=number_of_filters,
                                  number_of_conv_layers=number_of_conv_layers,
                                  use_sigmoid=use_sigmoid,
-                                 height=height,
                                  width=width,
                                  mask_embed_dim=mask_embed_dim)
     output = evaluator(image, mask_embedding)
@@ -245,5 +250,5 @@ if __name__ == '__main__':
                    number_of_filters=64,
                    number_of_conv_layers=5,
                    use_sigmoid=False,
-                   mask_embed_dim=6)
+                   mask_embed_dim=0)
 
