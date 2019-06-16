@@ -1,10 +1,49 @@
+from fft_utils import RFFT, IFFT, FFT
+from reconstruction import get_norm_layer, init_net, init_func
+
+import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fft_utils import RFFT, IFFT, FFT
-from torch.nn import init
-from reconstruction import get_norm_layer, init_net
 
+
+class kspaceMap(nn.Module):
+    def __init__(self, imSize=128, no_embed=False):
+        super(kspaceMap, self).__init__()
+
+        self.RFFT = RFFT()
+        self.IFFT = IFFT()
+        self.imSize = imSize
+        # seperate image to spectral maps
+        self.register_buffer('seperate_mask', torch.FloatTensor(1, imSize, 1, 1, imSize))
+        self.seperate_mask.fill_(0)
+        for i in range(imSize):
+            self.seperate_mask[0, i, 0, 0, i] = 1
+
+        self.no_embed = no_embed
+        if not no_embed:
+            self.embed = nn.Sequential(
+                nn.Conv2d(imSize, imSize, 1, 1, padding=0, bias=False),
+                nn.LeakyReLU(0.2, True)
+            )
+        else:
+            print(f'[kspaceMap] -> do not use kspace embedding')
+
+    def forward(self, input):
+        # we assume the input only has real part of images (if they are obtained from IFFT)
+        bz = input.shape[0]
+        x = input[:, :1, :, :]
+        if input.shape[1] > 1:
+            others = input[:, 1:, :, :]
+        kspace = self.RFFT(x)
+
+        kspace = kspace.unsqueeze(1).repeat(1, self.imSize, 1, 1, 1)  # [B,imsize,2,imsize,imsize]
+        masked_kspace = self.seperate_mask * kspace
+        masked_kspace = masked_kspace.view(bz * self.imSize, 2, self.imSize, self.imSize)
+        # discard the imaginary part [B,imsize,imsize, imsize]
+        seperate_imgs = self.IFFT(masked_kspace)[:, 0, :, :].view(bz, self.imSize, self.imSize, self.imSize)
+
+        return torch.cat([seperate_imgs, others], 1)
 
 
 class SimpleSequential(nn.Module):
@@ -23,7 +62,7 @@ def define_D(input_nc, ndf, which_model_netD,
     netD = None
     norm_layer = get_norm_layer(norm_type=norm)
 
-    netD = NLayerDiscriminatorChannel(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
+    netD = EvaluatorNetwork(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
 
     if preprocess_module is not None:
         netD = SimpleSequential(preprocess_module, netD)
@@ -31,47 +70,82 @@ def define_D(input_nc, ndf, which_model_netD,
     return init_net(netD, init_type, gpu_ids)
 
 
-class NLayerDiscriminatorChannel(nn.Module):
-    def __init__(self, input_nc, ndf=64, n_layers=3,
-            norm_layer=nn.BatchNorm2d, use_sigmoid=False, imSize=128):
-        print(f'[NLayerDiscriminatorChannel] -> n_layers = {n_layers}, n_channel {input_nc}')
-        super(NLayerDiscriminatorChannel, self).__init__()
+class EvaluatorNetwork(nn.Module):
+    def __init__(self, number_of_filters=256,
+                 number_of_conv_layers=4,
+                 use_sigmoid=False,
+                 image_width=128,
+                 mask_embed_dim=6):
+        print(f'[NLayerDiscriminatorChannel] -> n_layers = {number_of_conv_layers}')
+        super(EvaluatorNetwork, self).__init__()
+
+        self.spectral_map = kspaceMap(image_width) #TODO: clean up kspaceMap function
+        self.mask_embed_dim = mask_embed_dim
+
+        number_of_input_channels = image_width + mask_embed_dim
+
+        norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
+
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
 
-        kw = 4
-        padw = 1
+        kernel_size = 4
+        padding_width = 1
+
         sequence = [
-            nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw),
+            nn.Conv2d(number_of_input_channels, number_of_filters, kernel_size=kernel_size, stride=2, padding=padding_width),
             nn.LeakyReLU(0.2, True)
         ]
 
-        nf_mult = 1
-        nf_mult_prev = 1
-        for n in range(1, n_layers):
-            nf_mult_prev = nf_mult
-            nf_mult = min(2**n, 4)
+        in_channels = number_of_filters
+
+        for n in range(1, number_of_conv_layers):
+            if n < number_of_conv_layers - 1:
+                out_channels = in_channels * 2
+            else:
+                out_channels = in_channels
+
             sequence += [
-                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
-                          kernel_size=kw, stride=2, padding=padw, bias=use_bias),
-                norm_layer(ndf * nf_mult),
+                nn.Conv2d(in_channels, out_channels,
+                          kernel_size=kernel_size, stride=2, padding=padding_width, bias=use_bias),
+                norm_layer(out_channels),
                 nn.LeakyReLU(0.2, True)
             ]
 
-        kw = imSize//2**n_layers
-        sequence += [nn.AvgPool2d(kernel_size=kw)]
-        sequence += [nn.Conv2d(ndf * nf_mult, imSize, kernel_size=1, stride=1, padding=0)]
+            in_channels = out_channels
+
+        kernel_size = image_width // 2 ** number_of_conv_layers
+        sequence += [nn.AvgPool2d(kernel_size=kernel_size)]
+        sequence += [nn.Conv2d(in_channels, image_width, kernel_size=1, stride=1, padding=0)]
 
         if use_sigmoid:
             sequence += [nn.Sigmoid()]
 
         self.model = nn.Sequential(*sequence)
+        self.apply(init_func)
 
-    def forward(self, input, mask):
-        # mask is not used
-        return self.model(input).squeeze()
+    def forward(self, input, mask_embedding):
+        """
+
+        Args:
+            input: reconstructed image as returned by the reconstruction neywork
+                        shape   :   (batch_size, 2, height, width)
+            mask_embedding:     mask embedding returned by the reconstructor
+                        shape   :   (batch_size, embedding_dimension, height, width)
+
+        Returns:
+
+        """
+        if self.mask_embed_dim > 0:
+            input_and_mask = torch.cat([input, mask_embedding], dim=1)
+        else:
+            input_and_mask = input
+
+        input_and_spectral_map = self.spectral_map(input_and_mask)
+
+        return self.model(input_and_spectral_map).squeeze()
 
 #TODO: we might consider moving this to losses
 class GANLossKspace(nn.Module):
@@ -134,3 +208,37 @@ class GANLossKspace(nn.Module):
             return self.loss(input * (1-mask_), target_tensor * (1-mask_)) / (1-mask_).sum()
         else:
             return self.loss(input, target_tensor) / (b*w)
+
+def test_evaluator(height, width, number_of_filters, number_of_conv_layers, use_sigmoid, mask_embed_dim):
+    batch = 4
+
+    image = torch.rand(batch, 1, height, width)
+    image = image.type(torch.FloatTensor)
+
+    if mask_embed_dim > 0:
+        mask_embedding = torch.rand(batch, mask_embed_dim, height, width)
+        mask_embedding.type(torch.FloatTensor)
+    else:
+        mask_embedding = None
+
+    evaluator = EvaluatorNetwork(number_of_filters=number_of_filters,
+                                 number_of_conv_layers=number_of_conv_layers,
+                                 use_sigmoid=use_sigmoid,
+                                 image_width=width,
+                                 mask_embed_dim=mask_embed_dim)
+    output = evaluator(image, mask_embedding)
+    print('evaluator output shape :', output.shape)
+
+
+if __name__ == '__main__':
+
+    print('DICOM :')
+    test_evaluator(height=128,
+                   width=128,
+                   number_of_filters=64,
+                   number_of_conv_layers=5,
+                   use_sigmoid=False,
+                   mask_embed_dim=6)
+
+    # test_evaluator(data='raw')
+
