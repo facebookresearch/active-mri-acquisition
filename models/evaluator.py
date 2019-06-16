@@ -8,42 +8,46 @@ import torch.nn.functional as F
 
 
 class kspaceMap(nn.Module):
-    def __init__(self, imSize=128, no_embed=False):
+    def __init__(self, height=128, width=128, mask_embed_dim=6):
         super(kspaceMap, self).__init__()
 
         self.RFFT = RFFT()
         self.IFFT = IFFT()
-        self.imSize = imSize
-        # seperate image to spectral maps
-        self.register_buffer('seperate_mask', torch.FloatTensor(1, imSize, 1, 1, imSize))
-        self.seperate_mask.fill_(0)
-        for i in range(imSize):
-            self.seperate_mask[0, i, 0, 0, i] = 1
 
-        self.no_embed = no_embed
-        if not no_embed:
+        self.height = height
+        self.width = width
+
+        # seperate image to spectral maps
+        self.register_buffer('separate_mask', torch.FloatTensor(1, width, 1, 1, width))
+        self.separate_mask.fill_(0)
+        for i in range(width):
+            self.separate_mask[0, i, 0, 0, i] = 1
+
+        if mask_embed_dim > 0:
             self.embed = nn.Sequential(
-                nn.Conv2d(imSize, imSize, 1, 1, padding=0, bias=False),
+                nn.Conv2d(height, width, 1, 1, padding=0, bias=False),
                 nn.LeakyReLU(0.2, True)
             )
         else:
             print(f'[kspaceMap] -> do not use kspace embedding')
 
-    def forward(self, input):
-        # we assume the input only has real part of images (if they are obtained from IFFT)
-        bz = input.shape[0]
-        x = input[:, :1, :, :]
-        if input.shape[1] > 1:
-            others = input[:, 1:, :, :]
-        kspace = self.RFFT(x)
+    def forward(self, reconstructed_image, mask_embedding):
+        batch_size = reconstructed_image.shape[0]
 
-        kspace = kspace.unsqueeze(1).repeat(1, self.imSize, 1, 1, 1)  # [B,imsize,2,imsize,imsize]
-        masked_kspace = self.seperate_mask * kspace
-        masked_kspace = masked_kspace.view(bz * self.imSize, 2, self.imSize, self.imSize)
+        kspace = self.RFFT(reconstructed_image)
+        kspace = kspace.unsqueeze(1).repeat(1, self.width, 1, 1, 1)
+        masked_kspace = self.separate_mask * kspace
+        masked_kspace = masked_kspace.view(batch_size * self.width, 2, self.height, self.width)
+
         # discard the imaginary part [B,imsize,imsize, imsize]
-        seperate_imgs = self.IFFT(masked_kspace)[:, 0, :, :].view(bz, self.imSize, self.imSize, self.imSize)
+        separate_images = self.IFFT(masked_kspace)[:, 0, :, :].view(batch_size, self.width, self.height, self.width)
 
-        return torch.cat([seperate_imgs, others], 1)
+        if mask_embedding is not None:
+            spectral_map = torch.cat([separate_images, mask_embedding], dim=1)
+        else:
+            spectral_map = separate_images
+
+        return spectral_map
 
 
 class SimpleSequential(nn.Module):
@@ -74,15 +78,16 @@ class EvaluatorNetwork(nn.Module):
     def __init__(self, number_of_filters=256,
                  number_of_conv_layers=4,
                  use_sigmoid=False,
-                 image_width=128,
+                 height=128,
+                 width=128,
                  mask_embed_dim=6):
         print(f'[NLayerDiscriminatorChannel] -> n_layers = {number_of_conv_layers}')
         super(EvaluatorNetwork, self).__init__()
 
-        self.spectral_map = kspaceMap(image_width) #TODO: clean up kspaceMap function
+        self.spectral_map = kspaceMap(height, width) #TODO: clean up kspaceMap function
         self.mask_embed_dim = mask_embed_dim
 
-        number_of_input_channels = image_width + mask_embed_dim
+        number_of_input_channels = width + mask_embed_dim
 
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
 
@@ -91,11 +96,8 @@ class EvaluatorNetwork(nn.Module):
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
 
-        kernel_size = 4
-        padding_width = 1
-
         sequence = [
-            nn.Conv2d(number_of_input_channels, number_of_filters, kernel_size=kernel_size, stride=2, padding=padding_width),
+            nn.Conv2d(number_of_input_channels, number_of_filters, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2, True)
         ]
 
@@ -109,16 +111,16 @@ class EvaluatorNetwork(nn.Module):
 
             sequence += [
                 nn.Conv2d(in_channels, out_channels,
-                          kernel_size=kernel_size, stride=2, padding=padding_width, bias=use_bias),
+                          kernel_size=4, stride=2, padding=1, bias=use_bias),
                 norm_layer(out_channels),
                 nn.LeakyReLU(0.2, True)
             ]
 
             in_channels = out_channels
 
-        kernel_size = image_width // 2 ** number_of_conv_layers
+        kernel_size = width // 2 ** number_of_conv_layers
         sequence += [nn.AvgPool2d(kernel_size=kernel_size)]
-        sequence += [nn.Conv2d(in_channels, image_width, kernel_size=1, stride=1, padding=0)]
+        sequence += [nn.Conv2d(in_channels, width, kernel_size=1, stride=1, padding=0)]
 
         if use_sigmoid:
             sequence += [nn.Sigmoid()]
@@ -130,7 +132,7 @@ class EvaluatorNetwork(nn.Module):
         """
 
         Args:
-            input: reconstructed image as returned by the reconstruction neywork
+            input: reconstructed image as returned by the reconstruction network
                         shape   :   (batch_size, 2, height, width)
             mask_embedding:     mask embedding returned by the reconstructor
                         shape   :   (batch_size, embedding_dimension, height, width)
@@ -138,14 +140,10 @@ class EvaluatorNetwork(nn.Module):
         Returns:
 
         """
-        if self.mask_embed_dim > 0:
-            input_and_mask = torch.cat([input, mask_embedding], dim=1)
-        else:
-            input_and_mask = input
 
-        input_and_spectral_map = self.spectral_map(input_and_mask)
+        spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding)
 
-        return self.model(input_and_spectral_map).squeeze()
+        return self.model(spectral_map_and_mask_embedding).squeeze()
 
 #TODO: we might consider moving this to losses
 class GANLossKspace(nn.Module):
@@ -210,7 +208,7 @@ class GANLossKspace(nn.Module):
             return self.loss(input, target_tensor) / (b*w)
 
 def test_evaluator(height, width, number_of_filters, number_of_conv_layers, use_sigmoid, mask_embed_dim):
-    batch = 4
+    batch = 2
 
     image = torch.rand(batch, 1, height, width)
     image = image.type(torch.FloatTensor)
@@ -224,7 +222,8 @@ def test_evaluator(height, width, number_of_filters, number_of_conv_layers, use_
     evaluator = EvaluatorNetwork(number_of_filters=number_of_filters,
                                  number_of_conv_layers=number_of_conv_layers,
                                  use_sigmoid=use_sigmoid,
-                                 image_width=width,
+                                 height=height,
+                                 width=width,
                                  mask_embed_dim=mask_embed_dim)
     output = evaluator(image, mask_embedding)
     print('evaluator output shape :', output.shape)
@@ -235,10 +234,16 @@ if __name__ == '__main__':
     print('DICOM :')
     test_evaluator(height=128,
                    width=128,
+                   number_of_filters=256,
+                   number_of_conv_layers=4,
+                   use_sigmoid=False,
+                   mask_embed_dim=6)
+
+    print('RAW:')
+    test_evaluator(height=640,
+                   width=368,
                    number_of_filters=64,
                    number_of_conv_layers=5,
                    use_sigmoid=False,
                    mask_embed_dim=6)
-
-    # test_evaluator(data='raw')
 
