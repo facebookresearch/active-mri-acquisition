@@ -65,7 +65,8 @@ def get_train_valid_loader(batch_size,
 
     elif which_dataset == 'KNEE_RAW':
         mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4])
-        raw_root = '/datasets01_101/fastMRI/112718'  # TODO: datasource changed to 01_101 since dataset01 is offline (H2 being down). Revert when dataset01 is up.
+        # TODO: datasource changed to 01_101 since dataset01 is offline (H2 being down). Revert when dataset01 is up.
+        raw_root = '/datasets01_101/fastMRI/112718'
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + ' not exists. Change to the right path.')
         data_transform = RawDataTransform(mask_func)

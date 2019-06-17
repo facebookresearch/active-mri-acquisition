@@ -6,7 +6,9 @@ import torch.nn.functional as F
 
 from data import create_data_loaders
 from models import create_model
-from models.fft_utils import RFFT, IFFT, FFT
+from models.evaluator import EvaluatorNetwork
+from models.fft_utils import RFFT, IFFT, FFT, load_model_weights_if_present, preprocess_inputs
+from models.reconstruction import ReconstructorNetwork
 from util import util
 
 from gym.spaces import Box, Discrete
@@ -15,6 +17,7 @@ from gym.spaces import Box, Discrete
 rfft = RFFT()
 ifft = IFFT()
 fft = FFT()
+fft_functions = {'rfft': rfft, 'ifft': ifft, 'fft': fft}
 
 
 CONJUGATE_SYMMETRIC = True
@@ -40,7 +43,7 @@ class KSpaceMap(nn.Module):
     def forward(self, input, mask):
         batch_size, _, img_height, img_width = input.shape
         assert img_width == self.img_width
-        k_space = rfft(input[:, :1, :, :])  # Take only real part
+        k_space = rfft(input[:, :1, ...])  # Take only real part
 
         # This code creates w channels, where the i-th channel is a copy of k_space
         # with everything but the i-th column masked out
@@ -49,29 +52,37 @@ class KSpaceMap(nn.Module):
         masked_kspace = masked_kspace.view(batch_size * img_width, 2, img_height, img_width)
 
         # The imaginary part is discarded
-        return ifft(masked_kspace)[:, 0, :, :].view(batch_size, img_width, img_height, img_width)
+        return ifft(masked_kspace)[:, 0, ...].view(batch_size, img_width, img_height, img_width)
 
 
 # noinspection PyAttributeOutsideInit
 class ReconstructionEnv:
     """ RL environment representing the active acquisition process with reconstruction model. """
-    def __init__(self, initial_mask, opts):
-        self.opts = opts
-        train_loader, valid_loader = create_data_loaders(opts, is_test=False)
-        test_loader = create_data_loaders(opts, is_test=True)
+    def __init__(self, initial_mask, options):
+        self.opts = options
+        train_loader, valid_loader = create_data_loaders(options, is_test=False)
+        test_loader = create_data_loaders(options, is_test=True)
         self._dataset_train = train_loader.dataset
         self._dataset_test = test_loader.dataset
 
-        model = create_model(opts)
-        model.setup(opts)
-        model.eval()
-        self._model = model
-        self._evaluator_model = self._model
+        self._reconstructor = ReconstructorNetwork(
+            number_of_cascade_blocks=options.number_of_cascade_blocks,
+            n_downsampling=options.n_downsampling,
+            number_of_filters=options.number_of_filters,
+            number_of_layers_residual_bottleneck=options.number_of_layers_residual_bottleneck,
+            mask_embed_dim=options.mask_embed_dim,
+            dropout_probability=options.dropout_probability,
+            img_width=128,   # TODO : CHANGE!
+            use_deconv=options.use_deconv)
+        load_model_weights_if_present(self._reconstructor, options, 'reconstructor')
+
+        self._evaluator = EvaluatorNetwork()
+        load_model_weights_if_present(self._evaluator, options, 'evaluator')
 
         obs_shape = None
-        if opts.rl_model_type == 'spectral_maps':
+        if options.rl_model_type == 'spectral_maps':
             obs_shape = (134, 128, 128)
-        if opts.rl_model_type == 'two_streams':
+        if options.rl_model_type == 'two_streams':
             obs_shape = (4, 128, 128)
         self.observation_space = Box(low=-50000, high=50000, shape=obs_shape)
 
@@ -80,7 +91,7 @@ class ReconstructionEnv:
         self.action_space = Discrete(num_actions)
 
         self._ground_truth = None
-        self._initial_mask = initial_mask.to(model.device)
+        self._initial_mask = initial_mask.to(options.device)
         self.k_space_map = KSpaceMap(img_width=IMAGE_WIDTH).to(device)    # Used to compute spectral maps
 
         # These two store a shuffling of the datasets
@@ -138,7 +149,7 @@ class ReconstructionEnv:
 
             This method takes the current ground truth, masks it with the current mask and creates
             a zero-filled reconstruction from the masked image. Additionally, this zero-filled reconstruction can
-            be passed through the reconstruction network, [[self._model.netG]].
+            be passed through the reconstruction network, [[self._reconstructor]].
             The score evaluates the difference between the final reconstruction and the current ground truth.
 
             It is possible to pass alternate ground truth and mask to compute the score with respect to, instead of
@@ -153,28 +164,27 @@ class ReconstructionEnv:
                 ground_truth = self._ground_truth
             if mask_to_use is None:
                 mask_to_use = self._current_mask
-            masked_rffts = ReconstructionEnv.compute_masked_rfft(ground_truth, mask_to_use)
-            image = ifft(masked_rffts)
+            image, _, _ = preprocess_inputs(ground_truth, mask_to_use, fft_functions, self.opts)
             if use_reconstruction:
-                reconstructions, _, mask_embed = self._model.netG(image, mask_to_use)
-                image = reconstructions[-1]
+                image, _, _ = self._reconstructor(image, mask_to_use)  # pass through reconstruction network
         return [ReconstructionEnv._compute_score(img.unsqueeze(0), ground_truth, kind) for img in image]
 
     def _compute_observation_and_score_spectral_maps(self):
         with torch.no_grad():
-            masked_rffts = ReconstructionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
-            reconstructions, _, mask_embed = self._model.netG(ifft(masked_rffts), self._current_mask)
-            spectral_maps = self.k_space_map(reconstructions[-1], self._current_mask)
+            image, _, _ = preprocess_inputs(self._ground_truth, self._current_mask, fft_functions, self.opts)
+            reconstruction, _, mask_embed = self._reconstructor(image, self._current_mask)
+            spectral_maps = self.k_space_map(reconstruction, self._current_mask)
             observation = torch.cat([spectral_maps, mask_embed], dim=1)
-            score = ReconstructionEnv._compute_score(reconstructions[-1], self._ground_truth)
+            score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth)
         return observation.squeeze().cpu().numpy().astype(np.float32), score
 
     def _compute_observation_and_score_two_streams(self):
         with torch.no_grad():
-            masked_rffts = ReconstructionEnv.compute_masked_rfft(self._ground_truth, self._current_mask)
-            reconstructions, _, _ = self._model.netG(ifft(masked_rffts), self._current_mask)
-            observation = torch.cat([reconstructions[-1], masked_rffts], dim=1)
-            score = ReconstructionEnv._compute_score(reconstructions[-1], self._ground_truth)
+            zero_filled_reconstruction, _, _, masked_rffts = preprocess_inputs(
+                self._ground_truth, self._current_mask, fft_functions, self.opts, return_masked_k_space=True)
+            reconstruction, _, _ = self._reconstructor(zero_filled_reconstruction, self._current_mask)
+            observation = torch.cat([reconstruction, masked_rffts], dim=1)
+            score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth)
         return observation.squeeze().cpu().numpy().astype(np.float32), score
 
     def _compute_observation_and_score(self):
@@ -210,7 +220,7 @@ class ReconstructionEnv:
             logging.debug('{} episode started with randomly chosen image {}/{}'.format(
                 'Testing' if self.is_testing else 'Training', index_chosen_image, dataset_len))
             _, self._ground_truth = self._dataset_train.__getitem__(index_chosen_image)
-        self._ground_truth = self._ground_truth.to(self._model.device).unsqueeze(0)
+        self._ground_truth = self._ground_truth.to(self.opts.device).unsqueeze(0)
         self._current_mask = self._initial_mask
         self._scans_left = min(self.opts.budget, self.action_space.n)
         observation, self._current_score = self._compute_observation_and_score()
@@ -232,22 +242,16 @@ class ReconstructionEnv:
 
         return observation, reward, done, {}
 
-    def set_evaluator(self, evaluator_name):
-        """ Sets the used evaluator network according to the given name. """
-        self._evaluator_model = create_model(self.opts)
-        self.opts.name = evaluator_name
-        self._evaluator_model.setup(self.opts)
-        self._evaluator_model.eval()
-
     def get_evaluator_action(self):
         """ Returns the action recommended by the evaluator network of [[self._evaluator_model]]. """
-        with torch.no_grad():
-            self._evaluator_model.set_input_exp(self._ground_truth, self._current_mask)
-            self._evaluator_model.forward()
-            evaluator_input = self._evaluator_model.create_D_input(self._evaluator_model.fake_B)
-            kspace_scores = self._evaluator_model.netD(evaluator_input, self._current_mask)
-            kspace_scores.masked_fill_(self._current_mask.squeeze().byte(), 100000)
-            return torch.argmin(kspace_scores).item() - NUM_LINES_INITIAL
+        raise NotImplementedError
+        # with torch.no_grad():
+            # self._evaluator.set_input_exp(self._ground_truth, self._current_mask)
+            # self._evaluator.forward()
+            # evaluator_input = self._evaluator_model.create_D_input(self._evaluator_model.fake_B)
+            # kspace_scores = self._evaluator_model.netD(evaluator_input, self._current_mask)
+            # kspace_scores.masked_fill_(self._current_mask.squeeze().byte(), 100000)
+            # return torch.argmin(kspace_scores).item() - NUM_LINES_INITIAL
 
 
 def generate_initial_mask(num_lines):

@@ -43,12 +43,13 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
     # Update evaluator
     # ------------------------------------------------------------------------
     optimizers['D'].zero_grad()
-    fake = torch.cat([clamp(reconstruction_last_stage[:, :1, :, :]), mask_cond.detach()], dim=1) # considering only the real component of reconstruction
+    # considering only the real component of reconstruction
+    fake = torch.cat([clamp(reconstruction_last_stage[:, :1, ...]), mask_cond.detach()], dim=1)
     detached_fake = fake.detach()
     output = evaluator(detached_fake, mask)
     loss_D_fake = losses['GAN'](output, False, mask, degree=0, pred_and_gt=(detached_fake[:, :1, ...], target))
 
-    real = torch.cat([clamp(target[:, :1, :, :]), mask_cond.detach()], dim=1)
+    real = torch.cat([clamp(target[:, :1, ...]), mask_cond.detach()], dim=1)
     output = evaluator(real, mask)
     loss_D_real = losses['GAN'](output, True, mask, degree=1, pred_and_gt=(detached_fake[:, :1, ...], target))
 
@@ -82,22 +83,22 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
 def main(options):
     max_epochs = options.niter + options.niter_decay + 1
     # TODO remove this
-    max_epochs = 10
+    max_epochs = 1
     train_data_loader, val_data_loader = create_data_loaders(options)
 
     model = create_model(options)
     model.setup(options)
 
     # Create Reconstructor Model
-    reconstructor = ReconstructorNetwork(number_of_cascade_blocks=options.number_of_cascade_blocks,
-                                         n_downsampling=options.n_downsampling,
-                                         number_of_filters=options.number_of_filters,
-                                         number_of_layers_residual_bottleneck=options.number_of_layers_residual_bottleneck,
-                                         mask_embed_dim=options.mask_embed_dim,
-                                         dropout_probability=options.dropout_probability,
-                                         img_width=128,   # TODO : CHANGE!
-                                         use_deconv=options.use_deconv
-                                         )
+    reconstructor = ReconstructorNetwork(
+        number_of_cascade_blocks=options.number_of_cascade_blocks,
+        n_downsampling=options.n_downsampling,
+        number_of_filters=options.number_of_filters,
+        number_of_layers_residual_bottleneck=options.number_of_layers_residual_bottleneck,
+        mask_embed_dim=options.mask_embed_dim,
+        dropout_probability=options.dropout_probability,
+        img_width=128,   # TODO : CHANGE!
+        use_deconv=options.use_deconv)
     reconstructor = torch.nn.DataParallel(reconstructor).cuda()
 
     # Create Evaluator Model
@@ -120,18 +121,20 @@ def main(options):
     validation_engine = Engine(lambda engine, batch: inference(batch, reconstructor, fft_functions, options))
 
     # Checkpoint event handlers
-    regular_checkpoint_handler = ModelCheckpoint(os.path.join(options.checkpoints_dir, options.name), 'networks',
-                                                 save_interval=1, n_saved=1, require_empty=True)
+    regular_checkpoint_handler = ModelCheckpoint(os.path.join(options.checkpoints_dir, options.name), 'checkpoint',
+                                                 save_interval=1, n_saved=1, require_empty=False)
     trainer.add_event_handler(event_name=Events.EPOCH_COMPLETED, handler=regular_checkpoint_handler,
-                              to_save={'reconstructor': reconstructor, 'evaluator': evaluator})
+                              to_save={'reconstructor': reconstructor,
+                                       'evaluator': evaluator})
 
-    best_checkpoint_handler = ModelCheckpoint(os.path.join(options.checkpoints_dir, options.name), 'networks',
+    best_checkpoint_handler = ModelCheckpoint(os.path.join(options.checkpoints_dir, options.name), 'checkpoint',
                                               score_function=lambda ev: -ev.state.output['MSE'],
                                               score_name='mse',
                                               n_saved=1,
                                               require_empty=False)
     validation_engine.add_event_handler(event_name=Events.COMPLETED, handler=best_checkpoint_handler,
-                                        to_save={'reconstructor': reconstructor, 'evaluator': evaluator})
+                                        to_save={'reconstructor': reconstructor,
+                                                 'evaluator': evaluator})
 
     timer = Timer(average=True)
     timer.attach(trainer, start=Events.EPOCH_STARTED, resume=Events.ITERATION_STARTED,
