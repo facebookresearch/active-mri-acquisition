@@ -78,6 +78,7 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
 # TODO Add tensorboard visualization
 def main(options):
     max_epochs = options.niter + options.niter_decay + 1
+    max_epochs = 5
     train_data_loader, val_data_loader = create_data_loaders(options)
 
     fft_functions = {'rfft': RFFT().to(options.device), 'ifft': IFFT().to(options.device)}
@@ -120,8 +121,8 @@ def main(options):
                                                  save_interval=1, n_saved=1, require_empty=False,
                                                  save_as_state_dict=False)
     trainer.add_event_handler(event_name=Events.EPOCH_COMPLETED, handler=regular_checkpoint_handler,
-                              to_save={'reconstructor': reconstructor,
-                                       'evaluator': evaluator,
+                              to_save={'reconstructor': reconstructor.module.state_dict(),
+                                       'evaluator': evaluator.module.state_dict(),
                                        'options': options})
     best_checkpoint_handler = ModelCheckpoint(os.path.join(options.checkpoints_dir, options.name), 'checkpoint',
                                               score_function=lambda ev: -ev.state.output['MSE'],
@@ -129,8 +130,8 @@ def main(options):
                                               n_saved=1,
                                               require_empty=False, save_as_state_dict=False)
     validation_engine.add_event_handler(event_name=Events.COMPLETED, handler=best_checkpoint_handler,
-                                        to_save={'reconstructor': reconstructor,
-                                                 'evaluator': evaluator,
+                                        to_save={'reconstructor': reconstructor.module.state_dict(),
+                                                 'evaluator': evaluator.module.state_dict(),
                                                  'options': options})
 
     timer = Timer(average=True)

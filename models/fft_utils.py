@@ -67,7 +67,7 @@ def preprocess_inputs(target, mask, fft_functions, options, return_masked_k_spac
     # TODO move all the clamp calls to data pre-processing
     target = clamp(target.to(options.device)).detach()
 
-    if options.dynamic_mask_type != 'loader':
+    if hasattr(options, 'dynamic_mask_type') and options.dynamic_mask_type != 'loader':
         mask = create_mask(target.shape[0], mask_type=options.dynamic_mask_type)
     mask = mask.to(options.device)
 
@@ -96,7 +96,7 @@ def create_mask(batch_size, num_entries=128, mask_type='random'):
             mask[i, :] = s_fft
             mask[i, :mask_lf] = mask[i,-mask_lf:] = 1
         elif mask_type == 'random_lowfreq':
-            p_lines = 0.25 * np.random.random() + 0.125     # ~U(0.125, 0/375)
+            p_lines = 0.25 * np.random.random() + 0.125     # ~U(0.125, 0.375)
             num_low_freq_lines = np.random.binomial(num_entries, p_lines)
             mask[i, :num_low_freq_lines] = mask[i, -num_low_freq_lines:] = 1
         else:
@@ -110,3 +110,11 @@ def load_model_weights_if_present(model, options, model_name):
     if os.path.isfile(path):
         model.load_state_dict(torch.load(path))
     return model
+
+
+def load_checkpoint(checkpoints_dir, suffix):
+    return {
+        'reconstructor': torch.load(os.path.join(checkpoints_dir, 'checkpoint_reconstructor_{}.pth').format(suffix)),
+        'evaluator': torch.load(os.path.join(checkpoints_dir, 'checkpoint_evaluator_{}.pth').format(suffix)),
+        'options': torch.load(os.path.join(checkpoints_dir, 'checkpoint_options_{}.pth').format(suffix))
+    }

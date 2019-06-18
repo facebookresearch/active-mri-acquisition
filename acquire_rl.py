@@ -195,14 +195,14 @@ def get_policy(env, writer, opts):
     return policy
 
 
-def main(opts):
-    writer = SummaryWriter(opts.tb_logs_dir)
-    env = ReconstructionEnv(generate_initial_mask(opts.initial_num_lines), opts)
+def main(options):
+    writer = SummaryWriter(options.tb_logs_dir)
+    env = ReconstructionEnv(generate_initial_mask(options.initial_num_lines), options)
     env.set_training()
     logging.info('Created environment with {} actions'.format(env.action_space.n))
-    policy = get_policy(env, writer, opts)
+    policy = get_policy(env, writer, options)
     env.set_testing()
-    test_policy(env, policy, writer, None, 0, opts)
+    test_policy(env, policy, writer, None, 0, options)
 
 
 if __name__ == '__main__':
