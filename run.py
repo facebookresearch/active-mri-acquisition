@@ -1,6 +1,5 @@
 from data import create_data_loaders
 from models.fft_utils import RFFT, IFFT, clamp, preprocess_inputs, gaussian_nll_loss
-from models import create_model
 from models.evaluator import EvaluatorNetwork
 from models.networks import GANLossKspace
 from models.reconstruction import ReconstructorNetwork
@@ -83,9 +82,6 @@ def main(options):
     max_epochs = 10
     train_data_loader, val_data_loader = create_data_loaders(options)
 
-    model = create_model(options)
-    model.setup(options)
-
     # Create Reconstructor Model
     reconstructor = ReconstructorNetwork(number_of_cascade_blocks=options.number_of_cascade_blocks,
                                          n_downsampling=options.n_downsampling,
@@ -113,7 +109,7 @@ def main(options):
     }
     criterion_gan = GANLossKspace(use_lsgan=not options.no_lsgan,
                                   use_mse_as_energy=options.use_mse_as_disc_energy,
-                                  grad_ctx=model.opt.grad_ctx).to(model.device)
+                                  grad_ctx=options.grad_ctx).to(options.device)
     losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}
 
     fft_functions = {'rfft': RFFT().to(options.device), 'ifft': IFFT().to(options.device)}
@@ -194,6 +190,6 @@ def main(options):
 
 
 if __name__ == '__main__':
-    options = TrainOptions().parse()
+    options = TrainOptions().parse() #TODO: need to clean up options list
     options.device = torch.device('cuda:{}'.format(options.gpu_ids[0])) if options.gpu_ids else torch.device('cpu')
     main(options)
