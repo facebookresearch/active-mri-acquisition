@@ -34,9 +34,9 @@ def get_train_valid_loader(batch_size,
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
         data_transform = DicomDataTransform(mask_func, None)
         train_data = Slice(data_transform, dicom_root, which='train', resolution=128,
-                           scan_type='all', num_volumes=10, num_rand_slices=None)
+                           scan_type='all', num_volumes=None, num_rand_slices=None)
         valid_data = Slice(data_transform, dicom_root, which='val', resolution=128,
-                           scan_type='all', num_volumes=10, num_rand_slices=None)
+                           scan_type='all', num_volumes=None, num_rand_slices=None)
 
         def init_fun(_):
             return np.random.seed()
@@ -65,7 +65,8 @@ def get_train_valid_loader(batch_size,
 
     elif which_dataset == 'KNEE_RAW':
         mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4])
-        raw_root = '/datasets01_101/fastMRI/112718'  # TODO: datasource changed to 01_101 since dataset01 is offline (H2 being down). Revert when dataset01 is up.
+        # TODO: datasource changed to 01_101 since dataset01 is offline (H2 being down). Revert when dataset01 is up.
+        raw_root = '/datasets01_101/fastMRI/112718'
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + ' not exists. Change to the right path.')
         data_transform = RawDataTransform(mask_func)

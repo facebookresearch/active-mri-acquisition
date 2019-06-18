@@ -1,5 +1,5 @@
 from .fft_utils import RFFT, IFFT, FFT
-from .reconstruction import get_norm_layer, init_net, init_func
+from .reconstruction import get_norm_layer, init_func
 
 import functools
 import torch
@@ -16,19 +16,6 @@ class SimpleSequential(nn.Module):
     def forward(self, x, mask):
         output = self.net1(x,mask)
         return self.net2(output,mask)
-
-
-def define_D(input_nc, ndf, which_model_netD,
-             n_layers_D=3, norm='batch', use_sigmoid=False, init_type='normal', gpu_ids=[], preprocess_module=None):
-    netD = None
-    norm_layer = get_norm_layer(norm_type=norm)
-
-    netD = EvaluatorNetwork(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
-
-    if preprocess_module is not None:
-        netD = SimpleSequential(preprocess_module, netD)
-
-    return init_net(netD, init_type, gpu_ids)
 
 
 class SpectralMapDecomposition(nn.Module):
@@ -153,7 +140,8 @@ class EvaluatorNetwork(nn.Module):
 
         return self.model(spectral_map_and_mask_embedding).squeeze()
 
-#TODO: we might consider moving this to losses
+
+# TODO: we might consider moving this to losses
 class GANLossKspace(nn.Module):
     def __init__(self, use_lsgan=True, target_real_label=1.0, target_fake_label=0.0,
                  use_mse_as_energy=False, grad_ctx=False, gamma=100):
@@ -214,6 +202,7 @@ class GANLossKspace(nn.Module):
             return self.loss(input * (1-mask_), target_tensor * (1-mask_)) / (1-mask_).sum()
         else:
             return self.loss(input, target_tensor) / (b*w)
+
 
 def test_evaluator(height, width, number_of_filters, number_of_conv_layers, use_sigmoid, mask_embed_dim):
     batch = 4

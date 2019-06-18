@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -62,7 +63,7 @@ def gaussian_nll_loss(reconstruction, target, logvar):
     return 0.5 * (one_over_var * l2 + logvar)
 
 
-def preprocess_inputs(target, mask, fft_functions, options):
+def preprocess_inputs(target, mask, fft_functions, options, return_masked_k_space=False):
     # TODO move all the clamp calls to data pre-processing
     target = clamp(target.to(options.device)).detach()
 
@@ -70,11 +71,13 @@ def preprocess_inputs(target, mask, fft_functions, options):
         mask = create_mask(target.shape[0], mask_type=options.dynamic_mask_type)
     mask = mask.to(options.device)
 
-    kspace_ground_truth = fft_functions['rfft'](target)
-    zero_filled_reconstruction = fft_functions['ifft'](kspace_ground_truth * mask)
+    masked_true_k_space = fft_functions['rfft'](target) * mask
+    zero_filled_reconstruction = fft_functions['ifft'](masked_true_k_space)
 
     target = torch.cat([target, torch.zeros_like(target)], dim=1)
 
+    if return_masked_k_space:
+        return zero_filled_reconstruction, target, mask, masked_true_k_space
     return zero_filled_reconstruction, target, mask
 
 
@@ -100,3 +103,10 @@ def create_mask(batch_size, num_entries=128, mask_type='random'):
             raise ValueError('Invalid mask type: {}.'.format(mask_type))
 
     return torch.from_numpy(mask).view(batch_size, 1, 1, num_entries)
+
+
+def load_model_weights_if_present(model, options, model_name):
+    path = os.path.join(options.checkpoints_dir, options.name, 'checkpoint_{}.pth'.format(model_name))
+    if os.path.isfile(path):
+        model.load_state_dict(torch.load(path))
+    return model

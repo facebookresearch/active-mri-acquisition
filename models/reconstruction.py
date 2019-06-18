@@ -6,8 +6,8 @@ from .fft_utils import RFFT, IFFT, FFT
 from torch.nn import init
 
 
-#TODO: can we use this inside the model? Can we simplify this block?
-#TODO: do we need functools?
+# TODO: can we use this inside the model? Can we simplify this block?
+# TODO: do we need functools?
 def get_norm_layer(norm_type='instance'):
     if norm_type == 'batch':
         norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
@@ -47,23 +47,23 @@ def init_func(m):
     # print('initialize network with %s' % init_type)
     # net.apply(init_func)
 
-#TODO: DataParallel should not be here...
-def init_net(net, init_type='normal', gpu_ids=[]):
-    if len(gpu_ids) > 0:
-        assert(torch.cuda.is_available())
-        net.to(gpu_ids[0])
-        net = torch.nn.DataParallel(net, gpu_ids)
-    init_weights(net, init_type)
-    return net
-
-def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropout=False,
-             init_type='normal', gpu_ids=[], no_last_tanh=False):
-    netG = None
-    norm_layer = get_norm_layer(norm_type=norm)
-    netG = PasNetPlus(input_nc, output_nc, ngf, norm_layer=norm_layer,
-                      use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh,
-                      n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)
-    return init_net(netG, init_type, gpu_ids)
+# # TODO: DataParallel should not be here...
+# def init_net(net, init_type='normal', gpu_ids=[]):
+#     if len(gpu_ids) > 0:
+#         assert(torch.cuda.is_available())
+#         net.to(gpu_ids[0])
+#         net = torch.nn.DataParallel(net, gpu_ids)
+#     init_weights(net, init_type)
+#     return net
+#
+# def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropout=False,
+#              init_type='normal', gpu_ids=[], no_last_tanh=False):
+#     netG = None
+#     norm_layer = get_norm_layer(norm_type=norm)
+#     netG = PasNetPlus(input_nc, output_nc, ngf, norm_layer=norm_layer,
+#                       use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh,
+#                       n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)
+#     return init_net(netG, init_type, gpu_ids)
 
 
 # Define a resnet block
@@ -109,7 +109,7 @@ class ResnetBlock(nn.Module):
         return out
 
 
-## Currently the best Aug 10
+# Currently the best Aug 10
 class PasNetPlus(nn.Module):
 
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False,
@@ -271,9 +271,10 @@ class PasNetPlus(nn.Module):
 
 class ReconstructorNetwork(nn.Module):
 
-    def __init__(self, number_of_encoder_input_channels=2, number_of_decoder_output_channels=3, number_of_filters=128, dropout_probability=0,
-                 number_of_layers_residual_bottleneck=6, number_of_cascade_blocks=3, mask_embed_dim=6, padding_type='reflect', n_downsampling=3, img_width=128,
-                 use_deconv=True):
+    def __init__(self, number_of_encoder_input_channels=2, number_of_decoder_output_channels=3,
+                 number_of_filters=128, dropout_probability=0,
+                 number_of_layers_residual_bottleneck=6, number_of_cascade_blocks=3, mask_embed_dim=6,
+                 padding_type='reflect', n_downsampling=3, img_width=128, use_deconv=True):
         super(ReconstructorNetwork, self).__init__()
         self.number_of_encoder_input_channels = number_of_encoder_input_channels
         self.number_of_decoder_output_channels = number_of_decoder_output_channels
@@ -285,7 +286,6 @@ class ReconstructorNetwork(nn.Module):
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
-
 
         self.number_of_cascade_blocks = number_of_cascade_blocks
         self.use_mask_embedding = True if mask_embed_dim > 0 else False
@@ -301,7 +301,7 @@ class ReconstructorNetwork(nn.Module):
 
         # Architecture for the Cascade Blocks
         for iii in range(1, self.number_of_cascade_blocks + 1):
-            #TODO : may be clean up the local model variables
+            # TODO : may be clean up the local model variables
 
             # Encoder for iii_th cascade block
             encoder = [nn.ReflectionPad2d(1),
@@ -324,8 +324,11 @@ class ReconstructorNetwork(nn.Module):
             residual_bottleneck = []
             mult = 2 ** (n_downsampling - 1)
             for i in range(number_of_layers_residual_bottleneck):
-                residual_bottleneck += [ResnetBlock(number_of_filters * mult, padding_type=padding_type, norm_layer=norm_layer,
-                                                    dropout_probability=dropout_probability, use_bias=use_bias)]
+                residual_bottleneck += [ResnetBlock(number_of_filters * mult,
+                                                    padding_type=padding_type,
+                                                    norm_layer=norm_layer,
+                                                    dropout_probability=dropout_probability,
+                                                    use_bias=use_bias)]
 
             self.residual_bottlenecks_all_cascade_blocks.append(nn.Sequential(*residual_bottleneck))
 
@@ -351,7 +354,9 @@ class ReconstructorNetwork(nn.Module):
                               nn.ReLU(True)]
 
                     # model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
-            decoder += [nn.Conv2d(number_of_filters // 2, number_of_decoder_output_channels, kernel_size=1, padding=0, bias=False)]  # better
+            decoder += [nn.Conv2d(number_of_filters // 2,
+                                  number_of_decoder_output_channels,
+                                  kernel_size=1, padding=0, bias=False)]  # better
 
             self.decoders_all_cascade_blocks.append(nn.Sequential(*decoder))
 
@@ -375,7 +380,7 @@ class ReconstructorNetwork(nn.Module):
         return cond_embed
 
     def forward(self, zero_filled_input, mask):
-        '''
+        """
 
         Args:
                     zero_filled_input:  masked input image
@@ -386,8 +391,7 @@ class ReconstructorNetwork(nn.Module):
         Returns:    reconstructed high resolution image
                     uncertainty map
                     mask_embedding
-
-        '''
+        """
         if self.use_mask_embedding:
             mask_embedding = self.embed_mask(mask)
             mask_embedding = mask_embedding.repeat(1, 1, zero_filled_input.shape[2], zero_filled_input.shape[3])
@@ -396,16 +400,20 @@ class ReconstructorNetwork(nn.Module):
             encoder_input = zero_filled_input
             mask_embedding = None
 
-        for cascade_block, (encoder, residual_bottleneck, decoder) in enumerate(zip(self.encoders_all_cascade_blocks, self.residual_bottlenecks_all_cascade_blocks, self.decoders_all_cascade_blocks)):
+        for cascade_block, (encoder, residual_bottleneck, decoder) in enumerate(
+                zip(self.encoders_all_cascade_blocks,
+                    self.residual_bottlenecks_all_cascade_blocks,
+                    self.decoders_all_cascade_blocks)):
             encoder_output = encoder(encoder_input)
             if cascade_block > 0:
-                encoder_output = encoder_output + residual_bottleneck_output    #Skip connection from previous residual block
+                # Skip connection from previous residual block
+                encoder_output = encoder_output + residual_bottleneck_output
 
             residual_bottleneck_output = residual_bottleneck(encoder_output)
 
             decoder_output = decoder(residual_bottleneck_output)
 
-            reconstructed_image = self.data_consistency(decoder_output[:,:-1,:,:], zero_filled_input, mask)
+            reconstructed_image = self.data_consistency(decoder_output[:, :-1, ...], zero_filled_input, mask)
             uncertainty_map = decoder_output[:, -1:, :, :]
 
             if self.use_mask_embedding:
@@ -414,6 +422,7 @@ class ReconstructorNetwork(nn.Module):
                 encoder_input = reconstructed_image
 
         return reconstructed_image, uncertainty_map, mask_embedding
+
 
 def test(data):
     batch = 4
