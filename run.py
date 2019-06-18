@@ -1,6 +1,7 @@
 from data import create_data_loaders
 from models.fft_utils import RFFT, IFFT, clamp, preprocess_inputs, gaussian_nll_loss
 from models import create_model
+from models.evaluator import EvaluatorNetwork
 from models.networks import GANLossKspace
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
@@ -37,23 +38,22 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
 
     # Get reconstructor output
     reconstruction_last_stage, uncertainty_last_stage, mask_cond = reconstructor(zero_filled_reconstruction, mask)
-    # reconstruction_last_stage = reconstructions_all_stages
 
     # ------------------------------------------------------------------------
     # Update evaluator
     # ------------------------------------------------------------------------
     optimizers['D'].zero_grad()
-    fake = torch.cat([clamp(reconstruction_last_stage[:, :1, :, :]), mask_cond.detach()], dim=1) # considering only the real component of reconstruction
+    fake = clamp(reconstruction_last_stage[:, :1, :, :])
     detached_fake = fake.detach()
-    output = evaluator(detached_fake, mask)
+    output = evaluator(detached_fake, mask_cond.detach())
     loss_D_fake = losses['GAN'](output, False, mask, degree=0, pred_and_gt=(detached_fake[:, :1, ...], target))
 
-    real = torch.cat([clamp(target[:, :1, :, :]), mask_cond.detach()], dim=1)
-    output = evaluator(real, mask)
+    real = clamp(target[:, :1, :, :])
+    output = evaluator(real, mask_cond.detach())
     loss_D_real = losses['GAN'](output, True, mask, degree=1, pred_and_gt=(detached_fake[:, :1, ...], target))
 
     loss_D = loss_D_fake + loss_D_real
-    loss_D.backward()
+    loss_D.backward(retain_graph=True) #TODO: retained graph to use output in GAN backward pass
     optimizers['D'].step()
 
     # ------------------------------------------------------------------------
@@ -61,10 +61,9 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
     # ------------------------------------------------------------------------
     optimizers['G'].zero_grad()
     loss_G = 0
-    # for stage, (reconstruction, logvar) in enumerate(zip(reconstructions_all_stages, logvars)):
     loss_G += losses['NLL'](reconstruction_last_stage, target, uncertainty_last_stage)
     loss_G = loss_G.mean()
-    output = evaluator(fake, mask)
+    # output = evaluator(fake, mask_cond.detach())
     loss_G_GAN = losses['GAN'](output, True, mask, degree=1, updateG=True, pred_and_gt=(fake[:, :1, ...], target))
     loss_G_GAN *= options.lambda_gan
 
@@ -91,17 +90,22 @@ def main(options):
     # Create Reconstructor Model
     reconstructor = ReconstructorNetwork(number_of_cascade_blocks=options.number_of_cascade_blocks,
                                          n_downsampling=options.n_downsampling,
-                                         number_of_filters=options.number_of_filters,
+                                         number_of_filters=options.number_of_reconstructor_filters,
                                          number_of_layers_residual_bottleneck=options.number_of_layers_residual_bottleneck,
                                          mask_embed_dim=options.mask_embed_dim,
                                          dropout_probability=options.dropout_probability,
-                                         img_width=128,   # TODO : CHANGE!
+                                         img_width=options.image_width,
                                          use_deconv=options.use_deconv
                                          )
     reconstructor = torch.nn.DataParallel(reconstructor).cuda()
 
     # Create Evaluator Model
-    evaluator = model.netD
+    evaluator = EvaluatorNetwork(number_of_filters=options.number_of_evaluator_filters,
+                                 number_of_conv_layers=options.number_of_evaluator_convolution_layers,
+                                 use_sigmoid=False,   #TODO : do we keep this? Will add option based on the decision
+                                 width=options.image_width,
+                                 mask_embed_dim=options.mask_embed_dim)
+    evaluator = torch.nn.DataParallel(evaluator).cuda()
 
     # Optimizers and losses
     optimizers = {
