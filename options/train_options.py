@@ -70,6 +70,10 @@ class TrainOptions(BaseOptions):
 
         # Options for both Reconstructor and Evaluator Model
         parser.add_argument('--mask_embed_dim', type=int, default=6)
-        parser.add_argument('--image_width', type=int, default=128)
+        parser.add_argument('--image_width', type=int, default=128) #TODO : do we need it? We can set this based on dataroot
+
+        # Options moved from old model file
+        parser.add_argument('--grad_ctx', action='store_true',
+                            help='gan criterion computes adversarial loss signal at provided kspace lines')
 
         return parser
