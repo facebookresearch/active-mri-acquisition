@@ -80,8 +80,8 @@ class FTPASGANModel(BaseModel):
                                 help='do *not* use least square GAN, if false, use vanilla GAN')
         
         parser.add_argument('--set_sampling_at_stage', type=int, default=None, help='sampling from the model')
-        parser.add_argument('--grad_ctx', action='store_true',
-                            help='gan criterion computes adversarial loss signal at provided kspace lines')
+        # parser.add_argument('--grad_ctx', action='store_true',
+        #                     help='gan criterion computes adversarial loss signal at provided kspace lines')
         parser.add_argument('--pixelwise_loss_merge', action='store_true', help='no uncertainty analysis')
 
         parser.set_defaults(pool_size=0)
@@ -102,7 +102,7 @@ class FTPASGANModel(BaseModel):
         parser.set_defaults(no_lsgan=False)
         parser.set_defaults(no_kspacemap_embed=True)
         parser.set_defaults(mask_cond=True)
-        parser.set_defaults(grad_ctx=True)
+        # parser.set_defaults(grad_ctx=True)
         parser.set_defaults(pixelwise_loss_merge=True)
 
         return parser

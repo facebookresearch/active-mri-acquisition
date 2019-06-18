@@ -11,6 +11,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import warnings
+from tensorboardX import SummaryWriter
 
 from ignite.contrib.handlers import ProgressBar
 from ignite.engine import Engine, Events
@@ -77,6 +78,7 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
 
 # TODO Add tensorboard visualization
 def main(options):
+    writer = SummaryWriter(log_dir=os.path.join(options.checkpoints_dir, options.name))
     max_epochs = options.niter + options.niter_decay + 1
     # TODO remove this
     max_epochs = 10
