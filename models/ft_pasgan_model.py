@@ -7,43 +7,43 @@ from torch import nn
 from .ft_recurnnv2_model import AUTOPARAM
 
 
-class kspaceMap(nn.Module):
-    def __init__(self, imSize=128, no_embed=False):
-        super(kspaceMap, self).__init__()
-        
-        self.RFFT = RFFT()
-        self.IFFT = IFFT()
-        self.imSize = imSize
-        # seperate image to spectral maps
-        self.register_buffer('seperate_mask', torch.FloatTensor(1,imSize,1,1,imSize))
-        self.seperate_mask.fill_(0)
-        for i in range(imSize):
-            self.seperate_mask[0,i,0,0,i] = 1
-
-        self.no_embed = no_embed
-        if not no_embed:
-            self.embed = nn.Sequential(
-                            nn.Conv2d(imSize, imSize, 1, 1, padding=0, bias=False),
-                            nn.LeakyReLU(0.2,True)
-            )
-        else:
-            print(f'[kspaceMap] -> do not use kspace embedding')
-
-    def forward(self, input, mask):
-        # we assume the input only has real part of images (if they are obtained from IFFT)
-        bz = input.shape[0]
-        x = input[:,:1,:,:]
-        if input.shape[1] > 1:
-            others = input[:,1:,:,:]
-        kspace = self.RFFT(x)
-        
-        kspace = kspace.unsqueeze(1).repeat(1,self.imSize,1,1,1) # [B,imsize,2,imsize,imsize]
-        masked_kspace = self.seperate_mask * kspace
-        masked_kspace = masked_kspace.view(bz*self.imSize, 2, self.imSize, self.imSize)
-        # discard the imaginary part [B,imsize,imsize, imsize]
-        seperate_imgs = self.IFFT(masked_kspace)[:,0,:,:].view(bz, self.imSize, self.imSize, self.imSize)
-
-        return torch.cat([seperate_imgs, others], 1)
+# class kspaceMap(nn.Module):
+#     def __init__(self, imSize=128, no_embed=False):
+#         super(kspaceMap, self).__init__()
+#
+#         self.RFFT = RFFT()
+#         self.IFFT = IFFT()
+#         self.imSize = imSize
+#         # seperate image to spectral maps
+#         self.register_buffer('seperate_mask', torch.FloatTensor(1,imSize,1,1,imSize))
+#         self.seperate_mask.fill_(0)
+#         for i in range(imSize):
+#             self.seperate_mask[0,i,0,0,i] = 1
+#
+#         self.no_embed = no_embed
+#         if not no_embed:
+#             self.embed = nn.Sequential(
+#                             nn.Conv2d(imSize, imSize, 1, 1, padding=0, bias=False),
+#                             nn.LeakyReLU(0.2,True)
+#             )
+#         else:
+#             print(f'[kspaceMap] -> do not use kspace embedding')
+#
+#     def forward(self, input, mask):
+#         # we assume the input only has real part of images (if they are obtained from IFFT)
+#         bz = input.shape[0]
+#         x = input[:,:1,:,:]
+#         if input.shape[1] > 1:
+#             others = input[:,1:,:,:]
+#         kspace = self.RFFT(x)
+#
+#         kspace = kspace.unsqueeze(1).repeat(1,self.imSize,1,1,1) # [B,imsize,2,imsize,imsize]
+#         masked_kspace = self.seperate_mask * kspace
+#         masked_kspace = masked_kspace.view(bz*self.imSize, 2, self.imSize, self.imSize)
+#         # discard the imaginary part [B,imsize,imsize, imsize]
+#         seperate_imgs = self.IFFT(masked_kspace)[:,0,:,:].view(bz, self.imSize, self.imSize, self.imSize)
+#
+#         return torch.cat([seperate_imgs, others], 1)
 
 
 # class FTPASGANModel(BaseModel):

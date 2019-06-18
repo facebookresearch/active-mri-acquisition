@@ -11,6 +11,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import warnings
+from tensorboardX import SummaryWriter
 
 from ignite.contrib.handlers import ProgressBar
 from ignite.engine import Engine, Events
@@ -77,6 +78,7 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
 
 # TODO Add tensorboard visualization
 def main(options):
+    writer = SummaryWriter(log_dir=os.path.join(options.checkpoints_dir, options.name))
     max_epochs = options.niter + options.niter_decay + 1
     max_epochs = 5
     train_data_loader, val_data_loader = create_data_loaders(options)
@@ -91,7 +93,7 @@ def main(options):
         number_of_layers_residual_bottleneck=options.number_of_layers_residual_bottleneck,
         mask_embed_dim=options.mask_embed_dim,
         dropout_probability=options.dropout_probability,
-        img_width=128,   # TODO : CHANGE!
+        img_width=options.image_width,
         use_deconv=options.use_deconv)
     reconstructor = torch.nn.DataParallel(reconstructor).cuda()
 
@@ -157,6 +159,11 @@ def main(options):
             with open(fname, 'a') as f:
                 f.write('{}\n'.format(message))
 
+    @trainer.on(Events.ITERATION_COMPLETED)
+    def plot_training_loss(engine):
+        writer.add_scalar("training/generator_loss", engine.state.output['loss_G'], engine.state.iteration)
+        writer.add_scalar("training/discriminator_loss", engine.state.output['loss_D'], engine.state.iteration)
+
     @trainer.on(Events.EPOCH_COMPLETED)
     def print_times_iter(engine):
         progress_bar.log_message(
@@ -187,6 +194,11 @@ def main(options):
         progress_bar.log_message(
             'Validation Results - Epoch: {}  MSE: {:.3f} SSIM: {:.3f}'
             .format(engine.state.epoch, output['MSE'], output['SSIM']))
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def plot_validation_loss(engine):
+        writer.add_scalar("validation/MSE", validation_engine.state.output['MSE'], engine.state.epoch)
+        writer.add_scalar("validation/SSIM", validation_engine.state.output['SSIM'], engine.state.epoch)
 
     trainer.run(train_data_loader, max_epochs)
 
