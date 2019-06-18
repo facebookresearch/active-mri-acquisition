@@ -34,9 +34,9 @@ def get_train_valid_loader(batch_size,
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
         data_transform = DicomDataTransform(mask_func, None)
         train_data = Slice(data_transform, dicom_root, which='train', resolution=128,
-                           scan_type='all', num_volumes=10, num_rand_slices=None)
+                           scan_type='all', num_volumes=None, num_rand_slices=None)
         valid_data = Slice(data_transform, dicom_root, which='val', resolution=128,
-                           scan_type='all', num_volumes=10, num_rand_slices=None)
+                           scan_type='all', num_volumes=None, num_rand_slices=None)
 
         def init_fun(_):
             return np.random.seed()

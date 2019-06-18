@@ -40,8 +40,8 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--lr_decay_iters', type=int, default=50,
                             help='multiply by a gamma every lr_decay_iters iterations')
         parser.add_argument('--lambda_vgg', type=float, default=0, help='perceptual loss weight')
-        parser.add_argument('--no_cond_gan', action='store_true', help='do not use condition gan')
-        parser.add_argument('--consistency_loss', action='store_true', help='do not use condition gan')
+        parser.add_argument('--no_cond_gan', action='store_true', help='do not use condition GAN')
+        parser.add_argument('--consistency_loss', action='store_true', help='do not use condition GAN')
         parser.add_argument('--residual_loss', action='store_true', help='supervise the residual loss')
         parser.add_argument('--l2_weight', action='store_true', help='network l2 regularization')
 
@@ -57,12 +57,26 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--validation_train_split_ratio', type=float, default=0.9)
 
         # Options for Reconstruction Model
-        parser.add_argument('--number_of_filters', type=int, default=128)
+        parser.add_argument('--number_of_reconstructor_filters', type=int, default=128)
         parser.add_argument('--dropout_probability', type=float, default=0)
         parser.add_argument('--number_of_cascade_blocks', type=int, default=3)
         parser.add_argument('--number_of_layers_residual_bottleneck', type=int, default=6)
-        parser.add_argument('--mask_embed_dim', type=int, default=6)
         parser.add_argument('--n_downsampling', type=int, default=3)
         parser.add_argument('--use_deconv', type=bool, default=True)
+
+        # Options for Evaluator Model
+        parser.add_argument('--number_of_evaluator_filters', type=int, default=256)
+        parser.add_argument('--number_of_evaluator_convolution_layers', type=int, default=4)
+
+        # Options for both Reconstructor and Evaluator Model
+        parser.add_argument('--mask_embed_dim', type=int, default=6)
+        # TODO : do we need it? We can set this based on dataroot
+        parser.add_argument('--image_width', type=int, default=128)
+
+        # Options moved from old model file
+        parser.add_argument('--use_mse_as_disc_energy', action='store_true', help='use MSE as evaluator energy')
+        parser.add_argument('--grad_ctx', action='store_true',
+                            help='GAN criterion computes adversarial loss signal at provided k-space lines')
+        parser.add_argument('--lambda_gan', type=float, default=0.01, help='weight for reconstruction loss')
 
         return parser
