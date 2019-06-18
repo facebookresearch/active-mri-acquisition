@@ -24,11 +24,10 @@ def inference(batch, reconstructor, fft_functions, options):
         zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0], fft_functions, options)
 
         # Get reconstructor output
-        reconstructions_all_stages, logvars, mask_cond = reconstructor(zero_filled_reconstruction, mask)
-        reconstruction_last_stage = reconstructions_all_stages
+        reconstructed_image, uncertainty_map, mask_embedding = reconstructor(zero_filled_reconstruction, mask)
 
-        mse = F.mse_loss(reconstruction_last_stage[:, :1, ...], target[:, :1, ...], size_average=True)
-        ssim = util.ssim_metric(reconstruction_last_stage[:, :1, ...], target[:, :1, ...])
+        mse = F.mse_loss(reconstructed_image[:, :1, ...], target[:, :1, ...], size_average=True)
+        ssim = util.ssim_metric(reconstructed_image[:, :1, ...], target[:, :1, ...])
 
         return {'MSE': mse, 'SSIM': ssim}
 
@@ -37,19 +36,19 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
     zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0], fft_functions, options)
 
     # Get reconstructor output
-    reconstruction_last_stage, uncertainty_last_stage, mask_cond = reconstructor(zero_filled_reconstruction, mask)
+    reconstructed_image, uncertainty_map, mask_embedding = reconstructor(zero_filled_reconstruction, mask)
 
     # ------------------------------------------------------------------------
     # Update evaluator
     # ------------------------------------------------------------------------
     optimizers['D'].zero_grad()
-    fake = clamp(reconstruction_last_stage[:, :1, :, :])
+    fake = clamp(reconstructed_image[:, :1, :, :])
     detached_fake = fake.detach()
-    output = evaluator(detached_fake, mask_cond.detach())
+    output = evaluator(detached_fake, mask_embedding.detach())
     loss_D_fake = losses['GAN'](output, False, mask, degree=0, pred_and_gt=(detached_fake[:, :1, ...], target))
 
     real = clamp(target[:, :1, :, :])
-    output = evaluator(real, mask_cond.detach())
+    output = evaluator(real, mask_embedding.detach())
     loss_D_real = losses['GAN'](output, True, mask, degree=1, pred_and_gt=(detached_fake[:, :1, ...], target))
 
     loss_D = loss_D_fake + loss_D_real
@@ -61,7 +60,7 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
     # ------------------------------------------------------------------------
     optimizers['G'].zero_grad()
     loss_G = 0
-    loss_G += losses['NLL'](reconstruction_last_stage, target, uncertainty_last_stage)
+    loss_G += losses['NLL'](reconstructed_image, target, uncertainty_map)
     loss_G = loss_G.mean()
     # output = evaluator(fake, mask_cond.detach())
     loss_G_GAN = losses['GAN'](output, True, mask, degree=1, updateG=True, pred_and_gt=(fake[:, :1, ...], target))
