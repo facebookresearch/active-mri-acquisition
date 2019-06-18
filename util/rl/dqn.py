@@ -82,13 +82,9 @@ class DDQN(nn.Module):
     def __init__(self, num_actions, device, memory, opts):
         super(DDQN, self).__init__()
         self.model = get_model(num_actions, opts.rl_model_type)
-
-        if memory is not None:
-            self._data_loader = infinite_iterator(DataLoader(memory, batch_size=opts.rl_batch_size, num_workers=8))
-
+        self.memory = memory
         self.optimizer = optim.Adam(self.parameters(), lr=6.25e-5)
         self.num_actions = num_actions
-        self.memory = memory
         self.opts = opts
         self.device = device
 
@@ -122,9 +118,9 @@ class DDQN(nn.Module):
         self.memory.push(observation, action, next_observation, reward, done)
 
     def update_parameters(self, target_net):
-        if len(self.memory) < self.opts.rl_batch_size:
+        batch = self.memory.sample()
+        if batch is None:
             return None, None, None, None
-        batch = next(self._data_loader)
         observations = batch['observations'].to(self.device)
         next_observations = batch['next_observations'].to(self.device)
         actions = batch['actions'].to(self.device)
@@ -135,7 +131,7 @@ class DDQN(nn.Module):
 
         # Compute Q-values and get best action according to online network
         all_q_values = self.forward(observations)
-        q_values = all_q_values.gather(1, actions)
+        q_values = all_q_values.gather(1, actions.unsqueeze(1))
 
         # Compute target values using the best action found
         target_values = torch.zeros(observations.shape[0], device=self.device)

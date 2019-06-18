@@ -39,7 +39,8 @@ class RLOptions(BaseOptions):
 
         # Reinforcement learning options
         parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
-        parser.add_argument('--dqn_only_test', dest='dqn_only_test', action='store_true')
+        parser.add_argument('--dqn_only_test', dest='dqn_only_test', action='store_true',
+                            help='If true, no training will be done. A policy will be loaded from disk and tested.')
         parser.add_argument('--rl_model_type', type=str, default='two_streams')
         parser.add_argument('--replay_buffer_size', type=int, default=100000)
         parser.add_argument('--epsilon_start', type=float, default=0.99)
@@ -47,6 +48,8 @@ class RLOptions(BaseOptions):
         parser.add_argument('--epsilon_decay', type=float, default=10000)
         parser.add_argument('--num_train_episodes', type=int, default=10000)
         parser.add_argument('--rl_batch_size', type=int, default=16)
+        parser.add_argument('--rl_burn_in', type=int, default=200,
+                            help='Before this many steps nothing will be sampled from the replay buffer.')
         parser.add_argument('--agent_test_episode_freq', type=int, default=20)
         parser.add_argument('--target_net_update_freq', type=int, default=500)
         parser.add_argument('--gamma', type=float, default=0.999)

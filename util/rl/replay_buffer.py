@@ -1,11 +1,5 @@
 import numpy as np
-import random
 import torch
-
-from collections import namedtuple
-from torch.utils.data import Dataset
-
-Transition = namedtuple('Transition', ('observation', 'action', 'next_observation', 'reward', 'done'))
 
 
 def infinite_iterator(iterator):
@@ -13,20 +7,22 @@ def infinite_iterator(iterator):
         yield from iterator
 
 
-class ReplayMemory(Dataset):
-    def __init__(self, capacity, obs_shape, batch_size, transform=None):
-        self.capacity = capacity
-        self.memory = []
-        # [[self.batch_size] is only used for DataLoader buffering. The batch size used for DQN updates should be
-        # the batch size passed as input.
-        self.batch_size = 8 * batch_size
+class ReplayMemory:
+    def __init__(self, capacity, obs_shape, batch_size, burn_in):
+        assert burn_in >= batch_size
+        self.batch_size = batch_size
+        self.burn_in = burn_in
+        self.observations = torch.zeros(capacity, *obs_shape, dtype=torch.float32)
+        self.actions = torch.zeros(capacity, dtype=torch.long)
+        self.next_observations = torch.zeros(capacity, *obs_shape, dtype=torch.float32)
+        self.rewards = torch.zeros(capacity, dtype=torch.float32)
+        self.dones = torch.zeros(capacity, dtype=torch.uint8)
+
         self.position = 0
         self.mean_obs = torch.zeros(obs_shape, dtype=torch.float32)
         self.std_obs = torch.ones(obs_shape, dtype=torch.float32)
         self._m2_obs = torch.ones(obs_shape, dtype=torch.float32)
-        self.cnt = 1
-
-        self.transform = transform
+        self.count_seen = 1
 
     def normalize(self, observation):
         if observation is None:
@@ -39,38 +35,34 @@ class ReplayMemory(Dataset):
         return self.std_obs * observation + self.mean_obs
 
     def _update_stats(self, observation):
-        self.cnt += 1
+        self.count_seen += 1
         delta = observation - self.mean_obs
-        self.mean_obs = self.mean_obs + delta / self.cnt
+        self.mean_obs = self.mean_obs + delta / self.count_seen
         delta2 = observation - self.mean_obs
         self._m2_obs = self._m2_obs + (delta * delta2)
-        self.std_obs = np.sqrt(self._m2_obs / (self.cnt - 1))
+        self.std_obs = np.sqrt(self._m2_obs / (self.count_seen - 1))
 
     def push(self, observation, action, next_observation, reward, done):
-        if len(self.memory) < self.capacity:
-            self.memory.append(None)
-        self.memory[self.position] = Transition(
-            torch.tensor(observation, dtype=torch.float32),
-            torch.tensor([action]),
-            torch.tensor(next_observation, dtype=torch.float32),
-            torch.tensor([reward], dtype=torch.float32),
-            torch.tensor([done], dtype=torch.uint8))
-        self._update_stats(self.memory[self.position].observation)
-        self.position = (self.position + 1) % self.capacity
+        self.observations[self.position] = torch.tensor(observation, dtype=torch.float32)
+        self.actions[self.position] = torch.tensor([action], dtype=torch.long)
+        self.next_observations[self.position] = torch.tensor(next_observation, dtype=torch.float32)
+        self.rewards[self.position] = torch.tensor([reward], dtype=torch.float32)
+        self.dones[self.position] = torch.tensor([done], dtype=torch.uint8)
 
-    def __getitem__(self, _):
-        assert len(self.memory) >= self.batch_size
-        transition = random.sample(self.memory, 1)
-        transition = {
-            'observations': self.normalize(transition[0].observation),
-            'next_observations': self.normalize(transition[0].next_observation),
-            'actions': transition[0].action,
-            'rewards': transition[0].reward,
-            'dones': transition[0].done
+        self._update_stats(self.observations[self.position])
+        self.position = (self.position + 1) % len(self)
+
+    def sample(self):
+        if self.count_seen - 1 < self.burn_in:
+            return None
+        indices = np.random.choice(min(self.count_seen - 1, len(self)), self.batch_size)
+        return {
+            'observations': self.normalize(self.observations[indices]),
+            'next_observations': self.normalize(self.next_observations[indices]),
+            'actions': self.actions[indices],
+            'rewards': self.rewards[indices],
+            'dones': self.dones[indices]
         }
-        if self.transform:
-            transition = self.transform(transition)
-        return transition
 
     def __len__(self):
-        return 0 if len(self.memory) < self.batch_size else self.batch_size
+        return len(self.observations)
