@@ -11,7 +11,7 @@ queue=learnfair
 
 use_reconstruction=1
 
-for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "evaluator_net_offp" "greedyfull1nors_gt"; do
+for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "greedyfull1nors_gt"; do
     if [[ ${use_reconstruction} -eq 1 ]]
     then
         policy=${policy}_r
@@ -36,13 +36,11 @@ for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "evaluator_ne
     echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
 
     echo srun python acquire_rl.py --dataroot KNEE \
-        --name knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm \
-        --evaluator_name knee_energypasnetplus_w111logvar_0.1gan_gradctx_pxlm \
-        --model ft_pasgan \
-        --checkpoints_dir /checkpoint/lep/active_acq --batchSize 96 --which_model_netG pasnetplus --gpu_ids 0 \
-        --policy ${policy} --sequential_images --budget 1000 --num_test_images 1000 --freq_save_test_stats 20 \
-        --rl_logs_subdir all_baselines  --seed 0 \
-        --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
+    --checkpoints_dir /checkpoint/lep/active_acq/test_run_py --checkpoint_suffix 5 \
+    --batchSize 96 --gpu_ids 0 --num_train_episodes 100000 --policy ${policy} \
+    --budget 1000 --num_test_images 100 --num_train_images 100 --freq_save_test_stats 20 --sequential_images \
+    --rl_logs_subdir borra --seed 0 \
+    --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
 
     sbatch ${SLURM}
 done

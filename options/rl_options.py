@@ -4,7 +4,7 @@ from .base_options import BaseOptions
 class RLOptions(BaseOptions):
     def initialize(self, parser):
         parser = BaseOptions.initialize(self, parser)
-        parser.add_argument('--results_dir', type=str, default='./results/', help='saves results here.')
+        parser.add_argument('--results_dir', type=str, default=None, help='saves results here.')
         parser.add_argument('--checkpoint_suffix', type=str, default=None,
                             help='to load checkpoint using the suffix that run.py assigned to it '
                                  '(e.g., checkpoint_reconstruction_<suffix>.pth')

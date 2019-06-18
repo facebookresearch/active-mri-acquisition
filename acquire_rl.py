@@ -209,7 +209,8 @@ if __name__ == '__main__':
     # Reading options
     opts = RLOptions().parse()
     opts.batchSize = 1
-    opts.results_dir = opts.checkpoints_dir
+    if opts.results_dir is None:
+        opts.results_dir = opts.checkpoints_dir
 
     random.seed(opts.seed)
     np.random.seed(opts.seed)
