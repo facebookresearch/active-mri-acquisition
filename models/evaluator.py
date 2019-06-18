@@ -1,5 +1,5 @@
-from fft_utils import RFFT, IFFT, FFT
-from reconstruction import get_norm_layer, init_net, init_func
+from .fft_utils import RFFT, IFFT, FFT
+from .reconstruction import get_norm_layer, init_net, init_func
 
 import functools
 import torch
@@ -59,16 +59,18 @@ class SpectralMapDecomposition(nn.Module):
         kspace = self.RFFT(reconstructed_image)
         kspace = kspace.unsqueeze(1).repeat(1, width, 1, 1, 1)
 
-        # seperate image into spectral maps
+        # separate image into spectral maps
         separate_mask = torch.zeros([1, width, 1, 1, width], dtype=torch.float32)
         for i in range(width):
             separate_mask[0, i, 0, 0, i] = 1
+
+        separate_mask = separate_mask.cuda()    #TODO: Is there a neater way of doing this?
 
         masked_kspace = separate_mask * kspace
         masked_kspace = masked_kspace.view(batch_size * width, 2, height, width)
 
         # convert spectral maps to image space
-        # discard the imaginary part
+        # discard the imaginary part    #TODO: Future consideration of magnitude
         separate_images = self.IFFT(masked_kspace)[:, 0, :, :].view(batch_size, width, height, width)
 
         # concatenate mask embedding
@@ -86,7 +88,7 @@ class EvaluatorNetwork(nn.Module):
                  use_sigmoid=False,
                  width=128,
                  mask_embed_dim=6):
-        print(f'[NLayerDiscriminatorChannel] -> n_layers = {number_of_conv_layers}')
+        print(f'[EvaluatorNetwork] -> n_layers = {number_of_conv_layers}')
         super(EvaluatorNetwork, self).__init__()
 
         self.spectral_map = SpectralMapDecomposition()
@@ -133,7 +135,7 @@ class EvaluatorNetwork(nn.Module):
         self.model = nn.Sequential(*sequence)
         self.apply(init_func)
 
-    def forward(self, input, mask_embedding):
+    def forward(self, input, mask_embedding=None):
         """
 
         Args:
