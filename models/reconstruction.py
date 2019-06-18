@@ -384,7 +384,7 @@ class ReconstructorNetwork(nn.Module):
                                         shape = (batch_size, 1, 1, width)
 
         Returns:    reconstructed high resolution image
-                    uncertainy map
+                    uncertainty map
                     mask_embedding
 
         '''
