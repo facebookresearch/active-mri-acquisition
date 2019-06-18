@@ -4,12 +4,12 @@ from .base_options import BaseOptions
 class RLOptions(BaseOptions):
     def initialize(self, parser):
         parser = BaseOptions.initialize(self, parser)
-        parser.add_argument('--which_epoch', type=str, default='latest',
-                            help='which epoch to load? set to latest to use latest cached model')
-
-        parser.add_argument('--results_dir', type=str, default='./results/', help='saves results here.')
+        parser.add_argument('--results_dir', type=str, default=None, help='saves results here.')
+        parser.add_argument('--checkpoint_suffix', type=str, default=None,
+                            help='to load checkpoint using the suffix that run.py assigned to it '
+                                 '(e.g., checkpoint_reconstruction_<suffix>.pth')
         parser.add_argument('--rl_logs_subdir', type=str, default='debug',
-                            help='sub-directory of opts.results_dir to store results of RL runs.')
+                            help='sub-directory of results_dir to store results of RL runs.')
 
         # General options for all active acquisition algorithms
         parser.add_argument(
