@@ -1,9 +1,11 @@
 from __future__ import print_function
 import torch
+import torchvision.utils as tvutil
 import numpy as np
 from PIL import Image
 import os
 from . import pytorch_mssim
+import matplotlib.pyplot as plt
 
 
 def ssim_metric(src, tar, full=False):
@@ -63,8 +65,36 @@ def tensor2im(input_image, imtype=np.uint8, renormalize=True):
         image_numpy = np.tile(image_numpy, (3, 1, 1))
     
     # image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.0
-    image_numpy = np.transpose(image_numpy, (1, 2, 0))
+    # image_numpy = np.transpose(image_numpy, (1, 2, 0))
     return image_numpy.astype(imtype)
+
+def create_grid_from_tensor(tensor_of_images, num_rows=6):
+    """
+
+    Args:
+        tensor_of_images:   cuda tensor of images to be converted into grid of images
+                            shape   :   (batch_size, 2, height, width)
+
+    Returns:
+
+    """
+    #take norm over real-imaginary dimension
+    tensor_of_images = tensor_of_images.norm(dim=1, keepdim=True)
+
+    #make image grid
+    tensor_grid = tvutil.make_grid(tensor_of_images, nrow=num_rows, normalize=True, scale_each=True)
+    numpy_grid = tensor2im(tensor_grid, renormalize=True)
+
+    return numpy_grid
+
+
+def gray2heatmap(grayimg, cmap='jet'):
+    cmap = plt.get_cmap(cmap)
+    rgba_img = cmap(grayimg)
+    # rgb_img = np.delete(rgba_img, 3, 2) * 255.0
+    rgb_img = rgba_img[:, :, :, 0] * 255.0
+    rgb_img = rgb_img.astype(np.uint8)
+    return rgb_img
 
 
 def diagnose_network(net, name='network'):
