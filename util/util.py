@@ -83,7 +83,7 @@ def create_grid_from_tensor(tensor_of_images, num_rows=6):
 
     #make image grid
     tensor_grid = tvutil.make_grid(tensor_of_images, nrow=num_rows, normalize=True, scale_each=True)
-    numpy_grid = tensor2im(tensor_grid, renormalize=True)
+    numpy_grid = tensor2im(tensor_grid, renormalize=False)
 
     return numpy_grid
 
