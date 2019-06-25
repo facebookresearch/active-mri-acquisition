@@ -55,6 +55,9 @@ class TrainOptions(BaseOptions):
         # New options
         # ########################
         parser.add_argument('--validation_train_split_ratio', type=float, default=0.9)
+        parser.add_argument('--max_epochs', type=int, default=5,
+                            help='number of epochs to train (default: 5)')
+        parser.add_argument('--save_freq', type=int, default=200)
 
         # Options for Reconstruction Model
         parser.add_argument('--number_of_reconstructor_filters', type=int, default=128)
