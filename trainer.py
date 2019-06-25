@@ -12,6 +12,7 @@ import logging
 import os
 import submitit
 import tempfile
+from tensorboardX import SummaryWriter
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -91,7 +92,7 @@ class Trainer:
         return {
             'reconstructor': self.reconstructor.state_dict(),
             'evaluator': self.evaluator.state_dict(),
-            'options' : self.options,
+            'options': self.options,
             'optimizer_G': self.optimizers['G'].state_dict(),
             'optimizer_D': self.optimizers['D'].state_dict(),
             'completed_epochs': self.completed_epochs,
@@ -182,6 +183,8 @@ class Trainer:
         }
 
     def __call__(self) -> float:
+        writer = SummaryWriter(os.path.join(options.checkpoints_dir, options.name))
+
         print('Creating trainer with the following options:')
         for key, value in vars(self.options).items():
             if key == 'device': #TODO: clean this up!
@@ -200,6 +203,9 @@ class Trainer:
             dropout_probability=self.options.dropout_probability,
             img_width=self.options.image_width,
             use_deconv=self.options.use_deconv)
+
+        # if self.options.device:
+        #     torch.nn.DataParallel(self.reconstructor).to(self.options.device)
 
         self.reconstructor = torch.nn.DataParallel(self.reconstructor).cuda() #TODO: make better with to_device
 
@@ -247,7 +253,41 @@ class Trainer:
                                        trainer=self,
                                        progress_bar=progress_bar)
 
+        # Tensorboard Plots
+        @train_engine.on(Events.ITERATION_COMPLETED)
+        def plot_training_loss(engine):
+            writer.add_scalar("training/generator_loss", train_engine.state.output['loss_G'], engine.state.iteration)
+            writer.add_scalar("training/discriminator_loss", train_engine.state.output['loss_D'], engine.state.iteration)
+
+        @train_engine.on(Events.EPOCH_COMPLETED)
+        def plot_validation_loss(engine):
+            writer.add_scalar("validation/MSE", val_engine.state.output['MSE'], engine.state.epoch)
+            writer.add_scalar("validation/SSIM", val_engine.state.output['SSIM'], engine.state.epoch)
+
+        @train_engine.on(Events.EPOCH_COMPLETED)
+        def plot_validation_images(engine):
+            ground_truth = util.create_grid_from_tensor(val_engine.state.output['ground_truth'])
+            writer.add_image("validation_images/ground_truth", ground_truth, engine.state.epoch)
+
+            zero_filled_image = util.create_grid_from_tensor(val_engine.state.output['zero_filled_image'])
+            writer.add_image("validation_images/zero_filled_image", zero_filled_image, engine.state.epoch)
+
+            reconstructed_image = util.create_grid_from_tensor(val_engine.state.output['zero_filled_image'])
+            writer.add_image("validation_images/reconstructed_image", reconstructed_image, engine.state.epoch)
+
+            uncertainty_map = util.gray2heatmap(
+                util.create_grid_from_tensor(val_engine.state.output['uncertainty_map']), cmap='gray')
+            writer.add_image("validation_images/uncertainty_map", uncertainty_map, engine.state.epoch)
+
+            difference = util.create_grid_from_tensor(torch.abs(val_engine.state.output['ground_truth']
+                                                                - val_engine.state.output[
+                                                                    'reconstructed_image']))
+            difference = util.gray2heatmap(difference, cmap='gray')  # TODO: fix colormap
+            writer.add_image("validation_images/difference", difference, engine.state.epoch)
+
         train_engine.run(train_loader, self.options.max_epochs - self.completed_epochs)
+
+        writer.close()
 
         return self.best_validation_score
 
