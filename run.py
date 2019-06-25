@@ -6,6 +6,7 @@ from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
 from util import util
 
+import numpy as np
 import os
 import torch
 import torch.nn.functional as F
@@ -29,7 +30,14 @@ def inference(batch, reconstructor, fft_functions, options):
         mse = F.mse_loss(reconstructed_image[:, :1, ...], target[:, :1, ...], size_average=True)
         ssim = util.ssim_metric(reconstructed_image[:, :1, ...], target[:, :1, ...])
 
-        return {'MSE': mse, 'SSIM': ssim}
+        return {
+            'MSE': mse,
+            'SSIM': ssim,
+            'ground_truth': target,
+            'zero_filled_image': zero_filled_reconstruction,
+            'reconstructed_image': reconstructed_image,
+            'uncertainty_map': uncertainty_map
+        }
 
 
 def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
@@ -173,6 +181,7 @@ def main(options):
     def print_times_epoch(engine):
         progress_bar.log_message('Epoch {} done. Time per batch: {:.3f}[s]'.format(engine.state.epoch, timer.value()))
 
+
     @trainer.on(Events.EXCEPTION_RAISED)
     def handle_exception(engine, e):
         if isinstance(e, KeyboardInterrupt) and (engine.state.iteration > 1):
@@ -200,7 +209,27 @@ def main(options):
         writer.add_scalar("validation/MSE", validation_engine.state.output['MSE'], engine.state.epoch)
         writer.add_scalar("validation/SSIM", validation_engine.state.output['SSIM'], engine.state.epoch)
 
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def plot_validation_images(engine): #TODO: fix normalization
+        ground_truth = util.create_grid_from_tensor(validation_engine.state.output['ground_truth'])
+        writer.add_image("validation_images/ground_truth", ground_truth, engine.state.epoch)
+
+        zero_filled_image = util.create_grid_from_tensor(validation_engine.state.output['zero_filled_image'])
+        writer.add_image("validation_images/zero_filled_image", zero_filled_image, engine.state.epoch)
+
+        reconstructed_image = util.create_grid_from_tensor(validation_engine.state.output['zero_filled_image'])
+        writer.add_image("validation_images/reconstructed_image", reconstructed_image, engine.state.epoch)
+
+        uncertainty_map = util.gray2heatmap(util.create_grid_from_tensor(validation_engine.state.output['uncertainty_map']))
+        writer.add_image("validation_images/uncertainty_map", uncertainty_map, engine.state.epoch)
+
+        difference = util.create_grid_from_tensor(torch.abs(validation_engine.state.output['ground_truth']
+                                                         - validation_engine.state.output['reconstructed_image']))
+        difference = util.gray2heatmap(difference, cmap='gray')
+        writer.add_image("validation_images/difference", difference, engine.state.epoch)
+
     trainer.run(train_data_loader, max_epochs)
+    writer.close()
 
 
 if __name__ == '__main__':
