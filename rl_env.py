@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, FFT, load_model_weights_if_present, preprocess_inputs, clamp, load_checkpoint
+from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, clamp, load_checkpoint
 from models.reconstruction import ReconstructorNetwork
 from util import util
 
@@ -75,7 +75,7 @@ class ReconstructionEnv:
             dropout_probability=checkpoint['options'].dropout_probability,
             img_width=128,   # TODO : CHANGE!
             use_deconv=checkpoint['options'].use_deconv)
-        self._reconstructor.load_state_dict(checkpoint['reconstructor'])
+        self._reconstructor.load_state_dict(checkpoint['reconstructor'].module.state_dict())
         self._reconstructor.to(device)
 
         self._evaluator = EvaluatorNetwork(
@@ -84,7 +84,7 @@ class ReconstructionEnv:
             use_sigmoid=False,
             width=checkpoint['options'].image_width,
             mask_embed_dim=checkpoint['options'].mask_embed_dim)
-        self._evaluator.load_state_dict(checkpoint['evaluator'])
+        self._evaluator.load_state_dict(checkpoint['evaluator'].module.state_dict())
         self._evaluator.to(device)
 
         obs_shape = None
@@ -127,8 +127,8 @@ class ReconstructionEnv:
 
     @staticmethod
     def _compute_score(reconstruction, ground_truth, kind='mse'):
-        reconstruction = reconstruction[:, :1, :, :]
-        ground_truth = ground_truth[:, :1, :, :]
+        reconstruction = reconstruction[:, :1, ...]
+        ground_truth = ground_truth[:, :1, ...]
         if kind == 'mse':
             score = F.mse_loss(reconstruction, ground_truth)
         elif kind == 'ssim':
@@ -159,11 +159,11 @@ class ReconstructionEnv:
 
             This method takes the current ground truth, masks it with the current mask and creates
             a zero-filled reconstruction from the masked image. Additionally, this zero-filled reconstruction can
-            be passed through the reconstruction network, [[self._reconstructor]].
+            be passed through the reconstruction network, `self._reconstructor`.
             The score evaluates the difference between the final reconstruction and the current ground truth.
 
             It is possible to pass alternate ground truth and mask to compute the score with respect to, instead of
-            [[self._ground_truth]] and [[self._current_mask]].
+            `self._ground_truth` and `self._current_mask`.
 
             @:param use_reconstruction: specifies if the reconstruction network will be used or not.
             @:param ground_truth: specifies if the score has to be computed with respect to an alternate "ground truth".
@@ -174,7 +174,7 @@ class ReconstructionEnv:
                 ground_truth = self._ground_truth
             if mask_to_use is None:
                 mask_to_use = self._current_mask
-            image, _, _ = preprocess_inputs(ground_truth, mask_to_use, fft_functions, self.options)
+            image, _, _ = preprocess_inputs(ground_truth, mask_to_use, fft_functions, self.options, clamp_target=False)
             if use_reconstruction:
                 image, _, _ = self._reconstructor(image, mask_to_use)  # pass through reconstruction network
         return [ReconstructionEnv._compute_score(img.unsqueeze(0), ground_truth, kind) for img in image]
@@ -206,9 +206,9 @@ class ReconstructionEnv:
     def reset(self):
         """ Loads a new image from the dataset and starts a new episode with this image.
 
-            If [[self.options.sequential_images]] is True, it loops over images in the dataset in order. Otherwise,
-            it selects a random image from the first [[self.num_{train/test}_images]] in the dataset. The dataset
-            is ordered according to [[self._{train/test}_order]].
+            If `self.options.sequential_images` is True, it loops over images in the dataset in order. Otherwise,
+            it selects a random image from the first `self.num_{train/test}_images` in the dataset. The dataset
+            is ordered according to `self._{train/test}_order`.
         """
         if self.options.sequential_images:
             if self.is_testing:
@@ -252,7 +252,7 @@ class ReconstructionEnv:
         return observation, reward, done, {}
 
     def get_evaluator_action(self):
-        """ Returns the action recommended by the evaluator network of [[self._evaluator]]. """
+        """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
             image, _, _ = preprocess_inputs(self._ground_truth, self._current_mask, fft_functions, self.options)
             reconstruction, _, mask_embedding = self._reconstructor(image, self._current_mask)
