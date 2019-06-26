@@ -58,6 +58,13 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--max_epochs', type=int, default=5,
                             help='number of epochs to train (default: 5)')
         parser.add_argument('--save_freq', type=int, default=200)
+        parser.add_argument('--submitit_logs_dir', type=str, default=None)
+
+        # Hyperband Options
+        parser.add_argument('--R', type=int, default=10, help='Hyperband resource usage limit (default: 10)')
+        parser.add_argument('--eta', type=float, default=3.0, help='Hyperband elimination rate (default: 3.0)')
+        parser.add_argument('--interactive_init', dest='interactive_init', action='store_true',
+                            help='Allows choosing R and eta interactively via a command line prompt (default: False)')
 
         # Options for Reconstruction Model
         parser.add_argument('--number_of_reconstructor_filters', type=int, default=128)

@@ -159,7 +159,7 @@ class Trainer:
         loss_D_real = losses['GAN'](output, True, mask, degree=1, pred_and_gt=(detached_fake[:, :1, ...], target))
 
         loss_D = loss_D_fake + loss_D_real
-        loss_D.backward(retain_graph=True)  # TODO: retained graph to use output in GAN backward pass
+        loss_D.backward(retain_graph=True)
         optimizers['D'].step()
 
         # ------------------------------------------------------------------------
@@ -183,7 +183,7 @@ class Trainer:
         }
 
     def __call__(self) -> float:
-        writer = SummaryWriter(os.path.join(options.checkpoints_dir, options.name))
+        writer = SummaryWriter(os.path.join(self.options.checkpoints_dir, self.options.name))
 
         print('Creating trainer with the following options:')
         for key, value in vars(self.options).items():

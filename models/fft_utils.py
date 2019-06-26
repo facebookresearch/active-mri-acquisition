@@ -68,7 +68,7 @@ def preprocess_inputs(target, mask, fft_functions, options, return_masked_k_spac
     target = clamp(target.to(options.device)).detach()
 
     if hasattr(options, 'dynamic_mask_type') and options.dynamic_mask_type != 'loader':
-        mask = create_mask(target.shape[0], mask_type=options.dynamic_mask_type)
+        mask = create_mask(target.shape[0], num_entries=mask.shape[3], mask_type=options.dynamic_mask_type)
     mask = mask.to(options.device)
 
     masked_true_k_space = fft_functions['rfft'](target) * mask

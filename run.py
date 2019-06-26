@@ -86,7 +86,7 @@ def update(batch, reconstructor, evaluator, optimizers, losses, fft_functions, o
 
 # TODO Add tensorboard visualization
 def main(options):
-    writer = SummaryWriter(log_dir=os.path.join(options.checkpoints_dir, options.name))
+    writer = SummaryWriter(os.path.join(options.checkpoints_dir, options.name))
     max_epochs = options.niter + options.niter_decay + 1
     max_epochs = 5
     train_data_loader, val_data_loader = create_data_loaders(options)
