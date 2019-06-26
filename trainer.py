@@ -139,6 +139,7 @@ class Trainer:
                 self.completed_epochs = checkpoint['completed_epochs']
                 self.best_validation_score = checkpoint['best_validation_score']
 
+    # TODO: fix sign leakage
     def update(self, batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
         zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0], fft_functions, options)
 
