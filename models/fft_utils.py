@@ -63,9 +63,9 @@ def gaussian_nll_loss(reconstruction, target, logvar):
     return 0.5 * (one_over_var * l2 + logvar)
 
 
-def preprocess_inputs(target, mask, fft_functions, options, return_masked_k_space=False):
-    # TODO move all the clamp calls to data pre-processing
-    target = clamp(target.to(options.device)).detach()
+def preprocess_inputs(target, mask, fft_functions, options, return_masked_k_space=False, clamp_target=True):
+    if clamp_target:
+        target = clamp(target.to(options.device)).detach()
 
     if hasattr(options, 'dynamic_mask_type') and options.dynamic_mask_type != 'loader':
         mask = create_mask(target.shape[0], mask_type=options.dynamic_mask_type)

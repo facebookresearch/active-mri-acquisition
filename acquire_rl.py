@@ -15,7 +15,7 @@ from rl_env import ReconstructionEnv, device, generate_initial_mask, CONJUGATE_S
 
 
 def update_statistics(value, episode_step, statistics):
-    """ Updates a running mean and standard deviation for [[episode_step]], given [[value]].
+    """ Updates a running mean and standard deviation for `episode_step`, given `value`.
         https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
     """
     if episode_step not in statistics:
@@ -55,6 +55,7 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         total_reward = 0
         actions = []
         episode_step = 0
+        # TODO make these 3 be computed on a single call
         update_statistics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
         update_statistics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
         update_statistics(env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)

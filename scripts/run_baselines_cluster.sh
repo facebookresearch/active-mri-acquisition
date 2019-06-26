@@ -36,10 +36,10 @@ for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "greedyfull1n
     echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
 
     echo srun python acquire_rl.py --dataroot KNEE \
-    --checkpoints_dir /checkpoint/lep/active_acq/test_run_py --checkpoint_suffix 5 \
+    --checkpoints_dir /checkpoint/lep/active_acq/full_test_run_py --checkpoint_suffix 53 \
     --batchSize 96 --gpu_ids 0 --num_train_episodes 100000 --policy ${policy} \
-    --budget 1000 --num_test_images 100 --num_train_images 100 --freq_save_test_stats 20 --sequential_images \
-    --rl_logs_subdir borra --seed 0 \
+    --budget 1000 --num_test_images 1000 --num_train_images 100 --freq_save_test_stats 20 --sequential_images \
+    --rl_logs_subdir acquire_suffix_53 --seed 0 \
     --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
 
     sbatch ${SLURM}
