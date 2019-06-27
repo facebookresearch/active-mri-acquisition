@@ -138,7 +138,7 @@ class EvaluatorNetwork(nn.Module):
 
         spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding)
 
-        return self.model(spectral_map_and_mask_embedding).squeeze()
+        return self.model(spectral_map_and_mask_embedding).squeeze(3).squeeze(2)
 
 
 # TODO: we might consider moving this to losses

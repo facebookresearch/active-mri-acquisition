@@ -1,7 +1,7 @@
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
 from models.fft_utils import RFFT, IFFT, clamp, preprocess_inputs, gaussian_nll_loss
-from models.networks import GANLossKspace   #TODO: maybe move GANLossKspace to a loss file?
+from models.networks import GANLossKspace  # TODO: maybe move GANLossKspace to a loss file?
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
 from util import util
@@ -12,14 +12,13 @@ import logging
 import os
 import submitit
 import tempfile
-from tensorboardX import SummaryWriter
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
 from ignite.contrib.handlers import ProgressBar
 from ignite.engine import Engine, Events
-
+from tensorboardX import SummaryWriter
 from typing import Any, Dict, Tuple
 
 
@@ -188,10 +187,10 @@ class Trainer:
 
         print('Creating trainer with the following options:')
         for key, value in vars(self.options).items():
-            if key == 'device': #TODO: clean this up!
+            if key == 'device':  # TODO: clean this up!
                 value = 'cuda' if torch.cuda.is_available() else 'cpu'
             elif key == 'gpu_ids':
-                value = 'cuda : ' +str(value) if torch.cuda.is_available() else 'cpu'
+                value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
             print('    {:>25}: {:<30}'.format(key, value), flush=True)
 
         # Create Reconstructor Model
@@ -208,7 +207,7 @@ class Trainer:
         # if self.options.device:
         #     torch.nn.DataParallel(self.reconstructor).to(self.options.device)
 
-        self.reconstructor = torch.nn.DataParallel(self.reconstructor).cuda() #TODO: make better with to_device
+        self.reconstructor = torch.nn.DataParallel(self.reconstructor).cuda()  # TODO: make better with to_device
 
         # Create Evaluator Model
         self.evaluator = EvaluatorNetwork(
@@ -218,7 +217,7 @@ class Trainer:
             width=self.options.image_width,
             mask_embed_dim=self.options.mask_embed_dim)
 
-        self.evaluator = torch.nn.DataParallel(self.evaluator).cuda() #TODO: make better with to_device
+        self.evaluator = torch.nn.DataParallel(self.evaluator).cuda()  # TODO: make better with to_device
 
         # Optimizers and losses #TODO: add option for beta2
         self.optimizers = {
@@ -233,7 +232,7 @@ class Trainer:
                                               self.optimizers, self.losses, self.fft_functions, self.options))
 
         val_engine = Engine(lambda engine, batch: self.inference(batch, self.reconstructor,
-                                                                        self.fft_functions, self.options))
+                                                                 self.fft_functions, self.options))
 
         self.load_from_checkpoint_if_present()
 
@@ -258,7 +257,8 @@ class Trainer:
         @train_engine.on(Events.ITERATION_COMPLETED)
         def plot_training_loss(engine):
             writer.add_scalar("training/generator_loss", train_engine.state.output['loss_G'], engine.state.iteration)
-            writer.add_scalar("training/discriminator_loss", train_engine.state.output['loss_D'], engine.state.iteration)
+            writer.add_scalar("training/discriminator_loss", train_engine.state.output['loss_D'],
+                              engine.state.iteration)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_loss(engine):
@@ -292,7 +292,7 @@ class Trainer:
 
         return self.best_validation_score
 
-    def checkpoint(self) -> submitit.helpers.DelayedSubmission:     # submitit expects this function
+    def checkpoint(self) -> submitit.helpers.DelayedSubmission:  # submitit expects this function
         save_checkpoint_function(self, 'regular_checkpoint')
         trainer = Trainer(self.options)
         return submitit.helpers.DelayedSubmission(trainer)
