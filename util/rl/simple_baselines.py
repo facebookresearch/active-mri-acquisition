@@ -135,7 +135,7 @@ class FullGreedy:
                                             mask_to_use=masks_to_try)
             all_scores.extend(scores)
 
-        best_action_index = min(range(len(all_masks)), key=lambda x: scores[x])
+        best_action_index = min(range(len(all_masks)), key=lambda x: all_scores[x])
         action = self._valid_actions[best_action_index]
         del self._valid_actions[best_action_index]
         return action
