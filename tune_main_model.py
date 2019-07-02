@@ -8,7 +8,6 @@ import os
 import torch
 
 
-# TODO write some unit tests for the tuning code part
 def main(options):
     # Create a function evaluator to be passed to the tuner. Here you can pass the SLURM arguments as keywords.
     function_evaluator = SubmititEvaluator(Trainer, options, options.submitit_logs_dir, 3,
@@ -42,6 +41,6 @@ def main(options):
 
 
 if __name__ == '__main__':
-    options = TrainOptions().parse()  # TODO: need to clean up options list
+    options = TrainOptions().parse()
     options.device = torch.device('cuda:{}'.format(options.gpu_ids[0])) if options.gpu_ids else torch.device('cpu')
     main(options)

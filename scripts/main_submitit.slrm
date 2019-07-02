@@ -16,3 +16,5 @@ srun --label python main.py --dataroot KNEE \
 --submitit_logs_dir /checkpoint/sumanab/logs \
 --gpu_ids 0 \
 --print_freq 50
+
+--dataroot KNEE --checkpoints_dir /checkpoint/lep/active_acq/test_reconstr_raw  --submitit_logs_dir /private/home/lep/logs/active_acq/ --gpu_ids 0 --print_freq 50

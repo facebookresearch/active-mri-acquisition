@@ -1,5 +1,5 @@
-from .fft_utils import RFFT, IFFT, FFT
-from .reconstruction import get_norm_layer, init_func
+from .fft_utils import RFFT, IFFT
+from .reconstruction import init_func
 
 import functools
 import torch
@@ -138,7 +138,7 @@ class EvaluatorNetwork(nn.Module):
 
         spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding)
 
-        return self.model(spectral_map_and_mask_embedding).squeeze()
+        return self.model(spectral_map_and_mask_embedding).squeeze(3).squeeze(2)
 
 
 # TODO: we might consider moving this to losses

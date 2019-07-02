@@ -1,7 +1,7 @@
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
 from models.fft_utils import RFFT, IFFT, clamp, preprocess_inputs, gaussian_nll_loss
-from models.networks import GANLossKspace   #TODO: maybe move GANLossKspace to a loss file?
+from models.networks import GANLossKspace   # TODO: maybe move GANLossKspace to a loss file?
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
 from util import util
@@ -258,7 +258,8 @@ class Trainer:
         @train_engine.on(Events.ITERATION_COMPLETED)
         def plot_training_loss(engine):
             writer.add_scalar("training/generator_loss", train_engine.state.output['loss_G'], engine.state.iteration)
-            writer.add_scalar("training/discriminator_loss", train_engine.state.output['loss_D'], engine.state.iteration)
+            writer.add_scalar(
+                "training/discriminator_loss", train_engine.state.output['loss_D'], engine.state.iteration)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_loss(engine):

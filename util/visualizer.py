@@ -4,7 +4,7 @@ import ntpath
 import time
 import glob
 from . import util
-from . import html
+from . import html_util
 from scipy.misc import imresize
 from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
@@ -90,7 +90,7 @@ class Visualizer():
             self.writer.add_image('{}/{}'.format(mode, label), image_numpy.transpose(2, 0, 1), epoch)
 
         if self.use_html and (not self.saved):  # save images to a html file
-            webpage = html.HTML(self.web_dir, 'Experiment name = %s' % self.name, reflesh=1)
+            webpage = html_util.HTML(self.web_dir, 'Experiment name = %s' % self.name, reflesh=1)
             self.saved = True
             for label, image in visuals.items():
                 image_numpy = util.tensor2im(image)
