@@ -22,6 +22,7 @@ from tensorboardX import SummaryWriter
 from typing import Any, Dict, Tuple
 
 
+# TODO I think this is only compute MSE on last batch. Need to do checkpoing aggregating over the whole val set
 def run_validation_and_update_best_checkpoint(engine: ignite.engine.Engine,
                                               val_engine: ignite.engine.Engine = None,
                                               progress_bar: ignite.contrib.handlers.ProgressBar = None,
