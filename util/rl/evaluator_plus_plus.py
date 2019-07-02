@@ -28,7 +28,7 @@ class EvaluatorDataset(torch.utils.data.Dataset):
         self.dataset_dir = '/checkpoint/lep/active_acq/full_test_run_py/il_dataset/' + split
         self.horizon = horizon
         self.images_per_file = images_per_file
-        self.num_images = 2 if split == 'train' else 1
+        self.num_images = 5000 if split == 'train' else 500
         self.horizon = 32
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -195,7 +195,7 @@ def regret_output_transform(output: Dict[str, torch.Tensor]) -> Tuple[torch.Tens
 # TODO check why some scans are actually increasing MSE
 def regret_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     chosen = F.softmax(prediction, dim=1).argmax(dim=1).unsqueeze(1)
-    gt = target / target.sum(dim=1).unsqueeze(1)
+    gt = (target - target.min(dim=1)[0].unsqueeze(1)) / (target.max(dim=1)[0] - target.min(dim=1)[0]).unsqueeze(1)
     regret = gt.max(1)[0] - gt.gather(1, chosen).squeeze()
     return regret.mean()
 
@@ -236,7 +236,7 @@ class EvaluatorPlusPlusTrainer:
     def load_from_checkpoint_if_present(self):
         if not os.path.exists(self.options.checkpoints_dir):
             return
-        print('Loading checkpoint found at {}'.format(self.options.checkpoints_dir))
+        logging.info('Loading checkpoint found at {}'.format(self.options.checkpoints_dir))
         files = os.listdir(self.options.checkpoints_dir)
         for filename in files:
             if 'regular_checkpoint' in filename:
@@ -286,7 +286,7 @@ class EvaluatorPlusPlusTrainer:
         train_engine.add_event_handler(ignite.engine.Events.EPOCH_COMPLETED,
                                        log_train_metrics, progress_bar, self.writer)
 
-        train_engine.run(self.data_loaders['train'], self.options.max_epochs)
+        train_engine.run(self.data_loaders['train'], self.options.max_epochs - self.completed_epochs)
 
         self.writer.close()
 

@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 
 from util.rl.evaluator_plus_plus import EvaluatorDataset, EvaluatorPlusPlus, EvaluatorPlusPlusTrainer
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoints_dir', type=str, default=None)
@@ -38,6 +39,9 @@ if __name__ == '__main__':
         root_logger.setLevel('DEBUG')
     console_handler = logging.StreamHandler()
     file_handler = logging.FileHandler(os.path.join(options.checkpoints_dir, 'train.log'))
+    formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
 

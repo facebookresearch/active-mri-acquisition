@@ -6,10 +6,11 @@
 #SBATCH --gres=gpu:volta:8
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks-per-node=1
-#SBATCH --mem=128000
+#SBATCH --mem=512000
 #SBATCH --time=4320
 #SBATCH --comment="none"
 #SBATCH --nodes=1
 cd /private/home/lep/code/Active_Acquisition
-srun --label python train_evaluator++.py --checkpoints_dir /checkpoint/lep/active_acq/full_test_run_py/evaluator_pp \
---lr 0.0003 --num_workers 1 --max_epochs 500
+srun --label python train_evaluator++.py \
+--checkpoints_dir /checkpoint/lep/active_acq/full_test_run_py/evaluator_pp_5k \
+--lr 0.0003 --num_workers 16 --max_epochs 100 --batch_size 256
