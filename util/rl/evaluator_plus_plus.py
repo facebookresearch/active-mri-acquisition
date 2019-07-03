@@ -28,7 +28,7 @@ class EvaluatorDataset(torch.utils.data.Dataset):
         self.dataset_dir = '/checkpoint/lep/active_acq/full_test_run_py/il_dataset/' + split
         self.horizon = horizon
         self.images_per_file = images_per_file
-        self.num_images = 5000 if split == 'train' else 500
+        self.num_images = 15200 if split == 'train' else 1000
         self.horizon = 32
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
