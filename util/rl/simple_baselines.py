@@ -66,6 +66,8 @@ class GreedyMC:
         return action
 
     def compute_policy_for_horizon(self, obs):
+        # This expects observation to be a tensor of size [C, H, W], where the first channel is the observed
+        # reconstruction
         self._valid_actions = [x for x in self._valid_actions if x not in self.actions_used]
         self.actions_used = []
         original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
@@ -119,6 +121,8 @@ class FullGreedy:
         self.num_steps = num_steps
 
     def get_action(self, obs, _, __):
+        # This expects observation to be a tensor of size [C, H, W], where the first channel is the observed
+        # reconstruction
         original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
             else torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
         all_masks = []

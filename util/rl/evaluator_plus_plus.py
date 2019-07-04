@@ -15,6 +15,7 @@ import torch.nn.functional as F
 import torch.utils.data
 
 import models.evaluator
+import rl_env
 
 from typing import Any, Callable, Dict, Tuple
 
@@ -54,7 +55,7 @@ class EvaluatorDataset(torch.utils.data.Dataset):
 
 
 # ---------------------------------------------------------------------------------------------
-# Model
+# Model and policy wrapper
 # ---------------------------------------------------------------------------------------------
 class EvaluatorPlusPlus(nn.Module):
     def __init__(self, img_width: int = 128, mask_embed_dim: int = 6, num_actions: int = 54):
@@ -68,6 +69,27 @@ class EvaluatorPlusPlus(nn.Module):
         mask_embedding = mask_embedding.repeat(1, 1, reconstruction.shape[2], reconstruction.shape[3])
         x = self.evaluator(reconstruction, mask_embedding)
         return self.fc(x)
+
+
+class EvaluatorPlusPlusPolicy:
+    def __init__(self, model_path: str, device: torch.device):
+        self.evaluator = EvaluatorPlusPlus()
+        checkpoint = torch.load(model_path)
+        model_state_dict = {key.replace('module.', ''): value for (key, value) in checkpoint['model'].items()}
+        self.evaluator.load_state_dict(model_state_dict)
+        self.evaluator.to(device)
+        self.device = device
+
+    def get_action(self, obs: np.ndarray, _, __) -> int:
+        reconstruction = torch.Tensor(obs[:1, :-1]).unsqueeze(0).to(self.device)
+        mask = torch.Tensor(obs[:1, -1]).view(1, 1, 1, -1).to(self.device)
+        scores = self.evaluator(reconstruction, mask)
+        max_action = reconstruction.shape[3] // 2 if rl_env.CONJUGATE_SYMMETRIC else reconstruction.shape[3]
+        scores.masked_fill_(mask.byte().squeeze()[rl_env.NUM_LINES_INITIAL: max_action], -100000)
+        return scores.argmax(dim=1).item()
+
+    def init_episode(self):
+        pass
 
 
 # ---------------------------------------------------------------------------------------------

@@ -1,17 +1,18 @@
 import logging
-import numpy as np
 import os
 import random
 import sys
+
+import numpy as np
+import tensorboardX
 import torch
 
-from options.rl_options import RLOptions
-from tensorboardX import SummaryWriter
-from util.rl.dqn import DDQN, get_epsilon
-from util.rl.simple_baselines import RandomPolicy, NextIndexPolicy, GreedyMC, FullGreedy, EvaluatorNetwork
-from util.rl.replay_buffer import ReplayMemory
-
-from rl_env import ReconstructionEnv, device, generate_initial_mask, CONJUGATE_SYMMETRIC
+import options.rl_options
+import rl_env
+import util.rl.dqn
+import util.rl.evaluator_plus_plus
+import util.rl.replay_buffer
+import util.rl.simple_baselines
 
 
 def update_statistics(value, episode_step, statistics):
@@ -101,7 +102,7 @@ def train_policy(env, policy, target_net, writer, opts):
         episode_actions = []
         cnt_repeated_actions = 0
         while not done:
-            epsilon = get_epsilon(steps, opts)
+            epsilon = util.rl.dqn.get_epsilon(steps, opts)
             action = policy.get_action(obs, epsilon, episode_actions)
             next_obs, reward, done, _ = env.step(action)
             steps += 1
@@ -142,7 +143,7 @@ def train_policy(env, policy, target_net, writer, opts):
 def get_experiment_str(opts):
     if opts.policy == 'dqn':
         policy_str = '{}.bu{}.tupd{}.bs{}.edecay{}.gamma{}.norepl{}.nimgtr{}.nimgtest{}_'.format(
-            opts.rl_model_type, opts.budget, opts.target_net_update_freq, opts.rl_batch_size, opts.epsilon_decay,
+            opts.rl_obs_type, opts.budget, opts.target_net_update_freq, opts.rl_batch_size, opts.epsilon_decay,
             opts.gamma, int(opts.no_replacement_policy), opts.num_train_images, opts.num_test_images)
     else:
         policy_str = opts.policy
@@ -151,44 +152,51 @@ def get_experiment_str(opts):
     return '{}_bu{}_seed{}_neptest{}'.format(policy_str, opts.budget, opts.seed, opts.num_test_images)
 
 
+# Not a great policy specification protocol, but works for now.
 def get_policy(env, writer, opts):
-    # Not a great policy specification protocol, but works for now.
+    # This options affects how the score is computed by the environment (passing through rec. network or not)
     opts.use_reconstructions = (opts.policy[-2:] == '_r')
     logging.info('Use reconstructions is {}'.format(opts.use_reconstructions))
     if 'random' in opts.policy:
-        policy = RandomPolicy(range(env.action_space.n))
+        policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
     elif 'lowfirst' in opts.policy:
-        assert CONJUGATE_SYMMETRIC
-        policy = NextIndexPolicy(range(env.action_space.n))
+        assert rl_env.CONJUGATE_SYMMETRIC
+        policy = util.rl.simple_baselines.NextIndexPolicy(range(env.action_space.n))
     elif 'greedymc' in opts.policy:
-        policy = GreedyMC(env,
-                          samples=opts.greedymc_num_samples,
-                          horizon=opts.greedymc_horizon,
-                          use_reconstructions=opts.use_reconstructions,
-                          use_ground_truth='_gt' in opts.policy)
+        policy = util.rl.simple_baselines.GreedyMC(env,
+                                                   samples=opts.greedymc_num_samples,
+                                                   horizon=opts.greedymc_horizon,
+                                                   use_reconstructions=opts.use_reconstructions,
+                                                   use_ground_truth='_gt' in opts.policy)
     elif 'greedyfull1' in opts.policy:
         if 'nors' in opts.policy:
-            policy = FullGreedy(env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=False)
+            policy = util.rl.simple_baselines.FullGreedy(
+                env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=False)
         else:
             assert opts.use_reconstructions
-            policy = FullGreedy(env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=True)
+            policy = util.rl.simple_baselines.FullGreedy(
+                env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=True)
     elif 'evaluator_net' in opts.policy:
-        policy = EvaluatorNetwork(env)
+        policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator_net_offp' in opts.policy:
         assert opts.evaluator_name is not None and opts.evaluator_name != opts.name
-        policy = EvaluatorNetwork(env, opts.evaluator_name)
+        policy = util.rl.simple_baselines.EvaluatorNetwork(env)
+    elif 'evaluator++' in opts.policy:
+        assert opts.rl_obs_type == 'concatenate_mask'
+        policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(model_path=os.path.join(opts.checkpoints_dir,
+                                                                                             opts.evaluator_pp_path),
+                                                                     device=rl_env.device)
     elif opts.policy == 'dqn':
 
-        replay_memory = ReplayMemory(opts.replay_buffer_size,
-                                     env.observation_space.shape,
-                                     opts.rl_batch_size,
-                                     opts.rl_burn_in)
-        policy = DDQN(env.action_space.n, device, replay_memory, opts).to(device)
-        target_net = DDQN(env.action_space.n, device, None, opts).to(device)
+        replay_memory = util.rl.replay_buffer.ReplayMemory(opts.replay_buffer_size,
+                                                           env.observation_space.shape,
+                                                           opts.rl_batch_size,
+                                                           opts.rl_burn_in)
+        policy = util.rl.dqn.DDQN(env.action_space.n, rl_env.device, replay_memory, opts).to(rl_env.device)
+        target_net = util.rl.dqn.DDQN(env.action_space.n, rl_env.device, None, opts).to(rl_env.device)
 
         if opts.dqn_resume:
-            # TODO to be able to resume training need some code to store the replay buffer
-            raise NotImplementedError
+            raise NotImplementedError  # TODO to be able to resume training need some code to store the replay buffer
         if opts.dqn_only_test:
             policy.load(os.path.join(opts.tb_logs_dir, 'policy_best.pt'))
         else:
@@ -200,8 +208,8 @@ def get_policy(env, writer, opts):
 
 
 def main(options):
-    writer = SummaryWriter(options.tb_logs_dir)
-    env = ReconstructionEnv(generate_initial_mask(options.initial_num_lines), options)
+    writer = tensorboardX.SummaryWriter(options.tb_logs_dir)
+    env = rl_env.ReconstructionEnv(rl_env.generate_initial_mask(options.initial_num_lines), options)
     env.set_training()
     logging.info('Created environment with {} actions'.format(env.action_space.n))
     policy = get_policy(env, writer, options)
@@ -211,7 +219,7 @@ def main(options):
 
 if __name__ == '__main__':
     # Reading options
-    opts = RLOptions().parse()
+    opts = options.rl_options.RLOptions().parse()
     opts.batchSize = 1
     if opts.results_dir is None:
         opts.results_dir = opts.checkpoints_dir
