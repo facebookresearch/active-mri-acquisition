@@ -32,7 +32,7 @@ def main(options):
         'number_of_evaluator_filters': [64, 128, 256],
         'number_of_evaluator_convolution_layers': [3, 4, 5],
 
-        'mask_embed_dim': [0, 3, 6, 9]
+        'mask_embed_dim': [3, 6, 9]
     }
 
     # Create the tuner with evaluator and the specified classes

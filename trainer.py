@@ -1,11 +1,3 @@
-from data import create_data_loaders
-from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, clamp, preprocess_inputs, gaussian_nll_loss
-from models.networks import GANLossKspace   # TODO: maybe move GANLossKspace to a loss file?
-from models.reconstruction import ReconstructorNetwork
-from options.train_options import TrainOptions
-from util import util
-
 import argparse
 import ignite.engine
 import logging
@@ -19,8 +11,16 @@ import torch.optim as optim
 
 from ignite.contrib.handlers import ProgressBar
 from ignite.engine import Engine, Events
-
+from ignite.metrics import Loss
 from typing import Any, Dict, Tuple
+
+from data import create_data_loaders
+from models.evaluator import EvaluatorNetwork
+from models.fft_utils import RFFT, IFFT, clamp, preprocess_inputs, gaussian_nll_loss
+from models.networks import GANLossKspace  # TODO: maybe move GANLossKspace to a loss file?
+from models.reconstruction import ReconstructorNetwork
+from options.train_options import TrainOptions
+from util import util
 
 
 def run_validation_and_update_best_checkpoint(engine: ignite.engine.Engine,
@@ -30,12 +30,12 @@ def run_validation_and_update_best_checkpoint(engine: ignite.engine.Engine,
                                               trainer: 'Trainer' = None):
     # TODO: take argument for which metric to use as score for checkpointing. Using MSE for now
     val_engine.run(val_loader)
-    output = val_engine.state.output
+    metrics = val_engine.state.metrics
     progress_bar.log_message(
         'Validation Results - Epoch: {}  MSE: {:.3f} SSIM: {:.3f}'.format(
-            engine.state.epoch, output['MSE'], output['SSIM']))
+            engine.state.epoch, metrics['mse'], metrics['ssim']))
     trainer.completed_epochs += 1
-    score = output['MSE']
+    score = metrics['mse']
     if score > trainer.best_validation_score:
         trainer.best_validation_score = score
         full_path = save_checkpoint_function(trainer, 'best_checkpoint')
@@ -91,10 +91,10 @@ class Trainer:
     def create_checkpoint(self) -> Dict[str, Any]:
         return {
             'reconstructor': self.reconstructor.state_dict(),
-            'evaluator': self.evaluator.state_dict(),
+            'evaluator': self.evaluator.state_dict() if self.options.use_evaluator else None,
             'options': self.options,
             'optimizer_G': self.optimizers['G'].state_dict(),
-            'optimizer_D': self.optimizers['D'].state_dict(),
+            'optimizer_D': self.optimizers['D'].state_dict() if self.options.use_evaluator else None,
             'completed_epochs': self.completed_epochs,
             'best_validation_score': self.best_validation_score,
         }
@@ -133,13 +133,15 @@ class Trainer:
                 logging.info('Loading checkpoint at {}'.format(filename))
                 checkpoint = torch.load(os.path.join(self.options.checkpoints_dir, filename))
                 self.reconstructor.load_state_dict(checkpoint['reconstructor'])
-                self.evaluator.load_state_dict(checkpoint['evaluator'])
+                if self.options.use_evaluator:
+                    self.evaluator.load_state_dict(checkpoint['evaluator'])
+                    self.optimizers['D'].load_state_dict(checkpoint['optimizer_D'])
                 self.optimizers['G'].load_state_dict(checkpoint['optimizer_G'])
-                self.optimizers['D'].load_state_dict(checkpoint['optimizer_D'])
                 self.completed_epochs = checkpoint['completed_epochs']
                 self.best_validation_score = checkpoint['best_validation_score']
 
     # TODO: fix sign leakage
+    # noinspection PyUnboundLocalVariable
     def update(self, batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
         zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0], fft_functions, options)
 
@@ -147,39 +149,40 @@ class Trainer:
         reconstructed_image, uncertainty_map, mask_embedding = reconstructor(zero_filled_reconstruction, mask)
 
         # ------------------------------------------------------------------------
-        # Update evaluator
+        # Update evaluator and compute generator GAN Loss
         # ------------------------------------------------------------------------
-        optimizers['D'].zero_grad()
-        fake = clamp(reconstructed_image[:, :1, :, :])
-        detached_fake = fake.detach()
-        output = evaluator(detached_fake, mask_embedding.detach())
-        loss_D_fake = losses['GAN'](output, False, mask, degree=0, pred_and_gt=(detached_fake[:, :1, ...], target))
+        loss_G_GAN = 0
+        if self.evaluator is not None:
+            optimizers['D'].zero_grad()
+            fake = clamp(reconstructed_image[:, :1, :, :])
+            detached_fake = fake.detach()
+            output = evaluator(detached_fake, mask_embedding.detach())
+            loss_D_fake = losses['GAN'](output, False, mask, degree=0, pred_and_gt=(detached_fake[:, :1, ...], target))
 
-        real = clamp(target[:, :1, :, :])
-        output = evaluator(real, mask_embedding.detach())
-        loss_D_real = losses['GAN'](output, True, mask, degree=1, pred_and_gt=(detached_fake[:, :1, ...], target))
+            real = clamp(target[:, :1, :, :])
+            output = evaluator(real, mask_embedding.detach())
+            loss_D_real = losses['GAN'](output, True, mask, degree=1, pred_and_gt=(detached_fake[:, :1, ...], target))
 
-        loss_D = loss_D_fake + loss_D_real
-        loss_D.backward(retain_graph=True)
-        optimizers['D'].step()
+            loss_D = loss_D_fake + loss_D_real
+            loss_D.backward(retain_graph=True)
+            optimizers['D'].step()
+
+            loss_G_GAN = losses['GAN'](
+                output, True, mask, degree=1, updateG=True, pred_and_gt=(fake[:, :1, ...], target))
+            loss_G_GAN *= options.lambda_gan
 
         # ------------------------------------------------------------------------
         # Update reconstructor
         # ------------------------------------------------------------------------
         optimizers['G'].zero_grad()
-        loss_G = 0
-        loss_G += losses['NLL'](reconstructed_image, target, uncertainty_map)
-        loss_G = loss_G.mean()
-        # output = evaluator(fake, mask_cond.detach())
-        loss_G_GAN = losses['GAN'](output, True, mask, degree=1, updateG=True, pred_and_gt=(fake[:, :1, ...], target))
-        loss_G_GAN *= options.lambda_gan
-
+        loss_G = losses['NLL'](reconstructed_image, target, uncertainty_map).mean()
         loss_G += loss_G_GAN
+
         loss_G.backward()
         optimizers['G'].step()
 
         return {
-            'loss_D': loss_D.item(),
+            'loss_D': 0 if self.evaluator is None else loss_D.item(),
             'loss_G': loss_G.item()
         }
 
@@ -188,10 +191,10 @@ class Trainer:
 
         print('Creating trainer with the following options:')
         for key, value in vars(self.options).items():
-            if key == 'device': #TODO: clean this up!
+            if key == 'device':  # TODO: clean this up!
                 value = 'cuda' if torch.cuda.is_available() else 'cpu'
             elif key == 'gpu_ids':
-                value = 'cuda : ' +str(value) if torch.cuda.is_available() else 'cpu'
+                value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
             print('    {:>25}: {:<30}'.format(key, value), flush=True)
 
         # Create Reconstructor Model
@@ -205,27 +208,27 @@ class Trainer:
             img_width=self.options.image_width,
             use_deconv=self.options.use_deconv)
 
-        # if self.options.device:
-        #     torch.nn.DataParallel(self.reconstructor).to(self.options.device)
-
         self.reconstructor = torch.nn.DataParallel(self.reconstructor).cuda()  # TODO: make better with to_device
+        self.optimizers = {
+            'G': optim.Adam(self.reconstructor.parameters(), lr=self.options.lr, betas=(self.options.beta1, 0.999))}
 
         # Create Evaluator Model
-        self.evaluator = EvaluatorNetwork(
-            number_of_filters=self.options.number_of_evaluator_filters,
-            number_of_conv_layers=self.options.number_of_evaluator_convolution_layers,
-            use_sigmoid=False,  # TODO : do we keep this? Will add option based on the decision
-            width=self.options.image_width,
-            mask_embed_dim=self.options.mask_embed_dim)
+        if self.options.use_evaluator:
+            self.evaluator = EvaluatorNetwork(
+                number_of_filters=self.options.number_of_evaluator_filters,
+                number_of_conv_layers=self.options.number_of_evaluator_convolution_layers,
+                use_sigmoid=False,  # TODO : do we keep this? Will add option based on the decision
+                width=self.options.image_width,
+                mask_embed_dim=self.options.mask_embed_dim)
 
-        self.evaluator = torch.nn.DataParallel(self.evaluator).cuda()
+            self.evaluator = torch.nn.DataParallel(self.evaluator).cuda()
 
-        # Optimizers and losses #TODO: add option for beta2
-        self.optimizers = {
-            'G': optim.Adam(self.reconstructor.parameters(), lr=self.options.lr, betas=(self.options.beta1, 0.999)),
-            'D': optim.Adam(self.evaluator.parameters(), lr=self.options.lr, betas=(self.options.beta1, 0.999))}
+            self.optimizers['D'] = optim.Adam(
+                self.evaluator.parameters(), lr=self.options.lr, betas=(self.options.beta1, 0.999))
 
         train_loader, val_loader = self.get_loaders()
+
+        self.load_from_checkpoint_if_present()
 
         # Training engine and handlers
         train_engine = Engine(
@@ -233,9 +236,11 @@ class Trainer:
                                               self.optimizers, self.losses, self.fft_functions, self.options))
 
         val_engine = Engine(lambda engine, batch: self.inference(batch, self.reconstructor,
-                                                                        self.fft_functions, self.options))
-
-        self.load_from_checkpoint_if_present()
+                                                                 self.fft_functions, self.options))
+        validation_mse = Loss(loss_fn=lambda x, y: x, output_transform=lambda x: (x['MSE'], x['ground_truth']))
+        validation_mse.attach(val_engine, name='mse')
+        validation_ssim = Loss(loss_fn=lambda x, y: x, output_transform=lambda x: (x['SSIM'], x['ground_truth']))
+        validation_ssim.attach(val_engine, name='ssim')
 
         monitoring_metrics = ['loss_D', 'loss_G']
 
@@ -293,7 +298,7 @@ class Trainer:
 
         return self.best_validation_score
 
-    def checkpoint(self) -> submitit.helpers.DelayedSubmission:     # submitit expects this function
+    def checkpoint(self) -> submitit.helpers.DelayedSubmission:  # submitit expects this function
         save_checkpoint_function(self, 'regular_checkpoint')
         trainer = Trainer(self.options)
         return submitit.helpers.DelayedSubmission(trainer)

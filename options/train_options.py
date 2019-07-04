@@ -77,6 +77,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--use_deconv', type=bool, default=True)
 
         # Options for Evaluator Model
+        parser.add_argument('--no_evaluator', dest='use_evaluator', action='store_false')
         parser.add_argument('--number_of_evaluator_filters', type=int, default=256)
         parser.add_argument('--number_of_evaluator_convolution_layers', type=int, default=4)
 
