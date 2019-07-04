@@ -1,18 +1,21 @@
-from options.train_options import TrainOptions
-from trainer import Trainer
-from hyperband.hyperband import HyperbandTuner
-from hyperband.submitit_function_evaluator import SubmititEvaluator
-
-import argparse
 import os
+
+import hyperband
+import hyperband.submitit_function_evaluator
 import torch
+
+import options.train_options
+import trainer
 
 
 def main(options):
     # Create a function evaluator to be passed to the tuner. Here you can pass the SLURM arguments as keywords.
-    function_evaluator = SubmititEvaluator(Trainer, options, options.submitit_logs_dir, 3,
-                                           job_name='hyperband_test',
-                                           time=4320, partition='learnfair', num_gpus=8, cpus_per_task=16)
+    function_evaluator = hyperband.submitit_function_evaluator.SubmititEvaluator(trainer.Trainer, options,
+                                                                                 options.submitit_logs_dir, 3,
+                                                                                 job_name='hyperband_test',
+                                                                                 time=4320, partition='learnfair',
+                                                                                 num_gpus=8,
+                                                                                 cpus_per_task=16)
 
     # Specify the hyperparameter names and their possible values (for now only categorical distributions are supported).
     categorical_hp_classes = {
@@ -33,14 +36,16 @@ def main(options):
     }
 
     # Create the tuner with evaluator and the specified classes
-    tuner = HyperbandTuner(categorical_hp_classes,
-                           function_evaluator,
-                           results_file=os.path.join(options.checkpoints_dir, 'tuning.csv'))
+    tuner = hyperband.HyperbandTuner(categorical_hp_classes,
+                                     function_evaluator,
+                                     results_file=os.path.join(options.checkpoints_dir, 'tuning.csv'))
 
-    tuner.tune(options.R, eta=options.eta, n_max=10, use_interactive_prompt=options.interactive_init)
+    tuner.tune(options.R, eta=options.eta,
+               n_max=options.max_jobs_tuner,
+               use_interactive_prompt=options.interactive_init)
 
 
 if __name__ == '__main__':
-    options = TrainOptions().parse()
+    options = options.train_options.TrainOptions().parse()
     options.device = torch.device('cuda:{}'.format(options.gpu_ids[0])) if options.gpu_ids else torch.device('cpu')
     main(options)

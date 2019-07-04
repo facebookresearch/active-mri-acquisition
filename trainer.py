@@ -208,7 +208,7 @@ class Trainer:
         # if self.options.device:
         #     torch.nn.DataParallel(self.reconstructor).to(self.options.device)
 
-        self.reconstructor = torch.nn.DataParallel(self.reconstructor).cuda() #TODO: make better with to_device
+        self.reconstructor = torch.nn.DataParallel(self.reconstructor).cuda()  # TODO: make better with to_device
 
         # Create Evaluator Model
         self.evaluator = EvaluatorNetwork(
@@ -218,7 +218,7 @@ class Trainer:
             width=self.options.image_width,
             mask_embed_dim=self.options.mask_embed_dim)
 
-        self.evaluator = torch.nn.DataParallel(self.evaluator).cuda() #TODO: make better with to_device
+        self.evaluator = torch.nn.DataParallel(self.evaluator).cuda()
 
         # Optimizers and losses #TODO: add option for beta2
         self.optimizers = {

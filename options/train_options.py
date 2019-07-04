@@ -63,6 +63,8 @@ class TrainOptions(BaseOptions):
         # Hyperband Options
         parser.add_argument('--R', type=int, default=10, help='Hyperband resource usage limit (default: 10)')
         parser.add_argument('--eta', type=float, default=3.0, help='Hyperband elimination rate (default: 3.0)')
+        parser.add_argument('--max_jobs_tuner', type=int, default=10,
+                            help='Max. number of SLURM jobs that can be launched simultaneously (default: 10)')
         parser.add_argument('--interactive_init', dest='interactive_init', action='store_true',
                             help='Allows choosing R and eta interactively via a command line prompt (default: False)')
 

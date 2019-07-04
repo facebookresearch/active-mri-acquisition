@@ -58,12 +58,6 @@ class BaseOptions():
         # get the basic options
         opt, _ = parser.parse_known_args()
 
-        # modify model-related parser options
-        # model_name = opt.model
-        # model_option_setter = models.get_option_setter(model_name)
-        # parser = model_option_setter(parser, self.isTrain)
-        # opt, _ = parser.parse_known_args() # parse again with the new defaults
-
         # modify dataset-related parser options
         dataset_name = opt.dataset_mode
         dataset_option_setter = data.get_option_setter(dataset_name)
@@ -84,14 +78,6 @@ class BaseOptions():
             message += '{:>25}: {:<30}{}\n'.format(str(k), str(v), comment)
         message += '----------------- End -------------------'
         print(message)
-
-        # save to the disk
-        expr_dir = os.path.join(opt.checkpoints_dir, opt.name)
-        util.mkdirs(expr_dir)
-        file_name = os.path.join(expr_dir, 'opt.txt')
-        with open(file_name, 'wt') as opt_file:
-            opt_file.write(message)
-            opt_file.write('\n')
 
     def parse(self):
 
