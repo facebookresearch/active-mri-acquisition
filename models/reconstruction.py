@@ -1,8 +1,7 @@
 import functools
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from .fft_utils import RFFT, IFFT, FFT
+from .fft_utils import IFFT, FFT
 from torch.nn import init
 
 
@@ -43,27 +42,6 @@ def init_func(m):
     elif classname.find('BatchNorm2d') != -1:
         init.normal_(m.weight.data, 1.0, gain)
         init.constant_(m.bias.data, 0.0)
-
-    # print('initialize network with %s' % init_type)
-    # net.apply(init_func)
-
-# # TODO: DataParallel should not be here...
-# def init_net(net, init_type='normal', gpu_ids=[]):
-#     if len(gpu_ids) > 0:
-#         assert(torch.cuda.is_available())
-#         net.to(gpu_ids[0])
-#         net = torch.nn.DataParallel(net, gpu_ids)
-#     init_weights(net, init_type)
-#     return net
-#
-# def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropout=False,
-#              init_type='normal', gpu_ids=[], no_last_tanh=False):
-#     netG = None
-#     norm_layer = get_norm_layer(norm_type=norm)
-#     netG = PasNetPlus(input_nc, output_nc, ngf, norm_layer=norm_layer,
-#                       use_dropout=use_dropout, n_blocks=9, no_last_tanh=no_last_tanh,
-#                       n_downsampling=3, imgSize=128, mask_cond=True, use_deconv=True)
-#     return init_net(netG, init_type, gpu_ids)
 
 
 # Define a resnet block
@@ -113,9 +91,9 @@ class ResnetBlock(nn.Module):
 class PasNetPlus(nn.Module):
 
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False,
-                n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128,
-                mask_cond=True, use_deconv=True, no_meta=True):
-        assert(n_blocks >= 0)
+                 n_blocks=6, padding_type='reflect', no_last_tanh=False, n_downsampling=3, imgSize=128,
+                 mask_cond=True, use_deconv=True, no_meta=True):
+        assert (n_blocks >= 0)
         super(PasNetPlus, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
@@ -136,57 +114,57 @@ class PasNetPlus(nn.Module):
             input_nc += mask_embed_dim
             print('[PasNet] -> use masked embedding condition')
 
-        for iii in range(1, self.n_recurive+1):
+        for iii in range(1, self.n_recurive + 1):
             model = [nn.ReflectionPad2d(1),
-                        nn.Conv2d(input_nc, ngf*2, kernel_size=3,
-                                stride=2, padding=0, bias=use_bias),
-                        norm_layer(ngf*2),
-                        nn.ReLU(True)]
+                     nn.Conv2d(input_nc, ngf * 2, kernel_size=3,
+                               stride=2, padding=0, bias=use_bias),
+                     norm_layer(ngf * 2),
+                     nn.ReLU(True)]
 
             for i in range(1, n_downsampling):
-                mult = 2**i
+                mult = 2 ** i
                 model += [nn.ReflectionPad2d(1),
-                        nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3,
+                          nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3,
                                     stride=2, padding=0, bias=use_bias),
-                        norm_layer(ngf * mult * 2),
-                        nn.ReLU(True)]
-            setattr(self, 'model_encode'+str(iii), nn.Sequential(*model))
+                          norm_layer(ngf * mult * 2),
+                          nn.ReLU(True)]
+            setattr(self, 'model_encode' + str(iii), nn.Sequential(*model))
 
             model = []
-            mult = 2**n_downsampling
-            for i in range(n_blocks//self.n_recurive):
+            mult = 2 ** n_downsampling
+            for i in range(n_blocks // self.n_recurive):
                 model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer,
                                       use_dropout=use_dropout, use_bias=use_bias)]
 
-            setattr(self, 'model'+str(iii), nn.Sequential(*model))
+            setattr(self, 'model' + str(iii), nn.Sequential(*model))
 
             model = []
             for i in range(n_downsampling):
-                mult = 2**(n_downsampling - i)
+                mult = 2 ** (n_downsampling - i)
                 if self.use_deconv:
                     model += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2),
-                                         kernel_size=4, stride=2,
-                                         padding=1,
-                                         bias=use_bias),
-                                norm_layer(int(ngf * mult / 2)),
-                                nn.ReLU(True)]
+                                                 kernel_size=4, stride=2,
+                                                 padding=1,
+                                                 bias=use_bias),
+                              norm_layer(int(ngf * mult / 2)),
+                              nn.ReLU(True)]
                 else:
                     model += [nn.Upsample(scale_factor=2),
-                            nn.ReflectionPad2d(1)] + \
-                            [nn.Conv2d(ngf * mult, int(ngf * mult / 2),
-                                                kernel_size=3, stride=1,
-                                                padding=0,
-                                                bias=use_bias),
-                            norm_layer(int(ngf * mult / 2)),
-                            nn.ReLU(True)]
+                              nn.ReflectionPad2d(1)] + \
+                             [nn.Conv2d(ngf * mult, int(ngf * mult / 2),
+                                        kernel_size=3, stride=1,
+                                        padding=0,
+                                        bias=use_bias),
+                              norm_layer(int(ngf * mult / 2)),
+                              nn.ReLU(True)]
 
             # model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
-            model += [nn.Conv2d(ngf, output_nc, kernel_size=1, padding=0, bias=False)] # better
+            model += [nn.Conv2d(ngf, output_nc, kernel_size=1, padding=0, bias=False)]  # better
 
-            setattr(self, 'model_decode'+str(iii), nn.Sequential(*model))
+            setattr(self, 'model_decode' + str(iii), nn.Sequential(*model))
 
         if mask_cond:
-            mask_inc = imgSize if no_meta else imgSize+3
+            mask_inc = imgSize if no_meta else imgSize + 3
             self.mask_embed = nn.Sequential(nn.Conv2d(mask_inc, mask_embed_dim, 1, 1))
 
         self.IFFT = IFFT()
@@ -200,19 +178,19 @@ class PasNetPlus(nn.Module):
         return fuse
 
     def embed_condtions(self, mask):
-        b,c,h,w = mask.shape
-        mask = mask.view(b,w,1,1)
+        b, c, h, w = mask.shape
+        mask = mask.view(b, w, 1, 1)
         cond_embed = self.mask_embed(mask)
-        cond_embed = cond_embed.repeat(1,1,w,w)
+        cond_embed = cond_embed.repeat(1, 1, w, w)
 
         return cond_embed
 
     def reparam(self, mu, logvar):
-        _mu = mu[:,:1,:,:]
+        _mu = mu[:, :1, :, :]
         std = logvar.mul(0.5).exp()
         eps = torch.zeros_like(logvar).normal_()
         q_z = eps.mul(std).add_(_mu)
-        mu[:,:1,:,:] = q_z
+        mu[:, :1, :, :] = q_z
         return mu
 
     def forward(self, input, mask, use_sampling_at_stage=None):
@@ -228,8 +206,8 @@ class PasNetPlus(nn.Module):
         hidden_out1 = self.model1(hidden_in1)
         out1_ = self.model_decode1(hidden_out1)
 
-        logvar1 = out1_[:,2:,:,:]
-        out1 = self.kspace_fuse(out1_[:,:2,:,:], input, mask)
+        logvar1 = out1_[:, 2:, :, :]
+        out1 = self.kspace_fuse(out1_[:, :2, :, :], input, mask)
 
         if use_sampling_at_stage == 1:
             out1 = self.reparam(out1, logvar1)
@@ -244,8 +222,8 @@ class PasNetPlus(nn.Module):
         hidden_out2 = self.model2(hidden_in2)
         out2_ = self.model_decode2(hidden_out2)
 
-        logvar2 = out2_[:,2:,:,:]
-        out2 = self.kspace_fuse(out2_[:,:2,:,:], input, mask)
+        logvar2 = out2_[:, 2:, :, :]
+        out2 = self.kspace_fuse(out2_[:, :2, :, :], input, mask)
 
         if use_sampling_at_stage == 2:
             out1 = self.reparam(out2, logvar2)
@@ -260,19 +238,19 @@ class PasNetPlus(nn.Module):
         hidden_out3 = self.model3(hidden_in3)
         out3_ = self.model_decode3(hidden_out3)
 
-        logvar3 = out3_[:,2:,:,:]
-        out3 = self.kspace_fuse(out3_[:,:2,:,:], input, mask)
+        logvar3 = out3_[:, 2:, :, :]
+        out3 = self.kspace_fuse(out3_[:, :2, :, :], input, mask)
 
         if use_sampling_at_stage == 3:
             out3 = self.reparam(out3, logvar3)
 
-        return [out1, out2, out3], [logvar1, logvar2, logvar3],  mask_embed
+        return [out1, out2, out3], [logvar1, logvar2, logvar3], mask_embed
 
 
 class ReconstructorNetwork(nn.Module):
 
     def __init__(self, number_of_encoder_input_channels=2, number_of_decoder_output_channels=3,
-                 number_of_filters=128, dropout_probability=0,
+                 number_of_filters=128, dropout_probability=0.,
                  number_of_layers_residual_bottleneck=6, number_of_cascade_blocks=3, mask_embed_dim=6,
                  padding_type='reflect', n_downsampling=3, img_width=128, use_deconv=True):
         super(ReconstructorNetwork, self).__init__()
@@ -305,18 +283,18 @@ class ReconstructorNetwork(nn.Module):
 
             # Encoder for iii_th cascade block
             encoder = [nn.ReflectionPad2d(1),
-                     nn.Conv2d(number_of_encoder_input_channels, number_of_filters, kernel_size=3,
-                               stride=2, padding=0, bias=use_bias),
-                     norm_layer(number_of_filters),
-                     nn.ReLU(True)]
+                       nn.Conv2d(number_of_encoder_input_channels, number_of_filters, kernel_size=3,
+                                 stride=2, padding=0, bias=use_bias),
+                       norm_layer(number_of_filters),
+                       nn.ReLU(True)]
 
             for i in range(1, n_downsampling):
                 mult = 2 ** i
                 encoder += [nn.ReflectionPad2d(1),
-                          nn.Conv2d(number_of_filters * mult // 2, number_of_filters * mult, kernel_size=3,
-                                    stride=2, padding=0, bias=use_bias),
-                          norm_layer(number_of_filters * mult),
-                          nn.ReLU(True)]
+                            nn.Conv2d(number_of_filters * mult // 2, number_of_filters * mult, kernel_size=3,
+                                      stride=2, padding=0, bias=use_bias),
+                            norm_layer(number_of_filters * mult),
+                            nn.ReLU(True)]
 
             self.encoders_all_cascade_blocks.append(nn.Sequential(*encoder))
 
@@ -341,17 +319,17 @@ class ReconstructorNetwork(nn.Module):
                                                    kernel_size=4, stride=2,
                                                    padding=1,
                                                    bias=use_bias),
-                              norm_layer(int(number_of_filters * mult / 2)),
-                              nn.ReLU(True)]
+                                norm_layer(int(number_of_filters * mult / 2)),
+                                nn.ReLU(True)]
                 else:
                     decoder += [nn.Upsample(scale_factor=2),
-                              nn.ReflectionPad2d(1)] + \
-                             [nn.Conv2d(number_of_filters * mult, int(number_of_filters * mult / 2),
-                                        kernel_size=3, stride=1,
-                                        padding=0,
-                                        bias=use_bias),
-                              norm_layer(int(number_of_filters * mult / 2)),
-                              nn.ReLU(True)]
+                                nn.ReflectionPad2d(1)] + \
+                               [nn.Conv2d(number_of_filters * mult, int(number_of_filters * mult / 2),
+                                          kernel_size=3, stride=1,
+                                          padding=0,
+                                          bias=use_bias),
+                                norm_layer(int(number_of_filters * mult / 2)),
+                                nn.ReLU(True)]
 
                     # model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
             decoder += [nn.Conv2d(number_of_filters // 2,
@@ -379,6 +357,7 @@ class ReconstructorNetwork(nn.Module):
         cond_embed = self.mask_embedding_layer(mask)
         return cond_embed
 
+    # noinspection PyUnboundLocalVariable
     def forward(self, zero_filled_input, mask):
         """
 
@@ -443,29 +422,26 @@ def test(data):
                                          mask_embed_dim=0,
                                          n_downsampling=4,
                                          img_width=dicom.shape[3],
-                                         dropout_probability=0.5
-                                         )
+                                         dropout_probability=0.5)
 
         out = net_dicom.forward(dicom, mask_dicom)
 
     elif data == 'raw':
         # RAW
-        raw = torch.rand(batch, 2, 640,368)
+        raw = torch.rand(batch, 2, 640, 368)
         raw = raw.type(torch.FloatTensor)
 
         mask_raw = torch.randint(0, 1, (batch, 1, 1, 368))
         mask_raw = mask_raw.type(torch.FloatTensor)
 
-
         net_raw = ReconstructorNetwork(number_of_encoder_input_channels=2,
-                                         number_of_decoder_output_channels=3,
-                                         number_of_filters=128,
-                                         number_of_layers_residual_bottleneck=3,
-                                         number_of_cascade_blocks=3,
-                                         mask_embed_dim=6,
-                                         n_downsampling=3,
-                                         img_width=raw.shape[3]
-                                         )
+                                       number_of_decoder_output_channels=3,
+                                       number_of_filters=128,
+                                       number_of_layers_residual_bottleneck=3,
+                                       number_of_cascade_blocks=3,
+                                       mask_embed_dim=6,
+                                       n_downsampling=3,
+                                       img_width=raw.shape[3])
 
         out = net_raw.forward(raw, mask_raw)
 
@@ -479,5 +455,3 @@ def test(data):
 if __name__ == '__main__':
     test(data='raw')
     test(data='dicom')
-
-

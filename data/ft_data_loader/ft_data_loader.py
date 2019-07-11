@@ -164,7 +164,6 @@ def get_test_loader(batch_size, num_workers=2, pin_memory=False, which_dataset='
             pin_memory=pin_memory,
             drop_last=True
         )
-        # raise NotImplementedError
 
     else:
         raise ValueError

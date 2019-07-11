@@ -1,5 +1,5 @@
-from .fft_utils import RFFT, IFFT, FFT
-from .reconstruction import get_norm_layer, init_func
+from .fft_utils import RFFT, IFFT
+from .reconstruction import init_func
 
 import functools
 import torch
