@@ -9,6 +9,7 @@ from models.evaluator import EvaluatorNetwork
 from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, clamp, load_checkpoint
 from models.reconstruction import ReconstructorNetwork
 from util import util
+from typing import Dict, Tuple, Union
 
 from gym.spaces import Box, Discrete
 
@@ -25,6 +26,8 @@ NUM_LINES_INITIAL = 10
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
+# TODO Organize imports and finish adding type info
 
 class KSpaceMap(nn.Module):
     """Auxiliary module used to compute spectral maps of a zero-filled reconstruction.
@@ -88,10 +91,12 @@ class ReconstructionEnv:
         self._evaluator.to(device)
 
         obs_shape = None
-        if options.rl_model_type == 'spectral_maps':
+        if options.rl_obs_type == 'spectral_maps':
             obs_shape = (134, 128, 128)
-        if options.rl_model_type == 'two_streams':
+        if options.rl_obs_type == 'two_streams':
             obs_shape = (4, 128, 128)
+        if options.rl_obs_type == 'concatenate_mask':
+            obs_shape = (2, 129, 128)
         self.observation_space = Box(low=-50000, high=50000, shape=obs_shape)
 
         factor = 2 if CONJUGATE_SYMMETRIC else 1
@@ -110,7 +115,6 @@ class ReconstructionEnv:
         self.image_idx_test = 0
         self.image_idx_train = 0
         self.is_testing = False
-        self.reset()
 
     def set_testing(self):
         self.is_testing = True
@@ -121,12 +125,12 @@ class ReconstructionEnv:
         self.image_idx_train = 0
 
     @staticmethod
-    def compute_masked_rfft(ground_truth, mask):
+    def compute_masked_rfft(ground_truth: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         state = rfft(ground_truth) * mask
         return state
 
     @staticmethod
-    def _compute_score(reconstruction, ground_truth, kind='mse'):
+    def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor, kind: str = 'mse') -> torch.Tensor:
         reconstruction = reconstruction[:, :1, ...]
         ground_truth = ground_truth[:, :1, ...]
         if kind == 'mse':
@@ -140,7 +144,7 @@ class ReconstructionEnv:
             raise ValueError
         return score
 
-    def compute_new_mask(self, old_mask, action):
+    def compute_new_mask(self, old_mask: torch.Tensor, action: int) -> Tuple[torch.Tensor, bool]:
         """ Computes a new mask by adding the action to the given old mask.
 
             Note that action is relative to the set of valid k-space lines that can be scanned. That is, action = 0
@@ -179,31 +183,26 @@ class ReconstructionEnv:
                 image, _, _ = self._reconstructor(image, mask_to_use)  # pass through reconstruction network
         return [ReconstructionEnv._compute_score(img.unsqueeze(0), ground_truth, kind) for img in image]
 
-    def _compute_observation_and_score_spectral_maps(self):
-        with torch.no_grad():
-            image, _, _ = preprocess_inputs(self._ground_truth, self._current_mask, fft_functions, self.options)
-            reconstruction, _, mask_embed = self._reconstructor(image, self._current_mask)
-            spectral_maps = self.k_space_map(reconstruction, self._current_mask)
-            observation = torch.cat([spectral_maps, mask_embed], dim=1)
-            score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth)
-        return observation.squeeze().cpu().numpy().astype(np.float32), score
-
-    def _compute_observation_and_score_two_streams(self):
+    def _compute_observation_and_score(self) -> Tuple[torch.Tensor, float]:
         with torch.no_grad():
             zero_filled_reconstruction, _, _, masked_rffts = preprocess_inputs(
                 self._ground_truth, self._current_mask, fft_functions, self.options, return_masked_k_space=True)
-            reconstruction, _, _ = self._reconstructor(zero_filled_reconstruction, self._current_mask)
-            observation = torch.cat([reconstruction, masked_rffts], dim=1)
+            reconstruction, _, mask_embed = self._reconstructor(zero_filled_reconstruction, self._current_mask)
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth)
+
+            if self.options.rl_obs_type == 'spectral_maps':
+                spectral_maps = self.k_space_map(reconstruction, self._current_mask)
+                observation = torch.cat([spectral_maps, mask_embed], dim=1)
+            elif self.options.rl_obs_type == 'two_streams':
+                observation = torch.cat([reconstruction, masked_rffts], dim=1)
+            elif self.options.rl_obs_type == 'concatenate_mask':
+                observation = torch.cat(
+                    [reconstruction, self._current_mask.repeat(1, reconstruction.shape[1], 1, 1)], dim=2)
+            else:
+                raise ValueError
         return observation.squeeze().cpu().numpy().astype(np.float32), score
 
-    def _compute_observation_and_score(self):
-        if self.options.rl_model_type == 'spectral_maps':
-            return self._compute_observation_and_score_spectral_maps()
-        if self.options.rl_model_type == 'two_streams':
-            return self._compute_observation_and_score_two_streams()
-
-    def reset(self):
+    def reset(self) -> Union[np.ndarray, None]:
         """ Loads a new image from the dataset and starts a new episode with this image.
 
             If `self.options.sequential_images` is True, it loops over images in the dataset in order. Otherwise,
@@ -235,7 +234,7 @@ class ReconstructionEnv:
         observation, self._current_score = self._compute_observation_and_score()
         return observation
 
-    def step(self, action):
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, Dict]:
         """ Adds a new line (specified by the action) to the current mask and computes the resulting observation and
             reward (drop in MSE after reconstructing with respect to the current ground truth).
         """
@@ -251,7 +250,7 @@ class ReconstructionEnv:
 
         return observation, reward, done, {}
 
-    def get_evaluator_action(self):
+    def get_evaluator_action(self) -> int:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
             image, _, _ = preprocess_inputs(self._ground_truth, self._current_mask, fft_functions, self.options)

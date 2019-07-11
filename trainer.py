@@ -4,7 +4,6 @@ import logging
 import os
 import submitit
 import tempfile
-from tensorboardX import SummaryWriter
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -12,6 +11,7 @@ import torch.optim as optim
 from ignite.contrib.handlers import ProgressBar
 from ignite.engine import Engine, Events
 from ignite.metrics import Loss
+from tensorboardX import SummaryWriter
 from typing import Any, Dict, Tuple
 
 from data import create_data_loaders
@@ -23,6 +23,7 @@ from options.train_options import TrainOptions
 from util import util
 
 
+# TODO I think this is only compute MSE on last batch. Need to do checkpoing aggregating over the whole val set
 def run_validation_and_update_best_checkpoint(engine: ignite.engine.Engine,
                                               val_engine: ignite.engine.Engine = None,
                                               progress_bar: ignite.contrib.handlers.ProgressBar = None,
@@ -220,7 +221,6 @@ class Trainer:
                 use_sigmoid=False,  # TODO : do we keep this? Will add option based on the decision
                 width=self.options.image_width,
                 mask_embed_dim=self.options.mask_embed_dim)
-
             self.evaluator = torch.nn.DataParallel(self.evaluator).cuda()
 
             self.optimizers['D'] = optim.Adam(

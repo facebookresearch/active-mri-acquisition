@@ -1,14 +1,11 @@
 import math
-import numpy as np
 import random
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-
-from torch.utils.data import DataLoader
-
-from .replay_buffer import infinite_iterator
 
 
 def get_epsilon(steps_done, opts):
@@ -71,17 +68,17 @@ class TwoStreamsModel(nn.Module):
         return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
 
 
-def get_model(num_actions, type='spectral_maps'):
-    if type == 'spectral_maps':
+def get_model(num_actions, model_type='spectral_maps'):
+    if model_type == 'spectral_maps':
         return SpectralMapsModel(num_actions)
-    if type == 'two_streams':
+    if model_type == 'two_streams':
         return TwoStreamsModel(num_actions)
 
 
 class DDQN(nn.Module):
     def __init__(self, num_actions, device, memory, opts):
         super(DDQN, self).__init__()
-        self.model = get_model(num_actions, opts.rl_model_type)
+        self.model = get_model(num_actions, opts.rl_obs_type)
         self.memory = memory
         self.optimizer = optim.Adam(self.parameters(), lr=6.25e-5)
         self.num_actions = num_actions

@@ -11,7 +11,14 @@ queue=learnfair
 
 use_reconstruction=1
 
-for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "greedyfull1nors_gt"; do
+# for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "greedyfull1nors_gt" "evaluator++"; do
+for policy in "evaluator++"; do
+    if [[ ${policy} == "evaluator++" ]]
+    then
+        rl_obs_type=concatenate_mask
+    else
+        rl_obs_type=two_streams
+    fi
     if [[ ${use_reconstruction} -eq 1 ]]
     then
         policy=${policy}_r
@@ -36,11 +43,14 @@ for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "greedyfull1n
     echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
 
     echo srun python acquire_rl.py --dataroot KNEE \
-    --checkpoints_dir /checkpoint/lep/active_acq/full_test_run_py --checkpoint_suffix 53 \
-    --batchSize 96 --gpu_ids 0 --num_train_episodes 100000 --policy ${policy} \
-    --budget 1000 --num_test_images 1000 --num_train_images 100 --freq_save_test_stats 20 --sequential_images \
-    --rl_logs_subdir acquire_suffix_53 --seed 0 \
+    --checkpoints_dir /checkpoint/lep/active_acq/full_test_run_py --checkpoint_suffix 38_mse=0.02237745 \
+    --seed 0 --batchSize 96 --gpu_ids 0 --policy ${policy} \
+    --num_train_episodes 0 --num_train_images 0 \
+    --budget 1000 --num_test_images 1000 --freq_save_test_stats 40 --sequential_images \
+    --rl_logs_subdir all_baselines_best_mse \
+    --evaluator_pp_path evaluator_pp_15k/bs_256_lr_0.0003_beta1_0.5_beta2_0.999/best_checkpoint.pth \
+    --rl_obs_type ${rl_obs_type} \
     --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
 
-    sbatch ${SLURM}
+     sbatch ${SLURM}
 done

@@ -63,6 +63,7 @@ def gaussian_nll_loss(reconstruction, target, logvar):
     return 0.5 * (one_over_var * l2 + logvar)
 
 
+# TODO fix the conditional return
 def preprocess_inputs(target, mask, fft_functions, options, return_masked_k_space=False, clamp_target=True):
     if clamp_target:
         target = clamp(target.to(options.device)).detach()
