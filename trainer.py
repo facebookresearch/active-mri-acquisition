@@ -54,7 +54,8 @@ def save_checkpoint_function(trainer: 'Trainer', filename: str) -> str:
         raise
     else:
         tmp_filename.close()
-        full_path = os.path.join(trainer.options.checkpoints_dir, filename + '.pth')
+        full_path = os.path.join(trainer.options.checkpoints_dir, trainer.options.name,
+                                 filename + '.pth')
         os.rename(tmp_filename.name, full_path)
         return full_path
 
