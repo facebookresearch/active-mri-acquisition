@@ -23,7 +23,6 @@ from options.train_options import TrainOptions
 from util import util
 
 
-# TODO I think this is only compute MSE on last batch. Need to do checkpoing aggregating over the whole val set
 def run_validation_and_update_best_checkpoint(engine: ignite.engine.Engine,
                                               val_engine: ignite.engine.Engine = None,
                                               progress_bar: ignite.contrib.handlers.ProgressBar = None,
@@ -168,6 +167,7 @@ class Trainer:
             loss_D.backward(retain_graph=True)
             optimizers['D'].step()
 
+            output = evaluator(fake, mask_embedding.detach())
             loss_G_GAN = losses['GAN'](
                 output, True, mask, degree=1, updateG=True, pred_and_gt=(fake[:, :1, ...], target))
             loss_G_GAN *= options.lambda_gan
@@ -196,7 +196,7 @@ class Trainer:
                 value = 'cuda' if torch.cuda.is_available() else 'cpu'
             elif key == 'gpu_ids':
                 value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
-            print('    {:>25}: {:<30}'.format(key, value), flush=True)
+            print('    {:>25}: {:<30}'.format(key, 'None' if value is None else value), flush=True)
 
         # Create Reconstructor Model
         self.reconstructor = ReconstructorNetwork(
