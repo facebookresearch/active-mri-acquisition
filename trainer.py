@@ -44,7 +44,7 @@ def run_validation_and_update_best_checkpoint(
 
 
 def save_checkpoint_function(trainer: 'Trainer', filename: str) -> str:
-    # Ensures atomic checkpoint save to avoid corrupted files if it gets preempted during a save operation
+    # Ensures atomic checkpoint save to avoid corrupted files if preempted during a save operation
     tmp_filename = tempfile.NamedTemporaryFile(delete=False, dir=trainer.options.checkpoints_dir)
     try:
         torch.save(trainer.create_checkpoint(), tmp_filename)
@@ -79,9 +79,10 @@ class Trainer:
         self.best_validation_score = 0
         self.completed_epochs = 0
 
-        criterion_gan = GANLossKspace(  # use_lsgan=not options.no_lsgan,  TODO see if this breaks anything
-            use_mse_as_energy=options.use_mse_as_disc_energy,
-            grad_ctx=options.grad_ctx).to(options.device)
+        # TODO removed use_lsgan=not options.no_lsgan ---> see if this breaks anything
+        criterion_gan = GANLossKspace(
+            use_mse_as_energy=options.use_mse_as_disc_energy, grad_ctx=options.grad_ctx).to(
+                options.device)
 
         self.losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}
 
@@ -146,6 +147,7 @@ class Trainer:
                 self.best_validation_score = checkpoint['best_validation_score']
 
     # TODO: fix sign leakage
+    # TODO: consider adding learning rate scheduler
     # noinspection PyUnboundLocalVariable
     def update(self, batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
         zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0],

@@ -7,43 +7,78 @@ import data
 
 
 class BaseOptions():
+
     def __init__(self):
         self.initialized = False
 
     def initialize(self, parser):
-        parser.add_argument('--dataroot', required=True,
-                            help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
+        parser.add_argument(
+            '--dataroot',
+            required=True,
+            help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
         parser.add_argument('--batchSize', type=int, default=1, help='input batch size')
-        parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
-        parser.add_argument('--name', type=str, default='experiment_name',
-                            help='name of the experiment. It decides where to store samples and models')
-        parser.add_argument('--dataset_mode', type=str, default='unaligned',
-                            help='chooses how datasets are loaded. [unaligned | aligned | single]')
+        parser.add_argument(
+            '--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
+        parser.add_argument(
+            '--name',
+            type=str,
+            default='experiment_name',
+            help='name of the experiment. It decides where to store samples and models')
+        parser.add_argument(
+            '--dataset_mode',
+            type=str,
+            default='unaligned',
+            help='chooses how datasets are loaded. [unaligned | aligned | single]')
         parser.add_argument('--nThreads', default=4, type=int, help='# threads for loading data')
-        parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
-        parser.add_argument('--norm', type=str, default='instance',
-                            help='instance normalization or batch normalization')
-        parser.add_argument('--serial_batches', action='store_true',
-                            help='if true, takes images in order to make batches, otherwise takes them randomly')
-        parser.add_argument('--init_type', type=str, default='normal',
-                            help='network initialization [normal|xavier|kaiming|orthogonal]')
-        parser.add_argument('--verbose', action='store_true', help='if specified, print more debugging information')
-        parser.add_argument('--suffix', default='', type=str,
-                            help='customized suffix: opt.name = opt.name + suffix: '
-                                 'e.g., {model}_{which_model_netG}_size{loadSize}')
+        parser.add_argument(
+            '--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
+        parser.add_argument(
+            '--norm',
+            type=str,
+            default='instance',
+            help='instance normalization or batch normalization')
+        parser.add_argument(
+            '--serial_batches',
+            action='store_true',
+            help='if true, takes images in order to make batches, otherwise takes them randomly')
+        parser.add_argument(
+            '--init_type',
+            type=str,
+            default='normal',
+            help='network initialization [normal|xavier|kaiming|orthogonal]')
+        parser.add_argument(
+            '--verbose', action='store_true', help='if specified, print more debugging information')
+        parser.add_argument(
+            '--suffix',
+            default='',
+            type=str,
+            help='customized suffix: opt.name = opt.name + suffix: '
+            'e.g., {model}_{which_model_netG}_size{loadSize}')
 
         # adding for my project fmri
-        parser.add_argument("--kspace_keep_ratio", type=float, default=0.25, help="mask raio of kspace lines") 
-        parser.add_argument('--normalize_type', default='gan', type=str, choices=['gan','zero_one','imagenet','cae'],
-                            help='normalizing type')
-        parser.add_argument('--eval_full_valid', action='store_true',
-                            help='if specified, evaluate the full validation set, otherwised 10%')
+        parser.add_argument(
+            "--kspace_keep_ratio", type=float, default=0.25, help="mask raio of kspace lines")
+        parser.add_argument(
+            '--normalize_type',
+            default='gan',
+            type=str,
+            choices=['gan', 'zero_one', 'imagenet', 'cae'],
+            help='normalizing type')
+        parser.add_argument(
+            '--eval_full_valid',
+            action='store_true',
+            help='if specified, evaluate the full validation set, otherwised 10%')
         parser.add_argument('--nz', type=int, default=8, help='dimension of prior/posterior')
-        parser.add_argument('--non_strict_state_dict', action='store_true',
-                            help='if specified, load dict non-strictly. '
-                                 'Sometimes needed to avoid the naming issues (not sure why)')
-        parser.add_argument('--n_samples', type=int, default=16,
-                            help='for vae models, the number of samples in sampling.py')
+        parser.add_argument(
+            '--non_strict_state_dict',
+            action='store_true',
+            help='if specified, load dict non-strictly. '
+            'Sometimes needed to avoid the naming issues (not sure why)')
+        parser.add_argument(
+            '--n_samples',
+            type=int,
+            default=16,
+            help='for vae models, the number of samples in sampling.py')
 
         self.initialized = True
         return parser
@@ -51,8 +86,7 @@ class BaseOptions():
     def gather_options(self):
         # initialize parser with basic options
         if not self.initialized:
-            parser = argparse.ArgumentParser(
-                formatter_class=argparse.ArgumentDefaultsHelpFormatter)            
+            parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
             parser = self.initialize(parser)
 
         # get the basic options
@@ -64,7 +98,7 @@ class BaseOptions():
         parser = dataset_option_setter(parser, self.isTrain)
 
         self.parser = parser
-        
+
         return parser.parse_args()
 
     def print_options(self, opt):
@@ -82,7 +116,7 @@ class BaseOptions():
     def parse(self):
 
         opt = self.gather_options()
-        opt.isTrain = self.isTrain   # train or test
+        opt.isTrain = self.isTrain  # train or test
 
         # process opt.suffix
         if opt.suffix:
@@ -100,10 +134,12 @@ class BaseOptions():
         if len(opt.gpu_ids) > 0:
             torch.cuda.set_device(opt.gpu_ids[0])
             opt.batchSize *= len(opt.gpu_ids)
-            print(f'Use multiple GPUs, batchSize are increased by {len(opt.gpu_ids)} times to {opt.batchSize}')
+            print(f'Use multiple GPUs, batchSize are increased by {len(opt.gpu_ids)} '
+                  'times to {opt.batchSize}')
 
         if opt.isTrain:
             self.print_options(opt)
 
         self.opt = opt
+
         return self.opt
