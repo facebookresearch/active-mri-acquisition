@@ -13,12 +13,10 @@ from typing import Dict, Tuple, Union
 
 from gym.spaces import Box, Discrete
 
-
 rfft = RFFT()
 ifft = IFFT()
 fft = FFT()
 fft_functions = {'rfft': rfft, 'ifft': ifft, 'fft': fft}
-
 
 CONJUGATE_SYMMETRIC = True
 IMAGE_WIDTH = 128
@@ -26,13 +24,14 @@ NUM_LINES_INITIAL = 10
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 # TODO Organize imports and finish adding type info
+
 
 class KSpaceMap(nn.Module):
     """Auxiliary module used to compute spectral maps of a zero-filled reconstruction.
         See https://arxiv.org/pdf/1902.03051.pdf for details.
     """
+
     def __init__(self, img_width=128):
         super(KSpaceMap, self).__init__()
 
@@ -60,6 +59,7 @@ class KSpaceMap(nn.Module):
 # noinspection PyAttributeOutsideInit
 class ReconstructionEnv:
     """ RL environment representing the active acquisition process with reconstruction model. """
+
     def __init__(self, initial_mask, options):
         self.options = options
         self.options.device = device
@@ -73,10 +73,11 @@ class ReconstructionEnv:
             number_of_cascade_blocks=checkpoint['options'].number_of_cascade_blocks,
             n_downsampling=checkpoint['options'].n_downsampling,
             number_of_filters=checkpoint['options'].number_of_reconstructor_filters,
-            number_of_layers_residual_bottleneck=checkpoint['options'].number_of_layers_residual_bottleneck,
+            number_of_layers_residual_bottleneck=checkpoint['options']
+            .number_of_layers_residual_bottleneck,
             mask_embed_dim=checkpoint['options'].mask_embed_dim,
             dropout_probability=checkpoint['options'].dropout_probability,
-            img_width=128,   # TODO : CHANGE!
+            img_width=128,  # TODO : CHANGE!
             use_deconv=checkpoint['options'].use_deconv)
         self._reconstructor.load_state_dict(checkpoint['reconstructor'].module.state_dict())
         self._reconstructor.to(device)
@@ -105,7 +106,8 @@ class ReconstructionEnv:
 
         self._ground_truth = None
         self._initial_mask = initial_mask.to(device)
-        self.k_space_map = KSpaceMap(img_width=IMAGE_WIDTH).to(device)    # Used to compute spectral maps
+        self.k_space_map = KSpaceMap(img_width=IMAGE_WIDTH).to(
+            device)  # Used to compute spectral maps
 
         # These two store a shuffling of the datasets
         # self._test_order = np.load('data/rl_test_order.npy')
@@ -130,7 +132,8 @@ class ReconstructionEnv:
         return state
 
     @staticmethod
-    def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor, kind: str = 'mse') -> torch.Tensor:
+    def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
+                       kind: str = 'mse') -> torch.Tensor:
         reconstruction = reconstruction[:, :1, ...]
         ground_truth = ground_truth[:, :1, ...]
         if kind == 'mse':
@@ -147,8 +150,9 @@ class ReconstructionEnv:
     def compute_new_mask(self, old_mask: torch.Tensor, action: int) -> Tuple[torch.Tensor, bool]:
         """ Computes a new mask by adding the action to the given old mask.
 
-            Note that action is relative to the set of valid k-space lines that can be scanned. That is, action = 0
-            represents the lowest index of k-space lines that are not part of the initial mask.
+            Note that action is relative to the set of valid k-space lines that can be scanned.
+            That is, action = 0 represents the lowest index of k-space lines that are not part of
+            the initial mask.
         """
         line_to_scan = self.options.initial_num_lines + action
         new_mask = old_mask.clone().squeeze()
@@ -158,19 +162,25 @@ class ReconstructionEnv:
             new_mask[IMAGE_WIDTH - line_to_scan - 1] = 1
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
-    def compute_score(self, use_reconstruction=True, kind='mse', ground_truth=None, mask_to_use=None):
-        """ Computes the score (MSE or SSIM) of the current state with respect to the current ground truth.
+    def compute_score(self,
+                      use_reconstruction=True,
+                      kind='mse',
+                      ground_truth=None,
+                      mask_to_use=None):
+        """ Computes the score (MSE or SSIM) of current state with respect to current ground truth.
 
             This method takes the current ground truth, masks it with the current mask and creates
-            a zero-filled reconstruction from the masked image. Additionally, this zero-filled reconstruction can
-            be passed through the reconstruction network, `self._reconstructor`.
-            The score evaluates the difference between the final reconstruction and the current ground truth.
+            a zero-filled reconstruction from the masked image. Additionally, this zero-filled
+            reconstruction can be passed through the reconstruction network, `self._reconstructor`.
+            The score evaluates the difference between the final reconstruction and the current
+            ground truth.
 
-            It is possible to pass alternate ground truth and mask to compute the score with respect to, instead of
-            `self._ground_truth` and `self._current_mask`.
+            It is possible to pass alternate ground truth and mask to compute the score with
+            respect to, instead of `self._ground_truth` and `self._current_mask`.
 
             @:param use_reconstruction: specifies if the reconstruction network will be used or not.
-            @:param ground_truth: specifies if the score has to be computed with respect to an alternate "ground truth".
+            @:param ground_truth: specifies if the score has to be computed with respect to an
+                alternate "ground truth".
             @:param mask_to_use: specifies if the score has to be computed with an alternate mask.
         """
         with torch.no_grad():
@@ -178,16 +188,25 @@ class ReconstructionEnv:
                 ground_truth = self._ground_truth
             if mask_to_use is None:
                 mask_to_use = self._current_mask
-            image, _, _ = preprocess_inputs(ground_truth, mask_to_use, fft_functions, self.options, clamp_target=False)
+            image, _, _ = preprocess_inputs(
+                ground_truth, mask_to_use, fft_functions, self.options, clamp_target=False)
             if use_reconstruction:
-                image, _, _ = self._reconstructor(image, mask_to_use)  # pass through reconstruction network
-        return [ReconstructionEnv._compute_score(img.unsqueeze(0), ground_truth, kind) for img in image]
+                image, _, _ = self._reconstructor(
+                    image, mask_to_use)  # pass through reconstruction network
+        return [
+            ReconstructionEnv._compute_score(img.unsqueeze(0), ground_truth, kind) for img in image
+        ]
 
     def _compute_observation_and_score(self) -> Tuple[torch.Tensor, float]:
         with torch.no_grad():
             zero_filled_reconstruction, _, _, masked_rffts = preprocess_inputs(
-                self._ground_truth, self._current_mask, fft_functions, self.options, return_masked_k_space=True)
-            reconstruction, _, mask_embed = self._reconstructor(zero_filled_reconstruction, self._current_mask)
+                self._ground_truth,
+                self._current_mask,
+                fft_functions,
+                self.options,
+                return_masked_k_space=True)
+            reconstruction, _, mask_embed = self._reconstructor(zero_filled_reconstruction,
+                                                                self._current_mask)
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth)
 
             if self.options.rl_obs_type == 'spectral_maps':
@@ -197,7 +216,9 @@ class ReconstructionEnv:
                 observation = torch.cat([reconstruction, masked_rffts], dim=1)
             elif self.options.rl_obs_type == 'concatenate_mask':
                 observation = torch.cat(
-                    [reconstruction, self._current_mask.repeat(1, reconstruction.shape[1], 1, 1)], dim=2)
+                    [reconstruction,
+                     self._current_mask.repeat(1, reconstruction.shape[1], 1, 1)],
+                    dim=2)
             else:
                 raise ValueError
         return observation.squeeze().cpu().numpy().astype(np.float32), score
@@ -205,24 +226,33 @@ class ReconstructionEnv:
     def reset(self) -> Union[np.ndarray, None]:
         """ Loads a new image from the dataset and starts a new episode with this image.
 
-            If `self.options.sequential_images` is True, it loops over images in the dataset in order. Otherwise,
-            it selects a random image from the first `self.num_{train/test}_images` in the dataset. The dataset
-            is ordered according to `self._{train/test}_order`.
+            If `self.options.sequential_images` is True, it loops over images in the dataset in
+            order. Otherwise, it selects a random image from the first
+            `self.num_{train/test}_images` in the dataset. The dataset is ordered according to
+            `self._{train/test}_order`.
         """
         if self.options.sequential_images:
             if self.is_testing:
-                if self.image_idx_test == min(self.options.num_test_images, len(self._dataset_test)):
-                    return None     # Returns None to signal that testing is done
-                _, self._ground_truth = self._dataset_test.__getitem__(self._test_order[self.image_idx_test])
-                logging.debug('Testing episode started with image {}'.format(self._test_order[self.image_idx_test]))
+                if self.image_idx_test == min(self.options.num_test_images,
+                                              len(self._dataset_test)):
+                    return None  # Returns None to signal that testing is done
+                _, self._ground_truth = self._dataset_test.__getitem__(
+                    self._test_order[self.image_idx_test])
+                logging.debug('Testing episode started with image {}'.format(
+                    self._test_order[self.image_idx_test]))
                 self.image_idx_test += 1
             else:
-                _, self._ground_truth = self._dataset_train.__getitem__(self._train_order[self.image_idx_train])
-                logging.debug('Training episode started with image {}'.format(self._train_order[self.image_idx_train]))
+                _, self._ground_truth = self._dataset_train.__getitem__(
+                    self._train_order[self.image_idx_train])
+                logging.debug('Training episode started with image {}'.format(
+                    self._train_order[self.image_idx_train]))
                 self.image_idx_train = (self.image_idx_train + 1) % self.options.num_train_images
         else:
             dataset_to_check = self._dataset_test if self.is_testing else self._dataset_train
-            max_num_images = self.options.num_test_images if self.is_testing else self.options.num_train_images
+            if self.is_testing:
+                max_num_images = self.options.num_test_images
+            else:
+                max_num_images = self.options.num_train_images
             dataset_len = min(len(dataset_to_check), max_num_images)
             index_chosen_image = np.random.choice(dataset_len)
             logging.debug('{} episode started with randomly chosen image {}/{}'.format(
@@ -235,14 +265,17 @@ class ReconstructionEnv:
         return observation
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, Dict]:
-        """ Adds a new line (specified by the action) to the current mask and computes the resulting observation and
-            reward (drop in MSE after reconstructing with respect to the current ground truth).
+        """ Adds a new line (specified by the action) to the current mask and computes the
+            resulting observation and reward (drop in MSE after reconstructing with respect to the
+            current ground truth).
         """
         assert self._scans_left > 0
-        self._current_mask, has_already_been_scanned = self.compute_new_mask(self._current_mask, action)
+        self._current_mask, has_already_been_scanned = self.compute_new_mask(
+            self._current_mask, action)
         observation, new_score = self._compute_observation_and_score()
 
-        reward = -1.0 if has_already_been_scanned else (self._current_score - new_score).item() / 0.01
+        reward = -1.0 if has_already_been_scanned else (
+            self._current_score - new_score).item() / 0.01
         self._current_score = new_score
 
         self._scans_left -= 1
@@ -253,7 +286,8 @@ class ReconstructionEnv:
     def get_evaluator_action(self) -> int:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
-            image, _, _ = preprocess_inputs(self._ground_truth, self._current_mask, fft_functions, self.options)
+            image, _, _ = preprocess_inputs(self._ground_truth, self._current_mask, fft_functions,
+                                            self.options)
             reconstruction, _, mask_embedding = self._reconstructor(image, self._current_mask)
             k_space_scores = self._evaluator(clamp(reconstruction[:, :1, ...]), mask_embedding)
             k_space_scores.masked_fill_(self._current_mask.squeeze().byte(), 100000)
@@ -261,9 +295,9 @@ class ReconstructionEnv:
 
 
 def generate_initial_mask(num_lines):
-        mask = torch.zeros(1, 1, 1, IMAGE_WIDTH)
-        for i in range(num_lines):
-            mask[0, 0, 0, i] = 1
-            if CONJUGATE_SYMMETRIC:
-                mask[0, 0, 0, -(i+1)] = 1
-        return mask
+    mask = torch.zeros(1, 1, 1, IMAGE_WIDTH)
+    for i in range(num_lines):
+        mask[0, 0, 0, i] = 1
+        if CONJUGATE_SYMMETRIC:
+            mask[0, 0, 0, -(i + 1)] = 1
+    return mask

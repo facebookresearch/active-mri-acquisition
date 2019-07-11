@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader
 
 from util.rl.evaluator_plus_plus import EvaluatorDataset, EvaluatorPlusPlus, EvaluatorPlusPlusTrainer
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoints_dir', type=str, default=None)
@@ -23,11 +22,9 @@ if __name__ == '__main__':
     parser.add_argument('--beta2', type=float, default=0.999)
     options = parser.parse_args()
 
-    options.checkpoints_dir = os.path.join(options.checkpoints_dir,
-                                           'bs_{}_lr_{}_beta1_{}_beta2_{}'.format(options.batch_size,
-                                                                                  options.lr,
-                                                                                  options.beta1,
-                                                                                  options.beta2))
+    options.checkpoints_dir = os.path.join(
+        options.checkpoints_dir, 'bs_{}_lr_{}_beta1_{}_beta2_{}'.format(
+            options.batch_size, options.lr, options.beta1, options.beta2))
     options.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if not os.path.exists(options.checkpoints_dir):
@@ -47,17 +44,22 @@ if __name__ == '__main__':
     root_logger.addHandler(file_handler)
 
     # Training set up
-    train_dataloader = DataLoader(EvaluatorDataset(split='train'),
-                                  batch_size=options.batch_size,
-                                  shuffle=True,
-                                  num_workers=options.num_workers)
-    val_dataloader = DataLoader(EvaluatorDataset(split='val'),
-                                batch_size=options.batch_size,
-                                shuffle=True,
-                                num_workers=options.num_workers)
+    train_dataloader = DataLoader(
+        EvaluatorDataset(split='train'),
+        batch_size=options.batch_size,
+        shuffle=True,
+        num_workers=options.num_workers)
+    val_dataloader = DataLoader(
+        EvaluatorDataset(split='val'),
+        batch_size=options.batch_size,
+        shuffle=True,
+        num_workers=options.num_workers)
 
     model = EvaluatorPlusPlus()
-    optimizer = torch.optim.Adam(model.parameters(), lr=options.lr, betas=(options.beta1, options.beta2))
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=options.lr, betas=(options.beta1, options.beta2))
 
-    trainer = EvaluatorPlusPlusTrainer(model, optimizer, {'train': train_dataloader, 'val': val_dataloader}, options)
+    trainer = EvaluatorPlusPlusTrainer(model, optimizer,
+                                       {'train': train_dataloader,
+                                        'val': val_dataloader}, options)
     trainer()
