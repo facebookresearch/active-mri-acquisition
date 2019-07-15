@@ -72,6 +72,9 @@ def preprocess_inputs(target, mask, fft_functions, options, return_masked_k_spac
         mask = create_mask(target.shape[0], num_entries=mask.shape[3], mask_type=options.dynamic_mask_type)
     mask = mask.to(options.device)
 
+    if options.dataroot == 'KNEE_RAW':
+        target = torch.norm(target, p=2, dim=3, keepdim=True)   #TODO: to be updated based on decision
+        target = target.permute(0, 3, 1, 2)
     masked_true_k_space = fft_functions['rfft'](target) * mask
     zero_filled_reconstruction = fft_functions['ifft'](masked_true_k_space)
 
