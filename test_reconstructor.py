@@ -1,12 +1,12 @@
 import argparse
 import logging
 import os
+
+import ignite.contrib.handlers
+import ignite.engine
+import ignite.metrics
 import torch
 import torch.nn.functional as F
-
-from ignite.contrib.handlers import ProgressBar
-from ignite.engine import Engine
-from ignite.metrics import Loss
 
 from data import create_data_loaders
 from models.fft_utils import RFFT, IFFT, preprocess_inputs
@@ -25,9 +25,11 @@ def inference(batch, reconstructor, fft_functions, options):
         reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
             zero_filled_reconstruction, mask)
 
-        mse = F.mse_loss(reconstructed_image[:, :1, ...], target[:, :1, ...], size_average=True)
-        ssim = util.ssim_metric(reconstructed_image[:, :1, ...], target[:, :1, ...])
+        mse = F.mse_loss(reconstructed_image[:, :1, ...], target[:, :1, ...], reduction='none')
+        ssim = util.ssim_metric(
+            reconstructed_image[:, :1, ...], target[:, :1, ...], size_average=False)
 
+        mse = mse.mean([1, 2, 3])
         return {
             'MSE': mse,
             'SSIM': ssim,
@@ -78,25 +80,24 @@ def main(options: argparse.Namespace):
     load_from_checkpoint_if_present(options, reconstructor)
 
     fft_functions = {'rfft': RFFT().to(options.device), 'ifft': IFFT().to(options.device)}
-    test_engine = Engine(lambda engine, batch: inference(batch, reconstructor, fft_functions,
-                                                         options))
-    mse_metric = Loss(
-        loss_fn=lambda x, y: x, output_transform=lambda x: (x['MSE'], x['ground_truth']))
-    mse_metric.attach(test_engine, name='mse')
-    ssim_metric = Loss(
-        loss_fn=lambda x, y: x, output_transform=lambda x: (x['SSIM'], x['ground_truth']))
-    ssim_metric.attach(test_engine, name='ssim')
+    test_engine = ignite.engine.Engine(lambda engine, batch: inference(
+        batch, reconstructor, fft_functions, options))
 
-    monitoring_metrics = ['loss_D', 'loss_G']
+    progress_bar = ignite.contrib.handlers.ProgressBar()
+    progress_bar.attach(test_engine)
 
-    progress_bar = ProgressBar()
-    progress_bar.attach(test_engine, metric_names=monitoring_metrics)
+    all_mse = []
+    all_ssim = []
+
+    @test_engine.on(ignite.engine.Events.ITERATION_COMPLETED)
+    def aggregate_metrics(engine):
+        all_mse.append(engine.state.output['MSE'])
+        all_ssim.append(engine.state.output['SSIM'])
 
     test_engine.run(test_loader)
-
-    metrics = test_engine.state.metrics
-    progress_bar.log_message('Results - MSE: {:.3f} SSIM: {:.3f}'.format(
-        metrics['mse'], metrics['ssim']))
+    all_mse = torch.cat(all_mse)
+    all_ssim = torch.cat(all_ssim)
+    print('Results (median) - MSE: {}, SSIM: {}'.format(all_mse.median(), all_ssim.median()))
 
 
 if __name__ == '__main__':
