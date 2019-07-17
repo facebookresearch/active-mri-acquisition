@@ -77,7 +77,7 @@ class Trainer:
         self.options = options
         self.options.device = torch.device('cuda'
                                            if torch.cuda.is_available() else torch.device('cpu'))
-        self.best_validation_score = 0
+        self.best_validation_score = -float('inf')
         self.completed_epochs = 0
 
         # TODO removed use_lsgan=not options.no_lsgan ---> see if this breaks anything

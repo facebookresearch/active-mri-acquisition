@@ -2,7 +2,7 @@
 #SBATCH --job-name=train_activeacq
 #SBATCH --output=/private/home/lep/logs/active_acq/stdout/job%j.train_activeacq
 #SBATCH --error=/private/home/lep/logs/active_acq/stderr/job%j.train_activeacq
-#SBATCH --partition=dev
+#SBATCH --partition=learnfair
 #SBATCH --gres=gpu:volta:8
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks-per-node=1
