@@ -5,6 +5,7 @@ from rl_env import device
 
 
 class RandomPolicy:
+
     def __init__(self, actions):
         self.actions = np.random.permutation(actions)
         self.index = 0
@@ -23,6 +24,7 @@ class RandomPolicy:
 # in the case where k-space lines are stored with low frequencies outside, high
 # frequencies in the center, and if the conjugate symmetry property holds.
 class NextIndexPolicy:
+
     def __init__(self, actions):
         self.actions = actions
         self.index = 0
@@ -45,7 +47,9 @@ class GreedyMC:
 
         If [[use_ground_truth]] is True, the actual true image is used (rather than the reconstruction).
     """
-    def __init__(self, env, samples=10, horizon=1, use_ground_truth=False, use_reconstructions=True):
+
+    def __init__(self, env, samples=10, horizon=1, use_ground_truth=False,
+                 use_reconstructions=True):
         self.env = env
         self.actions = list(range(env.action_space.n))
         self._valid_actions = list(self.actions)
@@ -77,16 +81,18 @@ class GreedyMC:
         # This is wasteful because samples can be repeated, particularly when the horizon is short.
         # Also, this is not batched for [[compute_score]] so it's even slower.
         for _ in range(self.samples):
-            indices = np.random.choice(len(self._valid_actions),
-                                       min(len(self._valid_actions), self.horizon),
-                                       replace=False)
+            indices = np.random.choice(
+                len(self._valid_actions),
+                min(len(self._valid_actions), self.horizon),
+                replace=False)
             new_mask = self.env._current_mask
             for index in indices:
                 new_mask = self.env.compute_new_mask(new_mask, self._valid_actions[index])[0]
-            score = self.env.compute_score(use_reconstruction=self.use_reconstructions,
-                                           kind='mse',
-                                           ground_truth=original_obs_tensor,
-                                           mask_to_use=new_mask)
+            score = self.env.compute_score(
+                use_reconstruction=self.use_reconstructions,
+                kind='mse',
+                ground_truth=original_obs_tensor,
+                mask_to_use=new_mask)
             if score < best_score:
                 best_score = score
                 policy_indices = indices
@@ -106,6 +112,7 @@ class FullGreedy:
 
         If [[use_ground_truth]] is True, the actual true image is used (rather than the reconstruction).
     """
+
     def __init__(self, env, num_steps=1, use_ground_truth=False, use_reconstructions=True):
         if num_steps > 1:
             raise NotImplementedError
@@ -132,11 +139,12 @@ class FullGreedy:
 
         all_scores = []
         for i in range(0, len(all_masks), self.batch_size):
-            masks_to_try = torch.cat(all_masks[i: min(i + self.batch_size, len(all_masks))])
-            scores = self.env.compute_score(use_reconstruction=self.use_reconstructions,
-                                            kind='mse',
-                                            ground_truth=original_obs_tensor,
-                                            mask_to_use=masks_to_try)
+            masks_to_try = torch.cat(all_masks[i:min(i + self.batch_size, len(all_masks))])
+            scores = self.env.compute_score(
+                use_reconstruction=self.use_reconstructions,
+                kind='mse',
+                ground_truth=original_obs_tensor,
+                mask_to_use=masks_to_try)
             all_scores.extend(scores)
 
         best_action_index = min(range(len(all_masks)), key=lambda x: all_scores[x])
@@ -149,6 +157,7 @@ class FullGreedy:
 
 
 class EvaluatorNetwork:
+
     def __init__(self, env, evaluator_name=None):
         self.env = env
         if evaluator_name is not None:

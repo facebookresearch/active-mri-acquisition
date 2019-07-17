@@ -11,9 +11,8 @@
 #SBATCH --comment="none"
 #SBATCH --nodes=1
 cd /private/home/lep/code/Active_Acquisition
-srun --label python trainer.py --dataroot KNEE --name train_no_evaluator \
---checkpoints_dir /checkpoint/lep/active_acq --batchSize 48 \
+srun --label python trainer.py --dataroot KNEE --name train_with_evaluator \
+--checkpoints_dir /checkpoint/lep/active_acq --batchSize 40 \
 --gpu_ids 0,1,2,3,4,5,6,7 --print_freq 50 --lr 0.0006 --grad_ctx --max_epochs 100 \
 --dynamic_mask_type random_zz --print_freq 50 --use_mse_as_disc_energy --lambda_gan 0.1 \
---save_latest_freq 2000 \
---no_evaluator
+--save_latest_freq 2000

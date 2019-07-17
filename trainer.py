@@ -35,7 +35,7 @@ def run_validation_and_update_best_checkpoint(
     progress_bar.log_message('Validation Results - Epoch: {}  MSE: {:.3f} SSIM: {:.3f}'.format(
         engine.state.epoch, metrics['mse'], metrics['ssim']))
     trainer.completed_epochs += 1
-    score = metrics['mse']
+    score = -metrics['mse']
     if score > trainer.best_validation_score:
         trainer.best_validation_score = score
         full_path = save_checkpoint_function(trainer, 'best_checkpoint')
