@@ -8,8 +8,9 @@ from . import pytorch_mssim
 import matplotlib.pyplot as plt
 
 
-def ssim_metric(src, tar, full=False):
-    return pytorch_mssim.ssim(src[:,:1,:,:], tar[:,:1,:,:], full=full)
+def ssim_metric(src, tar, full=False, size_average=True):
+    return pytorch_mssim.ssim(
+        src[:, :1, :, :], tar[:, :1, :, :], full=full, size_average=size_average)
 
 
 def sum_axes(input, axes=[], keepdim=False):
@@ -26,7 +27,7 @@ def sum_axes(input, axes=[], keepdim=False):
             input = input.sum(ax)
     return input
 
-        
+
 def mri_denormalize(input_image, zscore=3):
     if isinstance(input_image, torch.Tensor):
         image_tensor = input_image.data
@@ -37,7 +38,7 @@ def mri_denormalize(input_image, zscore=3):
         minv = max(-zscore, dat.min())
         maxv = min(zscore, dat.max())
         dat.clamp_(minv, maxv)
-        dat.add_(-minv).div_(maxv-minv)
+        dat.add_(-minv).div_(maxv - minv)
 
     return input_image
 
@@ -49,11 +50,11 @@ def tensor2im(input_image, imtype=np.uint8, renormalize=True):
         image_tensor = input_image.data
     else:
         return input_image
-   
+
     # do normalization first, since we working on fourier space. we need to clamp
     if renormalize:
         image_tensor.add_(1).div_(2)
-    
+
     image_tensor.mul_(255).clamp_(0, 255)
 
     if len(image_tensor.shape) == 4:
@@ -63,10 +64,11 @@ def tensor2im(input_image, imtype=np.uint8, renormalize=True):
 
     if image_numpy.shape[0] == 1:
         image_numpy = np.tile(image_numpy, (3, 1, 1))
-    
+
     # image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.0
     # image_numpy = np.transpose(image_numpy, (1, 2, 0))
     return image_numpy.astype(imtype)
+
 
 def create_grid_from_tensor(tensor_of_images, num_rows=6):
     """
@@ -121,8 +123,11 @@ def print_numpy(x, val=True, shp=False):
         print('shape,', x.shape)
     if val:
         x = x.flatten()
-        print('mean = %3.3f, min = %3.3f, max = %3.3f, median = %3.3f, std=%3.3f' % (
-            np.mean(x), np.min(x), np.max(x), np.median(x), np.std(x)))
+        print('mean = %3.3f, min = %3.3f, max = %3.3f, median = %3.3f, std=%3.3f' % (np.mean(x),
+                                                                                     np.min(x),
+                                                                                     np.max(x),
+                                                                                     np.median(x),
+                                                                                     np.std(x)))
 
 
 def mkdirs(paths):

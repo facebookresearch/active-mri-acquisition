@@ -57,9 +57,15 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         actions = []
         episode_step = 0
         # TODO make these 3 be computed on a single call
-        update_statistics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
-        update_statistics(env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
-        update_statistics(env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
+        update_statistics(
+            env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step,
+            statistics_mse)
+        update_statistics(
+            env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step,
+            statistics_ssim)
+        update_statistics(
+            env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step,
+            statistics_psnr)
         while not done:
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
@@ -69,19 +75,28 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
             total_reward += reward
             obs = next_obs
             episode_step += 1
-            update_statistics(env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step, statistics_mse)
             update_statistics(
-                env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step, statistics_ssim)
+                env.compute_score(opts.use_reconstructions, kind='mse')[0], episode_step,
+                statistics_mse)
             update_statistics(
-                env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step, statistics_psnr)
+                env.compute_score(opts.use_reconstructions, kind='ssim')[0], episode_step,
+                statistics_ssim)
+            update_statistics(
+                env.compute_score(opts.use_reconstructions, kind='psnr')[0], episode_step,
+                statistics_psnr)
         average_total_reward += total_reward
         all_actions.append(actions)
         logging.debug('Actions and reward: {}, {}'.format(actions, total_reward))
         if episode % opts.freq_save_test_stats == 0:
             logging.info('Episode {}. Saving statistics.'.format(episode))
-            np.save(os.path.join(opts.tb_logs_dir, 'test_stats_mse_{}'.format(episode)), statistics_mse)
-            np.save(os.path.join(opts.tb_logs_dir, 'test_stats_ssim_{}'.format(episode)), statistics_ssim)
-            np.save(os.path.join(opts.tb_logs_dir, 'test_stats_psnr_{}'.format(episode)), statistics_ssim)
+            np.save(
+                os.path.join(opts.tb_logs_dir, 'test_stats_mse_{}'.format(episode)), statistics_mse)
+            np.save(
+                os.path.join(opts.tb_logs_dir, 'test_stats_ssim_{}'.format(episode)),
+                statistics_ssim)
+            np.save(
+                os.path.join(opts.tb_logs_dir, 'test_stats_psnr_{}'.format(episode)),
+                statistics_ssim)
             np.save(os.path.join(opts.tb_logs_dir, 'all_actions'), np.array(all_actions))
     end = time.time()
     logging.debug('Test run lasted {} seconds.'.format(end - start))
@@ -106,7 +121,8 @@ def train_policy(env, policy, target_net, writer, opts):
             action = policy.get_action(obs, epsilon, episode_actions)
             next_obs, reward, done, _ = env.step(action)
             steps += 1
-            is_zero_target = (done or action in episode_actions) if opts.no_replacement_policy else done
+            is_zero_target = (done or
+                              action in episode_actions) if opts.no_replacement_policy else done
             policy.add_experience(obs, action, next_obs, reward, is_zero_target)
             loss, grad_norm, mean_q_values, std_q_values = policy.update_parameters(target_net)
 
@@ -137,24 +153,29 @@ def train_policy(env, policy, target_net, writer, opts):
             if test_score < best_test_score:
                 policy.save(os.path.join(opts.tb_logs_dir, 'policy_best.pt'))
                 best_test_score = test_score
-                logging.info('Saved model to {}'.format(os.path.join(opts.tb_logs_dir, 'policy_checkpoint.pt')))
+                logging.info('Saved model to {}'.format(
+                    os.path.join(opts.tb_logs_dir, 'policy_checkpoint.pt')))
 
 
 def get_experiment_str(opts):
     if opts.policy == 'dqn':
         policy_str = '{}.bu{}.tupd{}.bs{}.edecay{}.gamma{}.norepl{}.nimgtr{}.nimgtest{}_'.format(
-            opts.rl_obs_type, opts.budget, opts.target_net_update_freq, opts.rl_batch_size, opts.epsilon_decay,
-            opts.gamma, int(opts.no_replacement_policy), opts.num_train_images, opts.num_test_images)
+            opts.rl_obs_type, opts.budget,
+            opts.target_net_update_freq, opts.rl_batch_size, opts.epsilon_decay, opts.gamma,
+            int(opts.no_replacement_policy), opts.num_train_images, opts.num_test_images)
     else:
         policy_str = opts.policy
         if 'greedymc' in opts.policy:
-            policy_str = '{}.nsam{}.hor{}_'.format(policy_str, opts.greedymc_num_samples, opts.greedymc_horizon)
-    return '{}_bu{}_seed{}_neptest{}'.format(policy_str, opts.budget, opts.seed, opts.num_test_images)
+            policy_str = '{}.nsam{}.hor{}_'.format(policy_str, opts.greedymc_num_samples,
+                                                   opts.greedymc_horizon)
+    return '{}_bu{}_seed{}_neptest{}'.format(policy_str, opts.budget, opts.seed,
+                                             opts.num_test_images)
 
 
 # Not a great policy specification protocol, but works for now.
 def get_policy(env, writer, opts):
-    # This options affects how the score is computed by the environment (passing through rec. network or not)
+    # This options affects how the score is computed by the environment
+    # (whether it passes through reconstruction network or not after a new col. is scanned)
     opts.use_reconstructions = (opts.policy[-2:] == '_r')
     logging.info('Use reconstructions is {}'.format(opts.use_reconstructions))
     if 'random' in opts.policy:
@@ -163,11 +184,12 @@ def get_policy(env, writer, opts):
         assert rl_env.CONJUGATE_SYMMETRIC
         policy = util.rl.simple_baselines.NextIndexPolicy(range(env.action_space.n))
     elif 'greedymc' in opts.policy:
-        policy = util.rl.simple_baselines.GreedyMC(env,
-                                                   samples=opts.greedymc_num_samples,
-                                                   horizon=opts.greedymc_horizon,
-                                                   use_reconstructions=opts.use_reconstructions,
-                                                   use_ground_truth='_gt' in opts.policy)
+        policy = util.rl.simple_baselines.GreedyMC(
+            env,
+            samples=opts.greedymc_num_samples,
+            horizon=opts.greedymc_horizon,
+            use_reconstructions=opts.use_reconstructions,
+            use_ground_truth='_gt' in opts.policy)
     elif 'greedyfull1' in opts.policy:
         if 'nors' in opts.policy:
             policy = util.rl.simple_baselines.FullGreedy(
@@ -183,20 +205,22 @@ def get_policy(env, writer, opts):
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator++' in opts.policy:
         assert opts.rl_obs_type == 'concatenate_mask'
-        policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(model_path=os.path.join(opts.checkpoints_dir,
-                                                                                             opts.evaluator_pp_path),
-                                                                     device=rl_env.device)
+        policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
+            model_path=os.path.join(opts.checkpoints_dir, opts.evaluator_pp_path),
+            device=rl_env.device)
     elif opts.policy == 'dqn':
 
         replay_memory = util.rl.replay_buffer.ReplayMemory(opts.replay_buffer_size,
                                                            env.observation_space.shape,
-                                                           opts.rl_batch_size,
-                                                           opts.rl_burn_in)
-        policy = util.rl.dqn.DDQN(env.action_space.n, rl_env.device, replay_memory, opts).to(rl_env.device)
-        target_net = util.rl.dqn.DDQN(env.action_space.n, rl_env.device, None, opts).to(rl_env.device)
+                                                           opts.rl_batch_size, opts.rl_burn_in)
+        policy = util.rl.dqn.DDQN(env.action_space.n, rl_env.device, replay_memory, opts).to(
+            rl_env.device)
+        target_net = util.rl.dqn.DDQN(env.action_space.n, rl_env.device, None, opts).to(
+            rl_env.device)
 
         if opts.dqn_resume:
-            raise NotImplementedError  # TODO to be able to resume training need some code to store the replay buffer
+            # TODO to be able to resume training need some code to store the replay buffer
+            raise NotImplementedError
         if opts.dqn_only_test:
             policy.load(os.path.join(opts.tb_logs_dir, 'policy_best.pt'))
         else:
