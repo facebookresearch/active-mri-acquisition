@@ -26,22 +26,22 @@ def main(options):
     # distributions are supported).
     categorical_hp_classes = {
         'lr': [0.0001, 0.001, 0.01, 0.1],
-        'batchSize': [16, 32, 48],
+        'batchSize': [4, 8, 16, 32], # [16, 32, 48],
 
         # Reconstructor hyper-parameters
-        'number_of_reconstructor_filters': [64, 128, 256],
+        'number_of_reconstructor_filters': [64, 128, 256, 512],
         'n_downsampling': [3, 4, 5],
         'number_of_layers_residual_bottleneck': [3, 4, 5],
         'dropout_probability': [0, 0.1, 0.2],
 
         # Evaluator hyper-parameters
-        'number_of_evaluator_filters': [64, 128, 256],
+        'number_of_evaluator_filters': [64, 128, 256, 512],
         'number_of_evaluator_convolution_layers': [3, 4, 5],
         'mask_embed_dim': [3, 6, 9]
     }
 
     # Create the tuner with evaluator and the specified classes
-    tuner = hyperband.HyperbandTuner(
+    tuner = hyperband.hyperband.HyperbandTuner(
         categorical_hp_classes,
         function_evaluator,
         results_file=os.path.join(options.checkpoints_dir, 'tuning.csv'))
