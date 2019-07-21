@@ -112,6 +112,14 @@ def create_mask(batch_size, num_entries=128, mask_type='random'):
             p_lines = 0.25 * np.random.random() + 0.125  # ~U(0.125, 0.375)
             num_low_freq_lines = np.random.binomial(num_entries, p_lines)
             mask[i, :num_low_freq_lines] = mask[i, -num_low_freq_lines:] = 1
+        elif mask_type == 'beta_symmetric':
+            half_entries = num_entries // 2
+            p = np.random.beta(1, 4)
+            mask_lf = np.random.choice(range(5, 11))
+            s_fft = (np.random.random(half_entries) < p).astype(np.float32)
+            mask[i, :half_entries] = s_fft
+            mask[i, :mask_lf] = 1
+            mask[i, :-(half_entries + 1):-1] = mask[i, :half_entries]
         else:
             raise ValueError('Invalid mask type: {}.'.format(mask_type))
 
@@ -126,12 +134,5 @@ def load_model_weights_if_present(model, options, model_name):
     return model
 
 
-def load_checkpoint(checkpoints_dir, suffix):
-    return {
-        'reconstructor':
-        torch.load(os.path.join(checkpoints_dir, 'checkpoint_reconstructor_{}.pth').format(suffix)),
-        'evaluator':
-        torch.load(os.path.join(checkpoints_dir, 'checkpoint_evaluator_{}.pth').format(suffix)),
-        'options':
-        torch.load(os.path.join(checkpoints_dir, 'checkpoint_options_{}.pth').format(suffix))
-    }
+def load_checkpoint(checkpoints_dir):
+    return torch.load(os.path.join(checkpoints_dir, 'best_checkpoint.pth'))

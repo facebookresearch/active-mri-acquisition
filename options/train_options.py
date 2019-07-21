@@ -96,7 +96,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument(
             '--dynamic_mask_type',
             type=str,
-            choices=['None', 'loader', 'random_zz', 'random_lowfreq'],
+            choices=['None', 'loader', 'random_zz', 'random_lowfreq', 'beta_symmetric'],
             default='random_zz',
             help='Allows changing the mask during training')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
