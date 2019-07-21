@@ -11,7 +11,7 @@ queue=learnfair
 
 use_reconstruction=1
 
-# for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "greedyfull1nors_gt" "evaluator++"; do
+for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "greedyfull1nors_gt"; do
 for policy in "evaluator++"; do
     if [[ ${policy} == "evaluator++" ]]
     then
@@ -43,7 +43,8 @@ for policy in "evaluator++"; do
     echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
 
     echo srun python acquire_rl.py --dataroot KNEE \
-    --checkpoints_dir /checkpoint/lep/active_acq/full_test_run_py --checkpoint_suffix 38_mse=0.02237745 \
+    --checkpoints_dir /checkpoint/lep/active_acq/train_no_evaluator \
+    --checkpoint_suffix 38_mse=0.02237745 \
     --seed 0 --batchSize 96 --gpu_ids 0 --policy ${policy} \
     --num_train_episodes 0 --num_train_images 0 \
     --budget 1000 --num_test_images 1000 --freq_save_test_stats 40 --sequential_images \
