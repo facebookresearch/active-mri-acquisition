@@ -134,5 +134,5 @@ def load_model_weights_if_present(model, options, model_name):
     return model
 
 
-def load_checkpoint(checkpoints_dir):
-    return torch.load(os.path.join(checkpoints_dir, 'best_checkpoint.pth'))
+def load_checkpoint(checkpoints_dir, name='best_checkpoint.pth'):
+    return torch.load(os.path.join(checkpoints_dir, name))
