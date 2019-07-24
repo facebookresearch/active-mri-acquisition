@@ -12,5 +12,5 @@
 #SBATCH --nodes=1
 cd /private/home/lep/code/Active_Acquisition
 srun --label python train_evaluator++.py \
---checkpoints_dir /checkpoint/lep/active_acq/full_test_run_py/evaluator_pp_15k \
+--checkpoints_dir /checkpoint/lep/active_acq/train_no_evaluator_symmetric/evaluator_pp_5k \
 --lr 0.0003 --num_workers 16 --max_epochs 300 --batch_size 256

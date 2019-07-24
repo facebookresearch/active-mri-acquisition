@@ -68,7 +68,7 @@ class ReconstructionEnv:
         self._dataset_train = train_loader.dataset
         self._dataset_test = test_loader.dataset
 
-        checkpoint = load_checkpoint(options.checkpoints_dir, 'best_checkpoint.pth')
+        checkpoint = load_checkpoint(options.checkpoints_dir, 'regular_checkpoint.pth')
         self._reconstructor = ReconstructorNetwork(
             number_of_cascade_blocks=checkpoint['options'].number_of_cascade_blocks,
             n_downsampling=checkpoint['options'].n_downsampling,

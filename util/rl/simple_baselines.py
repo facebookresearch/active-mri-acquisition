@@ -41,11 +41,13 @@ class NextIndexPolicy:
 # noinspection PyProtectedMember
 class GreedyMC:
     """ This policy takes the current reconstruction as if it was "ground truth",
-        and attempts to find the set of actions that decreases MSE the most with respected to the masked
-        reconstruction. The policy executes the set of actions, and recomputes it after all actions in the set
-        have been executed. The set of actions are searched using Monte Carlo sampling.
+        and attempts to find the set of actions that decreases MSE the most with respected to the
+        masked reconstruction. The policy executes the set of actions, and recomputes it after all
+        actions in the set have been executed. The set of actions are searched using Monte Carlo
+        sampling.
 
-        If [[use_ground_truth]] is True, the actual true image is used (rather than the reconstruction).
+        If `use_ground_truth` is True, the actual true image is used (rather than the
+        reconstruction).
     """
 
     def __init__(self, env, samples=10, horizon=1, use_ground_truth=False,
@@ -79,7 +81,7 @@ class GreedyMC:
         policy_indices = None
         best_score = np.inf
         # This is wasteful because samples can be repeated, particularly when the horizon is short.
-        # Also, this is not batched for [[compute_score]] so it's even slower.
+        # Also, this is not batched for `compute_score` so it's even slower.
         for _ in range(self.samples):
             indices = np.random.choice(
                 len(self._valid_actions),
@@ -107,10 +109,12 @@ class GreedyMC:
 # noinspection PyProtectedMember
 class FullGreedy:
     """ This policy takes the current reconstruction as if it was "ground truth",
-        and attempts to find the set of [[num_steps]] actions that decreases MSE the most with respected to the masked
-        reconstruction. It uses exhaustive search of actions rather than Monte Carlo sampling.
+        and attempts to find the set of `num_steps` actions that decreases MSE the most with
+        respected to the masked reconstruction. It uses exhaustive search of actions rather than
+        Monte Carlo sampling.
 
-        If [[use_ground_truth]] is True, the actual true image is used (rather than the reconstruction).
+        If `use_ground_truth` is True, the actual true image is used (rather than the
+        reconstruction).
     """
 
     def __init__(self, env, num_steps=1, use_ground_truth=False, use_reconstructions=True):
@@ -128,8 +132,8 @@ class FullGreedy:
         self.num_steps = num_steps
 
     def get_action(self, obs, _, __):
-        # This expects observation to be a tensor of size [C, H, W], where the first channel is the observed
-        # reconstruction
+        # This expects observation to be a tensor of size [C, H, W], where the first channel
+        # is the observed reconstruction
         original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
             else torch.tensor(obs[:1, :, :]).to(device).unsqueeze(0)
         all_masks = []

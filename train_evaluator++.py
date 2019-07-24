@@ -2,11 +2,9 @@ import argparse
 import logging
 import os
 
-import torch
+import torch.utils.data
 
-from torch.utils.data import DataLoader
-
-from util.rl.evaluator_plus_plus import EvaluatorDataset, EvaluatorPlusPlus, EvaluatorPlusPlusTrainer
+import util.rl.evaluator_plus_plus
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -44,22 +42,22 @@ if __name__ == '__main__':
     root_logger.addHandler(file_handler)
 
     # Training set up
-    train_dataloader = DataLoader(
-        EvaluatorDataset(split='train'),
+    train_dataloader = torch.utils.data.DataLoader(
+        util.rl.evaluator_plus_plus.EvaluatorDataset(split='train'),
         batch_size=options.batch_size,
         shuffle=True,
         num_workers=options.num_workers)
-    val_dataloader = DataLoader(
-        EvaluatorDataset(split='val'),
+    val_dataloader = torch.utils.data.DataLoader(
+        util.rl.evaluator_plus_plus.EvaluatorDataset(split='val'),
         batch_size=options.batch_size,
         shuffle=True,
         num_workers=options.num_workers)
 
-    model = EvaluatorPlusPlus()
+    model = util.rl.evaluator_plus_plus.EvaluatorPlusPlus()
     optimizer = torch.optim.Adam(
         model.parameters(), lr=options.lr, betas=(options.beta1, options.beta2))
 
-    trainer = EvaluatorPlusPlusTrainer(model, optimizer,
-                                       {'train': train_dataloader,
-                                        'val': val_dataloader}, options)
+    trainer = util.rl.evaluator_plus_plus.EvaluatorPlusPlusTrainer(
+        model, optimizer, {'train': train_dataloader,
+                           'val': val_dataloader}, options)
     trainer()

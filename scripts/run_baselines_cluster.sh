@@ -9,9 +9,11 @@ mkdir -p ${LOGS_DIR}/stderr
 
 queue=learnfair
 
-use_reconstruction=1
+use_reconstruction=0
 
-for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "greedyfull1nors_gt"; do
+# for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net"; do
+for policy in "random" "lowfirst"; do
+#for policy in "greedyfull1nors_gt"; do
 #for policy in "evaluator++"; do
     if [[ ${policy} == "evaluator++" ]]
     then
@@ -47,7 +49,7 @@ for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net" "greedyfull1n
     --seed 0 --batchSize 96 --gpu_ids 0 --policy ${policy} \
     --num_train_episodes 0 --num_train_images 0 \
     --budget 1000 --num_test_images 1000 --freq_save_test_stats 40 --sequential_images \
-    --rl_logs_subdir all_baselines_best_ckpt \
+    --rl_logs_subdir all_baselines_regular_ckpt \
     --evaluator_pp_path evaluator_pp_15k/bs_256_lr_0.0003_beta1_0.5_beta2_0.999/best_checkpoint.pth \
     --rl_obs_type ${rl_obs_type} \
     --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
