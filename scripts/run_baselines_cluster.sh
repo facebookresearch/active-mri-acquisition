@@ -7,13 +7,13 @@ mkdir -p ${JOBSCRIPTS_DIR}
 mkdir -p ${LOGS_DIR}/stdout
 mkdir -p ${LOGS_DIR}/stderr
 
-queue=learnfair
+queue=dev
 
-use_reconstruction=0
+use_reconstruction=1
 
 # for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net"; do
-for policy in "random" "lowfirst"; do
-#for policy in "greedyfull1nors_gt"; do
+#for policy in "random" "lowfirst"; do
+for policy in "greedyzero"; do
 #for policy in "evaluator++"; do
     if [[ ${policy} == "evaluator++" ]]
     then

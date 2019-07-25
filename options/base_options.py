@@ -135,7 +135,7 @@ class BaseOptions():
             torch.cuda.set_device(opt.gpu_ids[0])
             opt.batchSize *= len(opt.gpu_ids)
             print(f'Use multiple GPUs, batchSize are increased by {len(opt.gpu_ids)} '
-                  'times to {opt.batchSize}')
+                  f'times to {opt.batchSize}')
 
         if opt.isTrain:
             self.print_options(opt)

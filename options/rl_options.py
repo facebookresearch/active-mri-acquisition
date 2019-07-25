@@ -19,7 +19,7 @@ class RLOptions(BaseOptions):
                 'dqn', 'random', 'random_r', 'lowfirst', 'lowfirst_r', 'evaluator_net',
                 'evaluator_net_r', 'evaluator_net_offp', 'evaluator_net_offp_r', 'greedymc',
                 'greedymc_gt', 'greedymc_r', 'greedymc_gt_r', 'greedyfull1_gt_r', 'greedyfull1_r',
-                'greedyfull1nors_gt', 'greedyfull1nors_gt_r', 'evaluator++_r'
+                'greedyzero_r', 'evaluator++_r'
             ],
             default='random')
         parser.add_argument('--initial_num_lines', type=int, default=10)
