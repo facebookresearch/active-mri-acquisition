@@ -164,14 +164,16 @@ class Trainer:
         loss_G_GAN = 0
         if self.evaluator is not None:
             optimizers['D'].zero_grad()
-            fake = clamp(reconstructed_image[:, :1, :, :])
+            fake = clamp(reconstructed_image)
             detached_fake = fake.detach()
-            output = evaluator(detached_fake, mask_embedding.detach())
+            if options.mask_embed_dim != 0:
+                mask_embedding = mask_embedding.detach()
+            output = evaluator(detached_fake, mask_embedding)
             loss_D_fake = losses['GAN'](
                 output, False, mask, degree=0, pred_and_gt=(detached_fake[:, :1, ...], target))
 
-            real = clamp(target[:, :1, :, :])
-            output = evaluator(real, mask_embedding.detach())
+            real = clamp(target)
+            output = evaluator(real, mask_embedding)
             loss_D_real = losses['GAN'](
                 output, True, mask, degree=1, pred_and_gt=(detached_fake[:, :1, ...], target))
 
@@ -179,7 +181,7 @@ class Trainer:
             loss_D.backward(retain_graph=True)
             optimizers['D'].step()
 
-            output = evaluator(fake, mask_embedding.detach())
+            output = evaluator(fake, mask_embedding)
             loss_G_GAN = losses['GAN'](
                 output, True, mask, degree=1, updateG=True, pred_and_gt=(fake[:, :1, ...], target))
             loss_G_GAN *= options.lambda_gan
@@ -197,7 +199,7 @@ class Trainer:
         return {'loss_D': 0 if self.evaluator is None else loss_D.item(), 'loss_G': loss_G.item()}
 
     def __call__(self) -> float:
-        writer = SummaryWriter(os.path.join(self.options.checkpoints_dir, self.options.name))
+        # writer = SummaryWriter(os.path.join(self.options.checkpoints_dir, self.options.name))
 
         print('Creating trainer with the following options:')
         for key, value in vars(self.options).items():
@@ -245,6 +247,8 @@ class Trainer:
 
         self.load_from_checkpoint_if_present()
 
+        writer = SummaryWriter(os.path.join(self.options.checkpoints_dir, self.options.name))
+
         # Training engine and handlers
         train_engine = Engine(lambda engine, batch: self.
                               update(batch, self.reconstructor, self.evaluator, self.optimizers,
@@ -271,12 +275,6 @@ class Trainer:
             progress_bar=progress_bar,
             val_loader=val_loader,
             trainer=self)
-
-        train_engine.add_event_handler(
-            Events.ITERATION_COMPLETED,
-            save_regular_checkpoint,
-            trainer=self,
-            progress_bar=progress_bar)
 
         # Tensorboard Plots
         @train_engine.on(Events.ITERATION_COMPLETED)
@@ -322,6 +320,12 @@ class Trainer:
         train_engine.run(train_loader, self.options.max_epochs - self.completed_epochs)
 
         writer.close()
+
+        train_engine.add_event_handler(
+            Events.EPOCH_COMPLETED,
+            save_regular_checkpoint,
+            trainer=self,
+            progress_bar=progress_bar)
 
         return self.best_validation_score
 

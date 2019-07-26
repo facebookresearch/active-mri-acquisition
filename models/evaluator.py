@@ -1,4 +1,4 @@
-from .fft_utils import RFFT, IFFT
+from .fft_utils import RFFT, FFT, IFFT
 from .reconstruction import init_func
 
 import functools
@@ -22,7 +22,7 @@ class SpectralMapDecomposition(nn.Module):
     def __init__(self):
         super(SpectralMapDecomposition, self).__init__()
 
-        self.RFFT = RFFT()
+        self.FFT = FFT()
         self.IFFT = IFFT()
 
     def forward(self, reconstructed_image, mask_embedding):
@@ -30,7 +30,7 @@ class SpectralMapDecomposition(nn.Module):
 
         Args:
             reconstructed_image: image reconstructed by ReconstructorNetwork
-                                    shape   :   (batch_size, 1, height, width)
+                                    shape   :   (batch_size, 2, height, width)
             mask_embedding: mask embedding created by ReconstructorNetwork (Replicated along height and width)
                                     shape   :   (batch_size, embedding_dimension, height, width)
 
@@ -43,7 +43,7 @@ class SpectralMapDecomposition(nn.Module):
         width = reconstructed_image.shape[3]
 
         # create spectral maps in kspace
-        kspace = self.RFFT(reconstructed_image)
+        kspace = self.FFT(reconstructed_image)
         kspace = kspace.unsqueeze(1).repeat(1, width, 1, 1, 1)
 
         # separate image into spectral maps
@@ -207,7 +207,7 @@ class GANLossKspace(nn.Module):
 def test_evaluator(height, width, number_of_filters, number_of_conv_layers, use_sigmoid, mask_embed_dim):
     batch = 4
 
-    image = torch.rand(batch, 1, height, width)
+    image = torch.rand(batch, 2, height, width)
     image = image.type(torch.FloatTensor)
 
     if mask_embed_dim > 0:
