@@ -24,12 +24,14 @@ from typing import Any, Callable, Dict, Tuple
 # Dataset
 # ---------------------------------------------------------------------------------------------
 class EvaluatorDataset(torch.utils.data.Dataset):
+
     def __init__(self, horizon: int = 50, images_per_file: int = 100, split: str = 'train'):
         super(EvaluatorDataset).__init__()
-        self.dataset_dir = '/checkpoint/lep/active_acq/full_test_run_py/il_dataset/' + split
+        self.dataset_dir = \
+            f'/checkpoint/lep/active_acq/train_no_evaluator_symmetric/il_dataset/{split}'
         self.horizon = horizon
         self.images_per_file = images_per_file
-        self.num_images = 15200 if split == 'train' else 1000
+        self.num_images = 5000 if split == 'train' else 1000
         self.horizon = 32
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -58,24 +60,31 @@ class EvaluatorDataset(torch.utils.data.Dataset):
 # Model and policy wrapper
 # ---------------------------------------------------------------------------------------------
 class EvaluatorPlusPlus(nn.Module):
+
     def __init__(self, img_width: int = 128, mask_embed_dim: int = 6, num_actions: int = 54):
         super(EvaluatorPlusPlus, self).__init__()
-        self.evaluator = models.evaluator.EvaluatorNetwork(width=img_width, mask_embed_dim=mask_embed_dim)
+        self.evaluator = models.evaluator.EvaluatorNetwork(
+            width=img_width, mask_embed_dim=mask_embed_dim)
         self.fc = nn.Linear(img_width, num_actions)
         self.embedding = nn.Linear(img_width, mask_embed_dim)
 
     def forward(self, reconstruction: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         mask_embedding = self.embedding(mask).view(mask.shape[0], -1, 1, 1)
-        mask_embedding = mask_embedding.repeat(1, 1, reconstruction.shape[2], reconstruction.shape[3])
+        mask_embedding = mask_embedding.repeat(1, 1, reconstruction.shape[2],
+                                               reconstruction.shape[3])
         x = self.evaluator(reconstruction, mask_embedding)
         return self.fc(x)
 
 
 class EvaluatorPlusPlusPolicy:
+
     def __init__(self, model_path: str, device: torch.device):
         self.evaluator = EvaluatorPlusPlus()
         checkpoint = torch.load(model_path)
-        model_state_dict = {key.replace('module.', ''): value for (key, value) in checkpoint['model'].items()}
+        model_state_dict = {
+            key.replace('module.', ''): value
+            for (key, value) in checkpoint['model'].items()
+        }
         self.evaluator.load_state_dict(model_state_dict)
         self.evaluator.to(device)
         self.device = device
@@ -84,8 +93,9 @@ class EvaluatorPlusPlusPolicy:
         reconstruction = torch.Tensor(obs[:1, :-1]).unsqueeze(0).to(self.device)
         mask = torch.Tensor(obs[:1, -1]).view(1, 1, 1, -1).to(self.device)
         scores = self.evaluator(reconstruction, mask)
-        max_action = reconstruction.shape[3] // 2 if rl_env.CONJUGATE_SYMMETRIC else reconstruction.shape[3]
-        scores.masked_fill_(mask.byte().squeeze()[rl_env.NUM_LINES_INITIAL: max_action], -100000)
+        max_action = reconstruction.shape[
+            3] // 2 if rl_env.CONJUGATE_SYMMETRIC else reconstruction.shape[3]
+        scores.masked_fill_(mask.byte().squeeze()[rl_env.NUM_LINES_INITIAL:max_action], -100000)
         return scores.argmax(dim=1).item()
 
     def init_episode(self):
@@ -117,11 +127,8 @@ def preprocess_inputs(batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
     return image, mask, ground_truth
 
 
-def update(_: ignite.engine.Engine,
-           batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-           model: EvaluatorPlusPlus,
-           optimizer: optim.Optimizer,
-           loss_fn: Callable,
+def update(_: ignite.engine.Engine, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+           model: EvaluatorPlusPlus, optimizer: optim.Optimizer, loss_fn: Callable,
            device: torch.device) -> Dict[str, torch.Tensor]:
     image, mask, ground_truth = preprocess_inputs(batch, device)
     optimizer.zero_grad()
@@ -129,17 +136,11 @@ def update(_: ignite.engine.Engine,
     loss = loss_fn(prediction, ground_truth)
     loss.backward()
     optimizer.step(None)
-    return {
-        'prediction': prediction,
-        'ground_truth': ground_truth,
-        'loss': loss.item()
-    }
+    return {'prediction': prediction, 'ground_truth': ground_truth, 'loss': loss.item()}
 
 
-def inference(_: ignite.engine.Engine,
-              batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-              model: EvaluatorPlusPlus,
-              device: torch.device) -> Dict[str, torch.Tensor]:
+def inference(_: ignite.engine.Engine, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+              model: EvaluatorPlusPlus, device: torch.device) -> Dict[str, torch.Tensor]:
     with torch.no_grad():
         image, mask, ground_truth = preprocess_inputs(batch, device)
         prediction = model(image, mask)
@@ -150,8 +151,7 @@ def inference(_: ignite.engine.Engine,
         }
 
 
-def save_regular_checkpoint(engine: ignite.engine.Engine,
-                            trainer: 'EvaluatorPlusPlusTrainer',
+def save_regular_checkpoint(engine: ignite.engine.Engine, trainer: 'EvaluatorPlusPlusTrainer',
                             progress_bar: ignite.contrib.handlers.ProgressBar):
     if (engine.state.iteration - 1) % trainer.options.save_freq == 0:
         full_path = save_checkpoint_function(trainer, 'regular_checkpoint')
@@ -160,7 +160,8 @@ def save_regular_checkpoint(engine: ignite.engine.Engine,
 
 
 def save_checkpoint_function(trainer: 'EvaluatorPlusPlusTrainer', filename: str) -> str:
-    # Ensures atomic checkpoint save to avoid corrupted files if it gets preempted during a save operation
+    # Ensures atomic checkpoint save to avoid corrupted files if it gets
+    # preempted during a save operation
     tmp_filename = tempfile.NamedTemporaryFile(delete=False, dir=trainer.options.checkpoints_dir)
     try:
         torch.save(trainer.create_checkpoint(), tmp_filename)
@@ -175,12 +176,10 @@ def save_checkpoint_function(trainer: 'EvaluatorPlusPlusTrainer', filename: str)
         return full_path
 
 
-def run_validation_and_update_best_checkpoint(train_engine: ignite.engine.Engine,
-                                              val_engine: ignite.engine.Engine,
-                                              val_loader: torch.utils.data.DataLoader,
-                                              progress_bar: ignite.contrib.handlers.ProgressBar,
-                                              writer: tensorboardX.SummaryWriter,
-                                              trainer: 'EvaluatorPlusPlusTrainer'):
+def run_validation_and_update_best_checkpoint(
+        train_engine: ignite.engine.Engine, val_engine: ignite.engine.Engine,
+        val_loader: torch.utils.data.DataLoader, progress_bar: ignite.contrib.handlers.ProgressBar,
+        writer: tensorboardX.SummaryWriter, trainer: 'EvaluatorPlusPlusTrainer'):
     val_engine.run(val_loader)
     for key, value in val_engine.state.metrics.items():
         progress_bar.log_message('{} over validation set: {}'.format(key.capitalize(), value))
@@ -197,16 +196,12 @@ def run_validation_and_update_best_checkpoint(train_engine: ignite.engine.Engine
 # ---------------------------------------------------------------------------------------------
 # Utility functions for print/tensorboard logs
 # ---------------------------------------------------------------------------------------------
-def log_iteration(engine: ignite.engine.Engine,
-                  progress_bar: ignite.contrib.handlers.ProgressBar,
+def log_iteration(engine: ignite.engine.Engine, progress_bar: ignite.contrib.handlers.ProgressBar,
                   writer: tensorboardX.SummaryWriter):
     if (engine.state.iteration + 1) % 1 == 0:
         progress_bar.log_message('Loss: {}. Iter: {}/{}. Epoch: {}/{}'.format(
-            engine.state.output['loss'],
-            engine.state.iteration % len(engine.state.dataloader),
-            len(engine.state.dataloader),
-            engine.state.epoch, engine.state.max_epochs
-        ))
+            engine.state.output['loss'], engine.state.iteration % len(engine.state.dataloader),
+            len(engine.state.dataloader), engine.state.epoch, engine.state.max_epochs))
     writer.add_scalar('training/loss', engine.state.output['loss'], engine.state.iteration)
 
 
@@ -217,7 +212,8 @@ def regret_output_transform(output: Dict[str, torch.Tensor]) -> Tuple[torch.Tens
 # TODO check why some scans are actually increasing MSE
 def regret_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     chosen = F.softmax(prediction, dim=1).argmax(dim=1).unsqueeze(1)
-    gt = (target - target.min(dim=1)[0].unsqueeze(1)) / (target.max(dim=1)[0] - target.min(dim=1)[0]).unsqueeze(1)
+    gt = (target - target.min(dim=1)[0].unsqueeze(1)) / (
+        target.max(dim=1)[0] - target.min(dim=1)[0]).unsqueeze(1)
     regret = gt.max(1)[0] - gt.gather(1, chosen).squeeze()
     return regret.mean()
 
@@ -234,11 +230,9 @@ def log_train_metrics(engine: ignite.engine.Engine,
 # Main training code
 # ---------------------------------------------------------------------------------------------
 class EvaluatorPlusPlusTrainer:
-    def __init__(self,
-                 model: EvaluatorPlusPlus,
-                 optimizer: optim.Optimizer,
-                 data_loaders: Dict[str, torch.utils.data.DataLoader],
-                 options: argparse.Namespace):
+
+    def __init__(self, model: EvaluatorPlusPlus, optimizer: optim.Optimizer,
+                 data_loaders: Dict[str, torch.utils.data.DataLoader], options: argparse.Namespace):
         self.model = model
         self.optimizer = optimizer
         self.data_loaders = data_loaders
@@ -280,11 +274,10 @@ class EvaluatorPlusPlusTrainer:
             self.model = nn.DataParallel(self.model)
         self.model.to(self.options.device)
 
-        train_engine = ignite.engine.Engine(lambda engine, batch: update(engine, batch,
-                                                                         self.model, self.optimizer,
-                                                                         evaluator_loss_fn, self.options.device))
-        val_engine = ignite.engine.Engine(
-            lambda engine, batch: inference(engine, batch, self.model, self.options.device))
+        train_engine = ignite.engine.Engine(lambda engine, batch: update(
+            engine, batch, self.model, self.optimizer, evaluator_loss_fn, self.options.device))
+        val_engine = ignite.engine.Engine(lambda engine, batch: inference(
+            engine, batch, self.model, self.options.device))
 
         self.load_from_checkpoint_if_present()
 
@@ -292,23 +285,26 @@ class EvaluatorPlusPlusTrainer:
         progress_bar.attach(train_engine)
 
         # Train engine events
-        train_engine.add_event_handler(
-            ignite.engine.Events.ITERATION_COMPLETED, log_iteration, progress_bar, self.writer)
-        train_engine.add_event_handler(
-            ignite.engine.Events.ITERATION_COMPLETED, save_regular_checkpoint, self, progress_bar)
+        train_engine.add_event_handler(ignite.engine.Events.ITERATION_COMPLETED, log_iteration,
+                                       progress_bar, self.writer)
+        train_engine.add_event_handler(ignite.engine.Events.ITERATION_COMPLETED,
+                                       save_regular_checkpoint, self, progress_bar)
         train_engine.add_event_handler(ignite.engine.Events.EPOCH_COMPLETED,
-                                       run_validation_and_update_best_checkpoint,
-                                       val_engine, self.data_loaders['val'], progress_bar, self.writer, self)
+                                       run_validation_and_update_best_checkpoint, val_engine,
+                                       self.data_loaders['val'], progress_bar, self.writer, self)
 
         # Metrics
-        val_regret_metric = ignite.metrics.Loss(regret_loss, output_transform=regret_output_transform)
+        val_regret_metric = ignite.metrics.Loss(
+            regret_loss, output_transform=regret_output_transform)
         val_regret_metric.attach(val_engine, 'mean_batch_regret')
-        train_regret_metric = ignite.metrics.Loss(regret_loss, output_transform=regret_output_transform)
+        train_regret_metric = ignite.metrics.Loss(
+            regret_loss, output_transform=regret_output_transform)
         train_regret_metric.attach(train_engine, 'mean_batch_regret')
-        train_engine.add_event_handler(ignite.engine.Events.EPOCH_COMPLETED,
-                                       log_train_metrics, progress_bar, self.writer)
+        train_engine.add_event_handler(ignite.engine.Events.EPOCH_COMPLETED, log_train_metrics,
+                                       progress_bar, self.writer)
 
-        train_engine.run(self.data_loaders['train'], self.options.max_epochs - self.completed_epochs)
+        train_engine.run(self.data_loaders['train'],
+                         self.options.max_epochs - self.completed_epochs)
 
         self.writer.close()
 

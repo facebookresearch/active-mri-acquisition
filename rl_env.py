@@ -68,7 +68,7 @@ class ReconstructionEnv:
         self._dataset_train = train_loader.dataset
         self._dataset_test = test_loader.dataset
 
-        checkpoint = load_checkpoint(options.checkpoints_dir, options.checkpoint_suffix)
+        checkpoint = load_checkpoint(options.checkpoints_dir, 'regular_checkpoint.pth')
         self._reconstructor = ReconstructorNetwork(
             number_of_cascade_blocks=checkpoint['options'].number_of_cascade_blocks,
             n_downsampling=checkpoint['options'].n_downsampling,
@@ -79,7 +79,9 @@ class ReconstructionEnv:
             dropout_probability=checkpoint['options'].dropout_probability,
             img_width=128,  # TODO : CHANGE!
             use_deconv=checkpoint['options'].use_deconv)
-        self._reconstructor.load_state_dict(checkpoint['reconstructor'].module.state_dict())
+        self._reconstructor.load_state_dict(
+            {key.replace('module.', ''): val
+             for key, val in checkpoint['reconstructor'].items()})
         self._reconstructor.to(device)
 
         self._evaluator = EvaluatorNetwork(
@@ -88,7 +90,9 @@ class ReconstructionEnv:
             use_sigmoid=False,
             width=checkpoint['options'].image_width,
             mask_embed_dim=checkpoint['options'].mask_embed_dim)
-        self._evaluator.load_state_dict(checkpoint['evaluator'].module.state_dict())
+        self._evaluator.load_state_dict(
+            {key.replace('module.', ''): val
+             for key, val in checkpoint['evaluator'].items()})
         self._evaluator.to(device)
 
         obs_shape = None

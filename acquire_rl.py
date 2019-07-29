@@ -191,13 +191,12 @@ def get_policy(env, writer, opts):
             use_reconstructions=opts.use_reconstructions,
             use_ground_truth='_gt' in opts.policy)
     elif 'greedyfull1' in opts.policy:
-        if 'nors' in opts.policy:
-            policy = util.rl.simple_baselines.FullGreedy(
-                env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=False)
-        else:
-            assert opts.use_reconstructions
-            policy = util.rl.simple_baselines.FullGreedy(
-                env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=True)
+        assert opts.use_reconstructions
+        policy = util.rl.simple_baselines.FullGreedy(
+            env, num_steps=1, use_ground_truth='_gt' in opts.policy, use_reconstructions=True)
+    elif 'greedyzero' in opts.policy:
+        assert opts.use_reconstructions
+        policy = util.rl.simple_baselines.ZeroStepGreedy(env)
     elif 'evaluator_net' in opts.policy:
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator_net_offp' in opts.policy:
