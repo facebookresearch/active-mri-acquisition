@@ -20,13 +20,14 @@ def main(options):
         num_gpus=8,
         cpus_per_task=16)
 
-    hp = ['batchSize', 'mask_embed_dim']
+    hp = ['lambda_gan']
 
     hp_config = hyperband.HyperparametersConfig(hp)
-    hp_config.assign('batchSize', 4)
-    hp_config.assign('mask_embed_dim', 0)
+    # hp_config.assign('batchSize', 48)
+    # hp_config.assign('mask_embed_dim', 6)
+    hp_config.assign('lambda_gan', 0)
 
-    function_evaluator.submit_for_evaluation(hp_config, resource_budget=20)
+    function_evaluator.submit_for_evaluation(hp_config, resource_budget=50)
 
 
 if __name__ == '__main__':
