@@ -47,7 +47,7 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
     start = time.time()
     all_actions = []
     while True:
-        obs = env.reset()
+        obs, _ = env.reset()
         policy.init_episode()
         if episode == num_episodes or obs is None:
             break
@@ -70,8 +70,6 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
             next_obs, reward, done, _ = env.step(action)
-            if done:
-                next_obs = None
             total_reward += reward
             obs = next_obs
             episode_step += 1
@@ -111,7 +109,7 @@ def train_policy(env, policy, target_net, writer, opts):
     best_test_score = np.inf
     for episode in range(opts.num_train_episodes):
         logging.info('Episode {}'.format(episode + 1))
-        obs = env.reset()
+        obs, _ = env.reset()
         done = False
         total_reward = 0
         episode_actions = []
@@ -235,7 +233,7 @@ def main(options):
     env = rl_env.ReconstructionEnv(rl_env.generate_initial_mask(options.initial_num_lines), options)
     env.set_training()
     logging.info('Created environment with {} actions'.format(env.action_space.n))
-    policy = get_policy(env, writer, options)
+    policy = get_policy(env, writer, options)  # Trains if necessary
     env.set_testing()
     test_policy(env, policy, writer, None, 0, options)
 
