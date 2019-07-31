@@ -122,13 +122,15 @@ class ReconstructionEnv:
         self.image_idx_train = 0
         self.is_testing = False
 
-    def set_testing(self):
+    def set_testing(self, reset_index=True):
         self.is_testing = True
-        self.image_idx_test = 0
+        if reset_index:
+            self.image_idx_test = 0
 
-    def set_training(self):
+    def set_training(self, reset_index=False):
         self.is_testing = False
-        self.image_idx_train = 0
+        if reset_index:
+            self.image_idx_train = 0
 
     @staticmethod
     def compute_masked_rfft(ground_truth: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:

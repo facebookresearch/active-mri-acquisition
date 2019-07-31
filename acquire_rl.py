@@ -87,7 +87,7 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         average_total_reward += total_reward
         all_actions.append(actions)
         logging.debug('Actions and reward: {}, {}'.format(actions, total_reward))
-        if episode % opts.freq_save_test_stats == 0:
+        if episode % opts.freq_save_test_stats == 0 or episode == num_episodes:
             logging.info('Episode {}. Saving statistics.'.format(episode))
             np.save(
                 os.path.join(opts.tb_logs_dir, 'test_stats_mse_{}'.format(episode)), statistics_mse)
@@ -261,8 +261,12 @@ if __name__ == '__main__':
     logger.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
+    fh = logging.FileHandler(os.path.join(opts.tb_logs_dir, 'train.log'))
+    fh.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
     ch.setFormatter(formatter)
+    fh.setFormatter(formatter)
     logger.addHandler(ch)
+    logger.addHandler(fh)
 
     main(opts)
