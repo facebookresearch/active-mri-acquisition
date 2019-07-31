@@ -16,7 +16,7 @@ def main(options):
         options,
         options.submitit_logs_dir,
         3,
-        job_name='hyperband_test',
+        job_name='hyper-parameter-search',
         time=4320,
         partition='learnfair',
         num_gpus=8,
@@ -26,22 +26,23 @@ def main(options):
     # distributions are supported).
     categorical_hp_classes = {
         'lr': [0.0001, 0.001, 0.01, 0.1],
-        'batchSize': [16, 32, 48],
+        'batchSize': [2, 4, 8],
+        'lambda_gan' :  [0, 0.01],
 
         # Reconstructor hyper-parameters
-        'number_of_reconstructor_filters': [64, 128, 256],
-        'n_downsampling': [3, 4, 5],
-        'number_of_layers_residual_bottleneck': [3, 4, 5],
+        'number_of_reconstructor_filters': [64, 128, 256, 512],
+        'n_downsampling': [3, 4],   # 5 is distorting the 368 dimension
+        'number_of_layers_residual_bottleneck': [3, 4, 5, 6, 7, 8],
         'dropout_probability': [0, 0.1, 0.2],
 
         # Evaluator hyper-parameters
-        'number_of_evaluator_filters': [64, 128, 256],
+        'number_of_evaluator_filters': [64, 128, 256, 512],
         'number_of_evaluator_convolution_layers': [3, 4, 5],
-        'mask_embed_dim': [3, 6, 9]
+        'mask_embed_dim': [0, 3, 6, 9, 12, 15]
     }
 
     # Create the tuner with evaluator and the specified classes
-    tuner = hyperband.HyperbandTuner(
+    tuner = hyperband.hyperband.HyperbandTuner(
         categorical_hp_classes,
         function_evaluator,
         results_file=os.path.join(options.checkpoints_dir, 'tuning.csv'))
