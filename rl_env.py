@@ -82,14 +82,23 @@ class ReconstructionEnv:
         self.options.device = device
         train_loader, valid_loader = create_data_loaders(options, is_test=False)
         test_loader = create_data_loaders(options, is_test=True)
+
         self._dataset_train = train_loader.dataset
-        self._dataset_test = test_loader.dataset
+        self._dataset_test = test_loader.dataset if not options.test_with_train_set \
+            else train_loader.dataset
         self.num_train_images = self.options.num_train_images
         self.num_test_images = self.options.num_test_images
         if self.num_train_images is None or len(self._dataset_train) < self.num_train_images:
             self.num_train_images = len(self._dataset_train)
         if self.num_test_images is None or len(self._dataset_test) < self.num_test_images:
             self.num_test_images = len(self._dataset_test)
+
+        r = np.random.RandomState(options.seed)
+        self._train_order = r.permutation(len(self._dataset_train))
+        self._test_order = r.permutation(len(self._dataset_test))
+        self.image_idx_test = 0
+        self.image_idx_train = 0
+        self.is_testing = False
 
         checkpoint = load_checkpoint(options.checkpoints_dir, 'regular_checkpoint.pth')
         self._reconstructor = ReconstructorNetwork(
@@ -134,15 +143,6 @@ class ReconstructionEnv:
         self._ground_truth = None
         self._initial_mask = initial_mask.to(device)
         self.k_space_map = KSpaceMap(img_width=IMAGE_WIDTH).to(device)
-
-        # These two store a shuffling of the datasets
-        # self._test_order = np.load('data/rl_test_order.npy')
-        # self._train_order = np.load('data/rl_train_order.npy')
-        self._train_order = np.random.permutation(len(self._dataset_train))
-        self._test_order = np.random.permutation(len(self._dataset_test))
-        self.image_idx_test = 0
-        self.image_idx_train = 0
-        self.is_testing = False
 
     def set_testing(self, reset_index=True):
         self.is_testing = True

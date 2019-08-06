@@ -62,6 +62,8 @@ class RLOptions(BaseOptions):
         parser.add_argument('--num_train_episodes', type=int, default=10000)
         parser.add_argument('--rl_batch_size', type=int, default=16)
         parser.add_argument(
+            '--test_with_train_set', dest='test_with_train_set', action='store_true')
+        parser.add_argument(
             '--rl_burn_in',
             type=int,
             default=200,
