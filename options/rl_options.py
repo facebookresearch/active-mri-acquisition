@@ -14,6 +14,10 @@ class RLOptions(BaseOptions):
 
         # General options for all active acquisition algorithms
         parser.add_argument(
+            '--obs_type',
+            choices=['two_streams', 'concatenate_mask', 'spectral_maps'],
+            default='two_streams')
+        parser.add_argument(
             '--policy',
             choices=[
                 'dqn', 'random', 'random_r', 'lowfirst', 'lowfirst_r', 'evaluator_net',
@@ -46,8 +50,8 @@ class RLOptions(BaseOptions):
 
         # Reinforcement learning options
         parser.add_argument(
-            '--rl_obs_type',
-            choices=['two_streams', 'concatenate_mask', 'spectral_maps'],
+            '--rl_model_type',
+            choices=['two_streams', 'spectral_maps', 'large_two_streams'],
             default='two_streams')
         parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
         parser.add_argument(

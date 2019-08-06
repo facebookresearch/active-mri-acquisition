@@ -56,7 +56,7 @@ if __name__ == '__main__':
     # Adding config options expected by `rl_env.ReconstructionEnv`
     options_.sequential_images = True
     options_.budget = rl_env.IMAGE_WIDTH
-    options_.rl_obs_type = 'two_streams'
+    options_.obs_type = 'two_streams'
     options_.initial_num_lines = rl_env.NUM_LINES_INITIAL
     options_.num_train_images = None
     options_.num_test_images = None

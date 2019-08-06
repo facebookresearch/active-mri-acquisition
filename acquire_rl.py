@@ -158,7 +158,7 @@ def train_policy(env, policy, target_net, writer, opts):
 def get_experiment_str(opts):
     if opts.policy == 'dqn':
         policy_str = '{}.bu{}.tupd{}.bs{}.edecay{}.gamma{}.norepl{}.nimgtr{}.nimgtest{}_'.format(
-            opts.rl_obs_type, opts.budget,
+            opts.obs_type, opts.budget,
             opts.target_net_update_freq, opts.rl_batch_size, opts.epsilon_decay, opts.gamma,
             int(opts.no_replacement_policy), opts.num_train_images, opts.num_test_images)
     else:
@@ -201,7 +201,7 @@ def get_policy(env, writer, opts):
         assert opts.evaluator_name is not None and opts.evaluator_name != opts.name
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator++' in opts.policy:
-        assert opts.rl_obs_type == 'concatenate_mask'
+        assert opts.obs_type == 'concatenate_mask'
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             model_path=os.path.join(opts.checkpoints_dir, opts.evaluator_pp_path),
             device=rl_env.device)

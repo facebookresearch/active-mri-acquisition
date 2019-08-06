@@ -69,7 +69,7 @@ class ReconstructionEnv:
                 -`sequential_images`: If true, each episode presents the next image in the dataset,
                     otherwise a random image is presented.
                 -`budget`: how many actions to choose (the horizon of the episode).
-                -`rl_obs_type`: one of {'spectral_maps', 'two_streams', 'concatenate_mask'}
+                -`obs_type`: one of {'spectral_maps', 'two_streams', 'concatenate_mask'}
                 -`initial_num_lines`: how many k-space lines to start with.
                 -'num_train_images`: the number of images to use for training. If it's None,
                     then all images will be used.
@@ -128,11 +128,11 @@ class ReconstructionEnv:
         self._evaluator.to(device)
 
         obs_shape = None
-        if options.rl_obs_type == 'spectral_maps':
+        if options.obs_type == 'spectral_maps':
             obs_shape = (134, 128, 128)
-        if options.rl_obs_type == 'two_streams':
+        if options.obs_type == 'two_streams':
             obs_shape = (4, 128, 128)
-        if options.rl_obs_type == 'concatenate_mask':
+        if options.obs_type == 'concatenate_mask':
             obs_shape = (2, 129, 128)
         self.observation_space = Box(low=-50000, high=50000, shape=obs_shape)
 
@@ -237,12 +237,12 @@ class ReconstructionEnv:
                                                                 self._current_mask)
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth)
 
-            if self.options.rl_obs_type == 'spectral_maps':
+            if self.options.obs_type == 'spectral_maps':
                 spectral_maps = self.k_space_map(reconstruction, self._current_mask)
                 observation = torch.cat([spectral_maps, mask_embed], dim=1)
-            elif self.options.rl_obs_type == 'two_streams':
+            elif self.options.obs_type == 'two_streams':
                 observation = torch.cat([reconstruction, masked_rffts], dim=1)
-            elif self.options.rl_obs_type == 'concatenate_mask':
+            elif self.options.obs_type == 'concatenate_mask':
                 observation = torch.cat(
                     [reconstruction,
                      self._current_mask.repeat(1, reconstruction.shape[1], 1, 1)],
