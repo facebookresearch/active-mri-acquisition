@@ -20,13 +20,26 @@ from .ft_cifar10 import FT_CIFAR10
 from .ft_imagenet import FT_ImageNet
 from .ft_mnist import FT_MNIST
 from .ft_util_vaes import MaskFunc, DicomDataTransform, Slice, FixedAccelerationMaskFunc, RawDataTransform, \
-    RawSliceData, FixedOrderRandomSampler
+    RawSliceData, FixedOrderRandomSampler, SliceWithPrecomputedMasks
 import random
 
 
 def get_train_valid_loader(batch_size, num_workers=4, pin_memory=False, which_dataset='KNEE'):
 
-    if which_dataset == 'KNEE':
+    if which_dataset == 'KNEE_PRECOMPUTED_MASKS':
+        dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
+        data_transform = DicomDataTransform(None, None)
+        train_data = SliceWithPrecomputedMasks(data_transform, dicom_root, which='train')
+        valid_data = Slice(
+            data_transform,
+            dicom_root,
+            which='val',
+            resolution=128,
+            scan_type='all',
+            num_volumes=None,
+            num_rand_slices=None)
+
+    elif which_dataset == 'KNEE':
         mask_func = FixedAccelerationMaskFunc([0.125], [4])
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
         data_transform = DicomDataTransform(mask_func, None)
@@ -47,29 +60,6 @@ def get_train_valid_loader(batch_size, num_workers=4, pin_memory=False, which_da
             num_volumes=None,
             num_rand_slices=None)
 
-        def init_fun(_):
-            return np.random.seed()
-
-        train_loader = torch.utils.data.DataLoader(
-            train_data,
-            batch_size=batch_size,
-            sampler=None,
-            shuffle=True,
-            num_workers=num_workers,
-            worker_init_fn=init_fun,
-            pin_memory=pin_memory,
-            drop_last=True)
-
-        valid_loader = torch.utils.data.DataLoader(
-            valid_data,
-            batch_size=batch_size,
-            sampler=None,
-            shuffle=True,
-            num_workers=num_workers,
-            worker_init_fn=init_fun,
-            pin_memory=pin_memory,
-            drop_last=True)
-
     elif which_dataset == 'KNEE_RAW':
         mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4])
         # TODO: datasource changed to 01_101 since dataset01 is offline (H2 being down). Revert when dataset01 is up.
@@ -81,33 +71,31 @@ def get_train_valid_loader(batch_size, num_workers=4, pin_memory=False, which_da
             raw_root + '/singlecoil_train', transform=data_transform, num_cols=368)
         valid_data = RawSliceData(
             raw_root + '/singlecoil_val', transform=data_transform, num_cols=368)
-
-        def init_fun(_):
-            return np.random.seed()
-
-        train_loader = torch.utils.data.DataLoader(
-            train_data,
-            batch_size=batch_size,
-            sampler=None,
-            shuffle=True,
-            num_workers=num_workers,
-            worker_init_fn=init_fun,
-            pin_memory=pin_memory,
-            drop_last=True)
-
-        valid_loader = torch.utils.data.DataLoader(
-            valid_data,
-            batch_size=batch_size,
-            sampler=None,
-            shuffle=True,
-            num_workers=num_workers,
-            worker_init_fn=init_fun,
-            pin_memory=pin_memory,
-            drop_last=True)
-        # raise NotImplementedError
-
     else:
         raise ValueError
+
+    def init_fun(_):
+        return np.random.seed()
+
+    train_loader = torch.utils.data.DataLoader(
+        train_data,
+        batch_size=batch_size,
+        sampler=None,
+        shuffle=True,
+        num_workers=num_workers,
+        worker_init_fn=init_fun,
+        pin_memory=pin_memory,
+        drop_last=True)
+
+    valid_loader = torch.utils.data.DataLoader(
+        valid_data,
+        batch_size=batch_size,
+        sampler=None,
+        shuffle=True,
+        num_workers=num_workers,
+        worker_init_fn=init_fun,
+        pin_memory=pin_memory,
+        drop_last=True)
 
     return train_loader, valid_loader
 
