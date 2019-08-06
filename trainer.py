@@ -336,9 +336,9 @@ class Trainer:
 
 
 if __name__ == '__main__':
-    options = TrainOptions().parse()  # TODO: need to clean up options list
-    options.device = torch.device('cuda:{}'.format(
-        options.gpu_ids[0])) if options.gpu_ids else torch.device('cpu')
+    options_ = TrainOptions().parse()  # TODO: need to clean up options list
+    options_.device = torch.device('cuda:{}'.format(
+        options_.gpu_ids[0])) if options_.gpu_ids else torch.device('cpu')
 
-    trainer = Trainer(options)
+    trainer = Trainer(options_)
     trainer()
