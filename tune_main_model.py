@@ -16,8 +16,10 @@ def main(options):
         options,
         options.submitit_logs_dir,
         3,
-        job_name='hyper-parameter-search',
+        job_name='raw_10',
         time=4320,
+        # constraint='volta32gb',
+        # gres='gpu:8',
         partition='learnfair',
         num_gpus=8,
         cpus_per_task=16)
@@ -25,20 +27,23 @@ def main(options):
     # Specify the hyperparameter names and their possible values (for now only categorical
     # distributions are supported).
     categorical_hp_classes = {
-        'lr': [0.0001, 0.001, 0.01, 0.1],
-        'batchSize': [2, 4, 8],
-        'lambda_gan' :  [0, 0.01],
+        # 'lr': [0.0002],
+        # 'batchSize': [2],
+        'lambda_gan':  [0, 0.01],
 
         # Reconstructor hyper-parameters
-        'number_of_reconstructor_filters': [64, 128, 256, 512],
-        'n_downsampling': [3, 4],   # 5 is distorting the 368 dimension
-        'number_of_layers_residual_bottleneck': [3, 4, 5, 6, 7, 8],
+        # 'number_of_cascade_blocks': [3, 4],
+        'number_of_reconstructor_filters': [128, 256],
+        'n_downsampling': [4],   # 5 is distorting the 368 dimension
+        'number_of_layers_residual_bottleneck': [5, 6],
         'dropout_probability': [0, 0.1, 0.2],
 
         # Evaluator hyper-parameters
-        'number_of_evaluator_filters': [64, 128, 256, 512],
+        'number_of_evaluator_filters': [256],
         'number_of_evaluator_convolution_layers': [3, 4, 5],
-        'mask_embed_dim': [0, 3, 6, 9, 12, 15]
+        # 6 is changing the shape of output to (2, 368, 2) instead of (2, 368)
+
+        'mask_embed_dim': [0, 6, 9]
     }
 
     # Create the tuner with evaluator and the specified classes
