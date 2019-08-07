@@ -106,6 +106,7 @@ class TrainOptions(BaseOptions):
         # ########################
         # New options
         # ########################
+        parser.add_argument('--weights_checkpoint', type=str, default=None)
         parser.add_argument('--validation_train_split_ratio', type=float, default=0.9)
         parser.add_argument(
             '--max_epochs', type=int, default=100, help='number of epochs to train (default: 5)')
