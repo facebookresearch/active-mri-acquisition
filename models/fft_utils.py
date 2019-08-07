@@ -58,6 +58,10 @@ def clamp(tensor):
 
 
 def gaussian_nll_loss(reconstruction, target, logvar):
+    if reconstruction.shape[2] == 640:
+        reconstruction = reconstruction[:, :, 160:-160, 24:-24]
+        target = target[:, :, 160:-160, 24:-24]
+        logvar = logvar[:, :, 160:-160, 24:-24]
     l2 = F.mse_loss(reconstruction[:, :1, :, :], target[:, :1, :, :], reduce=False)
     # Clip logvar to make variance in [0.01, 5], for numerical stability
     logvar = logvar.clamp(-4.605, 1.609)
@@ -79,7 +83,8 @@ def preprocess_inputs(target,
 
     if hasattr(options, 'dynamic_mask_type') and options.dynamic_mask_type != 'loader':
         mask = create_mask(
-            target.shape[0], num_entries=mask.shape[3], mask_type=options.dynamic_mask_type)
+            target.shape[0], num_entries=mask.shape[3], mask_type=options.dynamic_mask_type,
+            low_freq_count=options.low_freq_count)
     mask = mask.to(options.device)
 
     if options.dataroot == 'KNEE_RAW':
@@ -95,12 +100,12 @@ def preprocess_inputs(target,
     return zero_filled_reconstruction, target, mask
 
 
-def create_mask(batch_size, num_entries=128, mask_type='random'):
+def create_mask(batch_size, num_entries=128, mask_type='random', low_freq_count=5):
     mask = np.zeros((batch_size, num_entries)).astype(np.float32)
     for i in range(batch_size):
         if mask_type == 'random_zz':
             mask_fraction = 0.25
-            mask_low_freqs = 5
+            mask_low_freqs = low_freq_count
             # we sample fraction and mask_low_freqs lines
             ratio = np.random.rand(1) + 0.5
             mask_frac = mask_fraction * ratio
