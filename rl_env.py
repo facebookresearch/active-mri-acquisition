@@ -1,4 +1,6 @@
 import logging
+import os
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -6,7 +8,7 @@ import torch.nn.functional as F
 
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, clamp, load_checkpoint
+from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, clamp
 from models.reconstruction import ReconstructorNetwork
 from util import util
 from typing import Dict, Tuple, Union
@@ -25,6 +27,10 @@ NUM_LINES_INITIAL = 10
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # TODO Organize imports and finish adding type info
+
+
+def load_checkpoint(checkpoints_dir, name='best_checkpoint.pth'):
+    return torch.load(os.path.join(checkpoints_dir, name))
 
 
 class KSpaceMap(nn.Module):
