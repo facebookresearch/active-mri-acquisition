@@ -117,9 +117,17 @@ class Trainer:
             # Get reconstructor output
             reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
                 zero_filled_reconstruction, mask)
+            if options.dataroot == 'KNEE_RAW':
+                mse = F.mse_loss(reconstructed_image[:, :1, 160:-160, 24:-24], target[:, :1, 160:-160, 24:-24], size_average=True)
+                ssim = util.ssim_metric(reconstructed_image[:, :1, 160:-160, 24:-24], target[:, :1, 160:-160, 24:-24])
 
-            mse = F.mse_loss(reconstructed_image[:, :1, ...], target[:, :1, ...], size_average=True)
-            ssim = util.ssim_metric(reconstructed_image[:, :1, ...], target[:, :1, ...])
+                target = target[:, :, 160:-160, 24:-24]
+                zero_filled_reconstruction = zero_filled_reconstruction[:, :, 160:-160, 24:-24]
+                reconstructed_image = reconstructed_image[:, :, 160:-160, 24:-24]
+                uncertainty_map = uncertainty_map[:, :, 160:-160, 24:-24]
+            else:
+                mse = F.mse_loss(reconstructed_image, target, size_average=True)
+                ssim = util.ssim_metric(reconstructed_image, target)
 
             return {
                 'MSE': mse,
@@ -306,15 +314,15 @@ class Trainer:
                              engine.state.epoch)
 
             uncertainty_map = util.gray2heatmap(
-                util.create_grid_from_tensor(val_engine.state.output['uncertainty_map']),
-                cmap='gray')
+                util.create_grid_from_tensor(val_engine.state.output['uncertainty_map'].exp()),
+                cmap='jet')
             writer.add_image("validation_images/uncertainty_map", uncertainty_map,
                              engine.state.epoch)
 
             difference = util.create_grid_from_tensor(
                 torch.abs(val_engine.state.output['ground_truth'] -
                           val_engine.state.output['reconstructed_image']))
-            difference = util.gray2heatmap(difference, cmap='gray')  # TODO: fix colormap
+            difference = util.gray2heatmap(difference, cmap='gray')
             writer.add_image("validation_images/difference", difference, engine.state.epoch)
 
         train_engine.run(train_loader, self.options.max_epochs - self.completed_epochs)
