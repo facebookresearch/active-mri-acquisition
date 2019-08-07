@@ -14,22 +14,27 @@ def get_epsilon(steps_done, opts):
 
 
 class Flatten(nn.Module):
+
     def forward(self, x):
         return x.view(x.size(0), -1)
 
 
 class SpectralMapsModel(nn.Module):
     """This model is similar to the evaluator model described in https://arxiv.org/pdf/1902.03051.pdf """
+
     def __init__(self, num_actions):
         super(SpectralMapsModel, self).__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(134, 256, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
-            nn.Conv2d(512, 1024, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
-            nn.Conv2d(1024, 1024, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            nn.Conv2d(134, 256, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.2, True),
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.2, True),
+            nn.Conv2d(512, 1024, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.2, True),
+            nn.Conv2d(1024, 1024, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.2, True),
             nn.AvgPool2d(kernel_size=8),
-            nn.Conv2d(1024, num_actions, kernel_size=1, stride=1)
-        )
+            nn.Conv2d(1024, num_actions, kernel_size=1, stride=1))
 
     def forward(self, x):
         return self.conv_image(x).view(-1, self.num_actions)
@@ -40,25 +45,57 @@ class TwoStreamsModel(nn.Module):
         reconstructions, the other receives the masked rfft observations. The output of the streams are combined
         using a few linear layers.
     """
+
     def __init__(self, num_actions):
         super(TwoStreamsModel, self).__init__()
         self.conv_image = nn.Sequential(
             nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
-        )
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
 
         self.conv_fft = nn.Sequential(
             nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten()
-        )
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
 
         self.fc = nn.Sequential(
-            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(),
-            nn.Linear(512, 256), nn.ReLU(),
-            nn.Linear(256, num_actions)
-        )
+            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
+            nn.Linear(256, num_actions))
+
+    def forward(self, x):
+        reconstructions = x[:, :2, :, :]
+        masked_rffts = x[:, 2:, :, :]
+        image_encoding = self.conv_image(reconstructions)
+        rfft_encoding = self.conv_image(masked_rffts)
+        return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
+
+
+class LargeTwoStreamsModel(nn.Module):
+    """ This model receives contains two convolutional streams. One receives the zero-filled
+        reconstructions, the other receives the masked rfft observations. The output of the streams
+        are combined using a few linear layers.
+    """
+
+    def __init__(self, num_actions):
+        super(LargeTwoStreamsModel, self).__init__()
+
+        self.conv_image = nn.Sequential(
+            nn.Conv2d(2, 128, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            Flatten())
+
+        self.conv_fft = nn.Sequential(
+            nn.Conv2d(2, 128, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
+            Flatten())
+
+        self.fc = nn.Sequential(
+            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
+            nn.Linear(256, num_actions))
+
+        raise NotImplementedError
 
     def forward(self, x):
         reconstructions = x[:, :2, :, :]
@@ -73,12 +110,15 @@ def get_model(num_actions, model_type='spectral_maps'):
         return SpectralMapsModel(num_actions)
     if model_type == 'two_streams':
         return TwoStreamsModel(num_actions)
+    if model_type == 'large_two_streams':
+        return LargeTwoStreamsModel(num_actions)
 
 
 class DDQN(nn.Module):
+
     def __init__(self, num_actions, device, memory, opts):
         super(DDQN, self).__init__()
-        self.model = get_model(num_actions, opts.rl_obs_type)
+        self.model = get_model(num_actions, opts.rl_model_type)
         self.memory = memory
         self.optimizer = optim.Adam(self.parameters(), lr=6.25e-5)
         self.num_actions = num_actions
@@ -148,14 +188,15 @@ class DDQN(nn.Module):
         # Compute total gradient norm (for logging purposes) and then clip gradients
         grad_norm = 0
         for p in list(filter(lambda p: p.grad is not None, self.parameters())):
-            grad_norm += (p.grad.data.norm(2).item() ** 2)
-        grad_norm = grad_norm ** .5
+            grad_norm += (p.grad.data.norm(2).item()**2)
+        grad_norm = grad_norm**.5
         # grad_norm = torch.nn.utils.clip_grad_norm_(self.parameters(), 100)
         torch.nn.utils.clip_grad_value_(self.parameters(), 1)
 
         self.optimizer.step()
 
-        return loss, grad_norm, all_q_values.detach().mean().cpu().numpy(), all_q_values.detach().std().cpu().numpy()
+        return loss, grad_norm, all_q_values.detach().mean().cpu().numpy(), all_q_values.detach(
+        ).std().cpu().numpy()
 
     def init_episode(self):
         pass

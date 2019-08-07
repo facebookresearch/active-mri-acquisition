@@ -1,4 +1,6 @@
 import logging
+import os
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -6,7 +8,7 @@ import torch.nn.functional as F
 
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, clamp, load_checkpoint
+from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, clamp
 from models.reconstruction import ReconstructorNetwork
 from util import util
 from typing import Dict, Tuple, Union
@@ -25,6 +27,10 @@ NUM_LINES_INITIAL = 10
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # TODO Organize imports and finish adding type info
+
+
+def load_checkpoint(checkpoints_dir, name='best_checkpoint.pth'):
+    return torch.load(os.path.join(checkpoints_dir, name))
 
 
 class KSpaceMap(nn.Module):
@@ -61,12 +67,44 @@ class ReconstructionEnv:
     """ RL environment representing the active acquisition process with reconstruction model. """
 
     def __init__(self, initial_mask, options):
+        """Creates a new environment.
+
+            @param `initial_mask`: The initial mask to use at the start of each episode.
+            @param `options`: Should specify the following options:
+                -`checkpoints_dir`: directory where models are stored.
+                -`sequential_images`: If true, each episode presents the next image in the dataset,
+                    otherwise a random image is presented.
+                -`budget`: how many actions to choose (the horizon of the episode).
+                -`obs_type`: one of {'spectral_maps', 'two_streams', 'concatenate_mask'}
+                -`initial_num_lines`: how many k-space lines to start with.
+                -'num_train_images`: the number of images to use for training. If it's None,
+                    then all images will be used.
+                -`num_test_images`: the number of images to use for test. If it's None, then
+                    all images will be used.
+        """
+        # TODO remove initial_mask argument (control this generation inside the class)
+
         self.options = options
         self.options.device = device
         train_loader, valid_loader = create_data_loaders(options, is_test=False)
         test_loader = create_data_loaders(options, is_test=True)
+
         self._dataset_train = train_loader.dataset
-        self._dataset_test = test_loader.dataset
+        self._dataset_test = test_loader.dataset if not options.test_with_train_set \
+            else train_loader.dataset
+        self.num_train_images = self.options.num_train_images
+        self.num_test_images = self.options.num_test_images
+        if self.num_train_images is None or len(self._dataset_train) < self.num_train_images:
+            self.num_train_images = len(self._dataset_train)
+        if self.num_test_images is None or len(self._dataset_test) < self.num_test_images:
+            self.num_test_images = len(self._dataset_test)
+
+        r = np.random.RandomState(options.seed)
+        self._train_order = r.permutation(len(self._dataset_train))
+        self._test_order = r.permutation(len(self._dataset_test))
+        self.image_idx_test = 0
+        self.image_idx_train = 0
+        self.is_testing = False
 
         checkpoint = load_checkpoint(options.checkpoints_dir, 'regular_checkpoint.pth')
         self._reconstructor = ReconstructorNetwork(
@@ -96,11 +134,11 @@ class ReconstructionEnv:
         self._evaluator.to(device)
 
         obs_shape = None
-        if options.rl_obs_type == 'spectral_maps':
+        if options.obs_type == 'spectral_maps':
             obs_shape = (134, 128, 128)
-        if options.rl_obs_type == 'two_streams':
+        if options.obs_type == 'two_streams':
             obs_shape = (4, 128, 128)
-        if options.rl_obs_type == 'concatenate_mask':
+        if options.obs_type == 'concatenate_mask':
             obs_shape = (2, 129, 128)
         self.observation_space = Box(low=-50000, high=50000, shape=obs_shape)
 
@@ -110,25 +148,17 @@ class ReconstructionEnv:
 
         self._ground_truth = None
         self._initial_mask = initial_mask.to(device)
-        self.k_space_map = KSpaceMap(img_width=IMAGE_WIDTH).to(
-            device)  # Used to compute spectral maps
+        self.k_space_map = KSpaceMap(img_width=IMAGE_WIDTH).to(device)
 
-        # These two store a shuffling of the datasets
-        # self._test_order = np.load('data/rl_test_order.npy')
-        # self._train_order = np.load('data/rl_train_order.npy')
-        self._train_order = np.random.permutation(len(self._dataset_train))
-        self._test_order = np.random.permutation(len(self._dataset_test))
-        self.image_idx_test = 0
-        self.image_idx_train = 0
-        self.is_testing = False
-
-    def set_testing(self):
+    def set_testing(self, reset_index=True):
         self.is_testing = True
-        self.image_idx_test = 0
+        if reset_index:
+            self.image_idx_test = 0
 
-    def set_training(self):
+    def set_training(self, reset_index=False):
         self.is_testing = False
-        self.image_idx_train = 0
+        if reset_index:
+            self.image_idx_train = 0
 
     @staticmethod
     def compute_masked_rfft(ground_truth: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -213,12 +243,12 @@ class ReconstructionEnv:
                                                                 self._current_mask)
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth)
 
-            if self.options.rl_obs_type == 'spectral_maps':
+            if self.options.obs_type == 'spectral_maps':
                 spectral_maps = self.k_space_map(reconstruction, self._current_mask)
                 observation = torch.cat([spectral_maps, mask_embed], dim=1)
-            elif self.options.rl_obs_type == 'two_streams':
+            elif self.options.obs_type == 'two_streams':
                 observation = torch.cat([reconstruction, masked_rffts], dim=1)
-            elif self.options.rl_obs_type == 'concatenate_mask':
+            elif self.options.obs_type == 'concatenate_mask':
                 observation = torch.cat(
                     [reconstruction,
                      self._current_mask.repeat(1, reconstruction.shape[1], 1, 1)],
@@ -227,38 +257,44 @@ class ReconstructionEnv:
                 raise ValueError
         return observation.squeeze().cpu().numpy().astype(np.float32), score
 
-    def reset(self) -> Union[np.ndarray, None]:
+    def reset(self) -> Tuple[Union[np.ndarray, None], Dict]:
         """ Loads a new image from the dataset and starts a new episode with this image.
 
             If `self.options.sequential_images` is True, it loops over images in the dataset in
             order. Otherwise, it selects a random image from the first
-            `self.num_{train/test}_images` in the dataset. The dataset is ordered according to
-            `self._{train/test}_order`.
+            `self.num_{train/test}_images` in the dataset. In the sequential case,
+            the dataset is ordered according to `self._{train/test}_order`.
         """
+        info = {}
         if self.options.sequential_images:
             if self.is_testing:
-                if self.image_idx_test == min(self.options.num_test_images,
-                                              len(self._dataset_test)):
-                    return None  # Returns None to signal that testing is done
+                if self.image_idx_test == min(self.num_test_images, len(self._dataset_test)):
+                    return None, info  # Returns None to signal that testing is done
+                info['split'] = 'test'
+                info['image_idx'] = f'{self._test_order[self.image_idx_test]}'
                 _, self._ground_truth = self._dataset_test.__getitem__(
                     self._test_order[self.image_idx_test])
-                logging.debug('Testing episode started with image {}'.format(
-                    self._test_order[self.image_idx_test]))
+                logging.debug(
+                    f'Testing episode started with image {self._test_order[self.image_idx_test]}')
                 self.image_idx_test += 1
             else:
+                info['split'] = 'train'
+                info['image_idx'] = f'{self._train_order[self.image_idx_train]}'
                 _, self._ground_truth = self._dataset_train.__getitem__(
                     self._train_order[self.image_idx_train])
-                logging.debug('Training episode started with image {}'.format(
-                    self._train_order[self.image_idx_train]))
-                self.image_idx_train = (self.image_idx_train + 1) % self.options.num_train_images
+                logging.debug(
+                    f'Train episode started with image {self._train_order[self.image_idx_train]}')
+                self.image_idx_train = (self.image_idx_train + 1) % self.num_train_images
         else:
             dataset_to_check = self._dataset_test if self.is_testing else self._dataset_train
+            info['split'] = 'test' if self.is_testing else 'train'
             if self.is_testing:
-                max_num_images = self.options.num_test_images
+                max_num_images = self.num_test_images
             else:
-                max_num_images = self.options.num_train_images
+                max_num_images = self.num_train_images
             dataset_len = min(len(dataset_to_check), max_num_images)
             index_chosen_image = np.random.choice(dataset_len)
+            info['image_idx'] = f'{index_chosen_image}'
             logging.debug('{} episode started with randomly chosen image {}/{}'.format(
                 'Testing' if self.is_testing else 'Training', index_chosen_image, dataset_len))
             _, self._ground_truth = self._dataset_train.__getitem__(index_chosen_image)
@@ -266,7 +302,7 @@ class ReconstructionEnv:
         self._current_mask = self._initial_mask
         self._scans_left = min(self.options.budget, self.action_space.n)
         observation, self._current_score = self._compute_observation_and_score()
-        return observation
+        return observation, info
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, Dict]:
         """ Adds a new line (specified by the action) to the current mask and computes the

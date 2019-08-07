@@ -88,7 +88,8 @@ def preprocess_inputs(target,
     mask = mask.to(options.device)
 
     if options.dataroot == 'KNEE_RAW':
-        target = torch.norm(target, p=2, dim=3, keepdim=True)   #TODO: to be updated based on decision
+        target = torch.norm(
+            target, p=2, dim=3, keepdim=True)  #TODO: to be updated based on decision
         target = target.permute(0, 3, 1, 2)
     masked_true_k_space = fft_functions['rfft'](target) * mask
     zero_filled_reconstruction = fft_functions['ifft'](masked_true_k_space)
@@ -132,15 +133,3 @@ def create_mask(batch_size, num_entries=128, mask_type='random', low_freq_count=
             raise ValueError('Invalid mask type: {}.'.format(mask_type))
 
     return torch.from_numpy(mask).view(batch_size, 1, 1, num_entries)
-
-
-def load_model_weights_if_present(model, options, model_name):
-    path = os.path.join(options.checkpoints_dir, options.name,
-                        'checkpoint_{}.pth'.format(model_name))
-    if os.path.isfile(path):
-        model.load_state_dict(torch.load(path))
-    return model
-
-
-def load_checkpoint(checkpoints_dir, name='best_checkpoint.pth'):
-    return torch.load(os.path.join(checkpoints_dir, name))

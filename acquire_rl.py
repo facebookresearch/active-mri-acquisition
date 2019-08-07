@@ -47,7 +47,7 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
     start = time.time()
     all_actions = []
     while True:
-        obs = env.reset()
+        obs, _ = env.reset()
         policy.init_episode()
         if episode == num_episodes or obs is None:
             break
@@ -70,8 +70,6 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
             next_obs, reward, done, _ = env.step(action)
-            if done:
-                next_obs = None
             total_reward += reward
             obs = next_obs
             episode_step += 1
@@ -87,7 +85,7 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         average_total_reward += total_reward
         all_actions.append(actions)
         logging.debug('Actions and reward: {}, {}'.format(actions, total_reward))
-        if episode % opts.freq_save_test_stats == 0:
+        if episode % opts.freq_save_test_stats == 0 or episode == num_episodes:
             logging.info('Episode {}. Saving statistics.'.format(episode))
             np.save(
                 os.path.join(opts.tb_logs_dir, 'test_stats_mse_{}'.format(episode)), statistics_mse)
@@ -111,7 +109,7 @@ def train_policy(env, policy, target_net, writer, opts):
     best_test_score = np.inf
     for episode in range(opts.num_train_episodes):
         logging.info('Episode {}'.format(episode + 1))
-        obs = env.reset()
+        obs, _ = env.reset()
         done = False
         total_reward = 0
         episode_actions = []
@@ -160,7 +158,7 @@ def train_policy(env, policy, target_net, writer, opts):
 def get_experiment_str(opts):
     if opts.policy == 'dqn':
         policy_str = '{}.bu{}.tupd{}.bs{}.edecay{}.gamma{}.norepl{}.nimgtr{}.nimgtest{}_'.format(
-            opts.rl_obs_type, opts.budget,
+            opts.obs_type, opts.budget,
             opts.target_net_update_freq, opts.rl_batch_size, opts.epsilon_decay, opts.gamma,
             int(opts.no_replacement_policy), opts.num_train_images, opts.num_test_images)
     else:
@@ -203,7 +201,7 @@ def get_policy(env, writer, opts):
         assert opts.evaluator_name is not None and opts.evaluator_name != opts.name
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator++' in opts.policy:
-        assert opts.rl_obs_type == 'concatenate_mask'
+        assert opts.obs_type == 'concatenate_mask'
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             model_path=os.path.join(opts.checkpoints_dir, opts.evaluator_pp_path),
             device=rl_env.device)
@@ -235,7 +233,7 @@ def main(options):
     env = rl_env.ReconstructionEnv(rl_env.generate_initial_mask(options.initial_num_lines), options)
     env.set_training()
     logging.info('Created environment with {} actions'.format(env.action_space.n))
-    policy = get_policy(env, writer, options)
+    policy = get_policy(env, writer, options)  # Trains if necessary
     env.set_testing()
     test_policy(env, policy, writer, None, 0, options)
 
@@ -261,8 +259,12 @@ if __name__ == '__main__':
     logger.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
+    fh = logging.FileHandler(os.path.join(opts.tb_logs_dir, 'train.log'))
+    fh.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
     ch.setFormatter(formatter)
+    fh.setFormatter(formatter)
     logger.addHandler(ch)
+    logger.addHandler(fh)
 
     main(opts)

@@ -14,6 +14,10 @@ class RLOptions(BaseOptions):
 
         # General options for all active acquisition algorithms
         parser.add_argument(
+            '--obs_type',
+            choices=['two_streams', 'concatenate_mask', 'spectral_maps'],
+            default='two_streams')
+        parser.add_argument(
             '--policy',
             choices=[
                 'dqn', 'random', 'random_r', 'lowfirst', 'lowfirst_r', 'evaluator_net',
@@ -46,8 +50,8 @@ class RLOptions(BaseOptions):
 
         # Reinforcement learning options
         parser.add_argument(
-            '--rl_obs_type',
-            choices=['two_streams', 'concatenate_mask', 'spectral_maps'],
+            '--rl_model_type',
+            choices=['two_streams', 'spectral_maps', 'large_two_streams'],
             default='two_streams')
         parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
         parser.add_argument(
@@ -61,6 +65,8 @@ class RLOptions(BaseOptions):
         parser.add_argument('--epsilon_decay', type=float, default=10000)
         parser.add_argument('--num_train_episodes', type=int, default=10000)
         parser.add_argument('--rl_batch_size', type=int, default=16)
+        parser.add_argument(
+            '--test_with_train_set', dest='test_with_train_set', action='store_true')
         parser.add_argument(
             '--rl_burn_in',
             type=int,

@@ -17,9 +17,9 @@ for policy in "greedyzero"; do
 #for policy in "evaluator++"; do
     if [[ ${policy} == "evaluator++" ]]
     then
-        rl_obs_type=concatenate_mask
+        obs_type=concatenate_mask
     else
-        rl_obs_type=two_streams
+        obs_type=two_streams
     fi
     if [[ ${use_reconstruction} -eq 1 ]]
     then
@@ -51,7 +51,7 @@ for policy in "greedyzero"; do
     --budget 1000 --num_test_images 1000 --freq_save_test_stats 40 --sequential_images \
     --rl_logs_subdir all_baselines_regular_ckpt \
     --evaluator_pp_path evaluator_pp_15k/bs_256_lr_0.0003_beta1_0.5_beta2_0.999/best_checkpoint.pth \
-    --rl_obs_type ${rl_obs_type} \
+    --obs_type ${obs_type} \
     --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
 
      sbatch ${SLURM}

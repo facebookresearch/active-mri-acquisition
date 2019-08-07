@@ -39,7 +39,7 @@ def run_validation_and_update_best_checkpoint(
     if score > trainer.best_validation_score:
         trainer.best_validation_score = score
         full_path = save_checkpoint_function(trainer, 'best_checkpoint')
-        progress_bar.log_message('Saved best checkpoint to {}. Score: {}. Epoch: {}'.format(
+        progress_bar.log_message('Saved best checkpoint to {}. Score: {}. Iteration: {}'.format(
             full_path, score, engine.state.iteration))
 
 
@@ -75,12 +75,9 @@ class Trainer:
         self.reconstructor = None
         self.evaluator = None
         self.options = options
-        self.options.device = torch.device('cuda'
-                                           if torch.cuda.is_available() else torch.device('cpu'))
         self.best_validation_score = -float('inf')
         self.completed_epochs = 0
 
-        # TODO removed use_lsgan=not options.no_lsgan ---> see if this breaks anything
         criterion_gan = GANLossKspace(
             use_mse_as_energy=options.use_mse_as_disc_energy, grad_ctx=options.grad_ctx).to(
                 options.device)
@@ -155,6 +152,17 @@ class Trainer:
                 self.completed_epochs = checkpoint['completed_epochs']
                 self.best_validation_score = checkpoint['best_validation_score']
 
+    def load_weights_from_given_checkpoint(self):
+        if self.options.weights_checkpoint is None or not os.path.exists(
+                self.options.weights_checkpoint):
+            return
+        print('Loading weights from checkpoint found at {}'.format(self.options.weights_checkpoint))
+        checkpoint = torch.load(
+            os.path.join(self.options.checkpoints_dir, self.options.weights_checkpoint))
+        self.reconstructor.load_state_dict(checkpoint['reconstructor'])
+        if self.options.use_evaluator and 'evaluator' in checkpoint.keys():
+            self.evaluator.load_state_dict(checkpoint['evaluator'])
+
     # TODO: fix sign leakage
     # TODO: consider adding learning rate scheduler
     # noinspection PyUnboundLocalVariable
@@ -207,12 +215,10 @@ class Trainer:
         return {'loss_D': 0 if self.evaluator is None else loss_D.item(), 'loss_G': loss_G.item()}
 
     def __call__(self) -> float:
-        # writer = SummaryWriter(os.path.join(self.options.checkpoints_dir, self.options.name))
-
         print('Creating trainer with the following options:')
         for key, value in vars(self.options).items():
-            if key == 'device':  # TODO: clean this up!
-                value = 'cuda' if torch.cuda.is_available() else 'cpu'
+            if key == 'device':
+                value = value.type
             elif key == 'gpu_ids':
                 value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
             print('    {:>25}: {:<30}'.format(key, 'None' if value is None else value), flush=True)
@@ -228,8 +234,8 @@ class Trainer:
             img_width=self.options.image_width,
             use_deconv=self.options.use_deconv)
 
-        self.reconstructor = torch.nn.DataParallel(
-            self.reconstructor).cuda()  # TODO: make better with to_device
+        if self.options.device.type == 'cuda':
+            self.reconstructor = torch.nn.DataParallel(self.reconstructor).to(self.options.device)
         self.optimizers = {
             'G':
             optim.Adam(
@@ -246,7 +252,7 @@ class Trainer:
                 use_sigmoid=False,  # TODO : do we keep this? Will add option based on the decision
                 width=self.options.image_width,
                 mask_embed_dim=self.options.mask_embed_dim)
-            self.evaluator = torch.nn.DataParallel(self.evaluator).cuda()
+            self.evaluator = torch.nn.DataParallel(self.evaluator).to(self.options.device)
 
             self.optimizers['D'] = optim.Adam(
                 self.evaluator.parameters(), lr=self.options.lr, betas=(self.options.beta1, 0.999))
@@ -254,6 +260,7 @@ class Trainer:
         train_loader, val_loader = self.get_loaders()
 
         self.load_from_checkpoint_if_present()
+        self.load_weights_from_given_checkpoint()
 
         writer = SummaryWriter(os.path.join(self.options.checkpoints_dir, self.options.name))
 
@@ -325,15 +332,15 @@ class Trainer:
             difference = util.gray2heatmap(difference, cmap='gray')
             writer.add_image("validation_images/difference", difference, engine.state.epoch)
 
-        train_engine.run(train_loader, self.options.max_epochs - self.completed_epochs)
-
-        writer.close()
-
         train_engine.add_event_handler(
             Events.EPOCH_COMPLETED,
             save_regular_checkpoint,
             trainer=self,
             progress_bar=progress_bar)
+
+        train_engine.run(train_loader, self.options.max_epochs - self.completed_epochs)
+
+        writer.close()
 
         return self.best_validation_score
 
@@ -344,9 +351,9 @@ class Trainer:
 
 
 if __name__ == '__main__':
-    options = TrainOptions().parse()  # TODO: need to clean up options list
-    options.device = torch.device('cuda:{}'.format(
-        options.gpu_ids[0])) if options.gpu_ids else torch.device('cpu')
+    options_ = TrainOptions().parse()  # TODO: need to clean up options list
+    options_.device = torch.device('cuda:{}'.format(
+        options_.gpu_ids[0])) if options_.gpu_ids else torch.device('cpu')
 
-    trainer = Trainer(options)
-    trainer()
+    trainer_ = Trainer(options_)
+    trainer_()
