@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=train_activeacq
+#SBATCH --job-name=dqn_activeacq
 #SBATCH --output=/private/home/lep/logs/active_acq/stdout/job%j.train_activeacq
 #SBATCH --error=/private/home/lep/logs/active_acq/stderr/job%j.train_activeacq
-#SBATCH --partition=dev
+#SBATCH --partition=learnfair
 #SBATCH --gres=gpu:volta:1
 #SBATCH --cpus-per-task=2
 #SBATCH --ntasks-per-node=1
@@ -20,7 +20,7 @@ srun --label python acquire_rl.py --dataroot KNEE --policy dqn --sequential_imag
     --epsilon_decay 1000000 \
     --target_net_update_freq 1000 \
     --rl_batch_size 32 \
-    --gamma 0.9 \
+    --gamma 0.5 \
     --budget 100 \
     --num_test_images 1 --num_train_images 1 --freq_save_test_stats 1 \
     --agent_test_episode_freq 100 --replay_buffer_size 100000
