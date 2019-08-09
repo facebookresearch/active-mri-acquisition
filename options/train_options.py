@@ -99,6 +99,7 @@ class TrainOptions(BaseOptions):
             choices=['None', 'loader', 'random_zz', 'random_lowfreq', 'beta_symmetric'],
             default='random_zz',
             help='Allows changing the mask during training')
+        parser.add_argument('--low_freq_count', type=int, default=5, help='required for random_zz masks')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
 
         self.isTrain = True

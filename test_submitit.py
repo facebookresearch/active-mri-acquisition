@@ -2,8 +2,6 @@ import hyperband.submitit_function_evaluator
 import options.train_options
 import trainer
 
-from hyperband import HyperparametersConfig
-
 import torch
 
 
@@ -15,19 +13,38 @@ def main(options):
         options,
         options.submitit_logs_dir,
         3,
-        job_name='submitit_test',
+        job_name='run50',
+        # constraint='volta32gb',
+        # gres='gpu:8',
         time=4320,
-        partition='priority',
+        partition='dev',
         num_gpus=8,
         cpus_per_task=16,
         comment='short job debugging stuff')
 
-    hp = ['lambda_gan']
+    hp = [
+        'lr',
+        'lambda_gan',
+        'number_of_reconstructor_filters',
+        'n_downsampling',
+        'number_of_layers_residual_bottleneck',
+        'dropout_probability',
+        'number_of_evaluator_filters',
+        'number_of_evaluator_convolution_layers',
+        'mask_embed_dim',
+    ]
 
     hp_config = hyperband.HyperparametersConfig(hp)
-    # hp_config.assign('batchSize', 48)
-    # hp_config.assign('mask_embed_dim', 6)
+    hp_config.assign('batchSize', 2)
+    hp_config.assign('lr', 0.0002)
     hp_config.assign('lambda_gan', 0)
+    hp_config.assign('number_of_reconstructor_filters', 128)
+    hp_config.assign('n_downsampling', 3)
+    hp_config.assign('number_of_layers_residual_bottleneck', 5)
+    hp_config.assign('dropout_probability', 0.2)
+    hp_config.assign('number_of_evaluator_filters', 256)
+    hp_config.assign('number_of_evaluator_convolution_layers', 5)
+    hp_config.assign('mask_embed_dim', 0)
 
     jobid = function_evaluator.submit_for_evaluation(hp_config, resource_budget=50)
     print(jobid)
