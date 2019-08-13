@@ -188,7 +188,7 @@ class ZeroStepGreedy:
         rfft_reconstr = rl_env.fft_functions['fft'](reconstruction)
         diff = torch.nn.functional.mse_loss(
             rfft_gt[0], rfft_reconstr[0], reduction='none').sum([0, 1])
-        return diff[:rl_env.IMAGE_WIDTH // 2].argmax().item() - rl_env.NUM_LINES_INITIAL
+        return diff[:rl_env.IMAGE_WIDTH // 2].argmax().item() - self.env.options.initial_num_lines
 
     def init_episode(self):
         pass

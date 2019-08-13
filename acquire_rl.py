@@ -203,8 +203,8 @@ def get_policy(env, writer, opts):
     elif 'evaluator++' in opts.policy:
         assert opts.obs_type == 'concatenate_mask'
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
-            model_path=os.path.join(opts.checkpoints_dir, opts.evaluator_pp_path),
-            device=rl_env.device)
+            os.path.join(opts.checkpoints_dir, opts.evaluator_pp_path), opts.initial_num_lines,
+            rl_env.device)
     elif opts.policy == 'dqn':
 
         replay_memory = util.rl.replay_buffer.ReplayMemory(opts.replay_buffer_size,

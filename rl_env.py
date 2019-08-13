@@ -21,7 +21,6 @@ fft_functions = {'rfft': rfft, 'ifft': ifft, 'fft': fft}
 
 CONJUGATE_SYMMETRIC = True
 IMAGE_WIDTH = 128
-NUM_LINES_INITIAL = 10
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -143,7 +142,7 @@ class ReconstructionEnv:
         self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
 
         factor = 2 if CONJUGATE_SYMMETRIC else 1
-        num_actions = (IMAGE_WIDTH - factor * NUM_LINES_INITIAL) // 2
+        num_actions = (IMAGE_WIDTH - factor * options.initial_num_lines) // 2
         self.action_space = gym.spaces.Discrete(num_actions)
 
         self._ground_truth = None
@@ -333,7 +332,7 @@ class ReconstructionEnv:
             reconstruction, _, mask_embedding = self._reconstructor(image, self._current_mask)
             k_space_scores = self._evaluator(clamp(reconstruction[:, :1, ...]), mask_embedding)
             k_space_scores.masked_fill_(self._current_mask.squeeze().byte(), 100000)
-            return torch.argmin(k_space_scores).item() - NUM_LINES_INITIAL
+            return torch.argmin(k_space_scores).item() - self.options.initial_num_lines
 
 
 def generate_initial_mask(num_lines):

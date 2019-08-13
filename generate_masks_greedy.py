@@ -16,7 +16,8 @@ def generate_masks(env: rl_env.ReconstructionEnv,
                    greedy_policy: util.rl.simple_baselines.FullGreedy):
     import time
     start = time.time()
-    num_non_scanned_lines = (rl_env.IMAGE_WIDTH // 2) - rl_env.NUM_LINES_INITIAL
+    initial_num_lines = env.options.initial_num_lines
+    num_non_scanned_lines = (rl_env.IMAGE_WIDTH // 2) - initial_num_lines
     for episode in range(env.num_train_images):
         obs, info = env.reset()
         greedy_policy.init_episode()
@@ -24,13 +25,13 @@ def generate_masks(env: rl_env.ReconstructionEnv,
         done = False
         how_many_lines = int(num_non_scanned_lines * np.random.beta(1, 4))
         mask = np.zeros(rl_env.IMAGE_WIDTH)
-        mask[:rl_env.NUM_LINES_INITIAL] = mask[-rl_env.NUM_LINES_INITIAL:] = 1
+        mask[:initial_num_lines] = mask[-initial_num_lines:] = 1
         while not done and how_many_lines > 0:
             action = greedy_policy.get_action(obs, None, None)
             next_obs, _, done, _ = env.step(action)
             obs = next_obs
             how_many_lines -= 1
-            mask[rl_env.NUM_LINES_INITIAL + action] = 1
+            mask[initial_num_lines + action] = 1
         if (episode + 1) % 500 == 0:
             logging.info(f"Processed image {info['image_idx']}")
     end = time.time()
@@ -50,6 +51,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoints_dir', type=str, required=True)
     parser.add_argument('--dataset_dir', type=str, required=True)
+    parser.add_argument('--initial_num_lines', type=int, default=10)
     parser.add_argument('--dataroot', type=str, default='KNEE')
     options_ = parser.parse_args()
 
@@ -57,7 +59,6 @@ if __name__ == '__main__':
     options_.sequential_images = True
     options_.budget = rl_env.IMAGE_WIDTH
     options_.obs_type = 'two_streams'
-    options_.initial_num_lines = rl_env.NUM_LINES_INITIAL
     options_.num_train_images = None
     options_.num_test_images = None
     options_.batchSize = 1
