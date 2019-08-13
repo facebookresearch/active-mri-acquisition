@@ -1,19 +1,18 @@
 import logging
 import os
 
+import gym.spaces
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Dict, List, Optional, Tuple, Union
 
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
 from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, clamp
 from models.reconstruction import ReconstructorNetwork
 from util import util
-from typing import Dict, Tuple, Union
-
-from gym.spaces import Box, Discrete
 
 rfft = RFFT()
 ifft = IFFT()
@@ -106,7 +105,7 @@ class ReconstructionEnv:
         self.image_idx_train = 0
         self.is_testing = False
 
-        checkpoint = load_checkpoint(options.checkpoints_dir, 'regular_checkpoint.pth')
+        checkpoint = load_checkpoint(options.checkpoints_dir, 'best_checkpoint.pth')
         self._reconstructor = ReconstructorNetwork(
             number_of_cascade_blocks=checkpoint['options'].number_of_cascade_blocks,
             n_downsampling=checkpoint['options'].n_downsampling,
@@ -128,9 +127,10 @@ class ReconstructionEnv:
             use_sigmoid=False,
             width=checkpoint['options'].image_width,
             mask_embed_dim=checkpoint['options'].mask_embed_dim)
-        self._evaluator.load_state_dict(
-            {key.replace('module.', ''): val
-             for key, val in checkpoint['evaluator'].items()})
+        if checkpoint['evaluator'] is not None:
+            self._evaluator.load_state_dict(
+                {key.replace('module.', ''): val
+                 for key, val in checkpoint['evaluator'].items()})
         self._evaluator.to(device)
 
         obs_shape = None
@@ -140,11 +140,11 @@ class ReconstructionEnv:
             obs_shape = (4, 128, 128)
         if options.obs_type == 'concatenate_mask':
             obs_shape = (2, 129, 128)
-        self.observation_space = Box(low=-50000, high=50000, shape=obs_shape)
+        self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
 
         factor = 2 if CONJUGATE_SYMMETRIC else 1
         num_actions = (IMAGE_WIDTH - factor * NUM_LINES_INITIAL) // 2
-        self.action_space = Discrete(num_actions)
+        self.action_space = gym.spaces.Discrete(num_actions)
 
         self._ground_truth = None
         self._initial_mask = initial_mask.to(device)
@@ -197,10 +197,10 @@ class ReconstructionEnv:
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
     def compute_score(self,
-                      use_reconstruction=True,
-                      kind='mse',
-                      ground_truth=None,
-                      mask_to_use=None):
+                      use_reconstruction: bool = True,
+                      kind: str = 'mse',
+                      ground_truth: Optional[torch.Tensor] = None,
+                      mask_to_use: Optional[torch.Tensor] = None) -> List[torch.Tensor]:
         """ Computes the score (MSE or SSIM) of current state with respect to current ground truth.
 
             This method takes the current ground truth, masks it with the current mask and creates
@@ -212,10 +212,11 @@ class ReconstructionEnv:
             It is possible to pass alternate ground truth and mask to compute the score with
             respect to, instead of `self._ground_truth` and `self._current_mask`.
 
-            @:param use_reconstruction: specifies if the reconstruction network will be used or not.
-            @:param ground_truth: specifies if the score has to be computed with respect to an
+            @:param `use_reconstruction`: specifies if the reconstruction network will be used.
+            @:param `kind`: specifies what the score function is ('mse', 'ssim', 'psnr')
+            @:param `ground_truth`: specifies if the score has to be computed with respect to an
                 alternate "ground truth".
-            @:param mask_to_use: specifies if the score has to be computed with an alternate mask.
+            @:param `mask_to_use`: specifies if the score has to be computed with an alternate mask.
         """
         with torch.no_grad():
             if ground_truth is None:
@@ -314,8 +315,9 @@ class ReconstructionEnv:
             self._current_mask, action)
         observation, new_score = self._compute_observation_and_score()
 
-        reward = -1.0 if has_already_been_scanned else (
-            self._current_score - new_score).item() / 0.01
+        reward_ = -new_score if self.options.use_score_as_reward \
+            else self._current_score - new_score
+        reward = -1.0 if has_already_been_scanned else reward_.item() / 0.01
         self._current_score = new_score
 
         self._scans_left -= 1

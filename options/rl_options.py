@@ -30,6 +30,12 @@ class RLOptions(BaseOptions):
         parser.add_argument('--budget', type=int, default=5)
         parser.add_argument('--num_test_images', type=int, default=1000)
         parser.add_argument('--num_train_images', type=int, default=10000)
+        parser.add_argument(
+            '--use_score_as_reward',
+            dest='use_score_as_reward',
+            action='store_true',
+            help='If true, the reward is the score (e.g., MSE, SSIM). Otherwise, the reward is the '
+            'decrease in score with respect to previous step.')
         parser.add_argument('--debug', dest='debug', action='store_true')
         parser.add_argument('--seed', type=int, default=0)
         parser.add_argument(
