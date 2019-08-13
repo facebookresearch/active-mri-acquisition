@@ -65,6 +65,7 @@ class RLOptions(BaseOptions):
             dest='dqn_only_test',
             action='store_true',
             help='If true, no training will be done. A policy will be loaded from disk and tested.')
+        parser.add_argument('--dqn_load_dir', type=str, default=None)
         parser.add_argument('--replay_buffer_size', type=int, default=100000)
         parser.add_argument('--epsilon_start', type=float, default=0.99)
         parser.add_argument('--epsilon_end', type=float, default=0.01)

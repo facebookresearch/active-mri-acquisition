@@ -28,7 +28,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def load_checkpoint(checkpoints_dir, name='best_checkpoint.pth'):
-    return torch.load(os.path.join(checkpoints_dir, name))
+    checkpoint_path = os.path.join(checkpoints_dir, name)
+    if os.path.isfile(checkpoint_path):
+        logging.info(f'Found checkpoint at {checkpoint_path}.')
+        return torch.load(checkpoint_path)
+    logging.info(f'No checkpoint found at {checkpoint_path}.')
+    return None
 
 
 class KSpaceMap(nn.Module):
@@ -127,6 +132,7 @@ class ReconstructionEnv:
             width=checkpoint['options'].image_width,
             mask_embed_dim=checkpoint['options'].mask_embed_dim)
         if checkpoint['evaluator'] is not None:
+            logging.info(f'Loaded evaluator from checkpoint.')
             self._evaluator.load_state_dict(
                 {key.replace('module.', ''): val
                  for key, val in checkpoint['evaluator'].items()})
@@ -330,7 +336,7 @@ class ReconstructionEnv:
             image, _, _ = preprocess_inputs(self._ground_truth, self._current_mask, fft_functions,
                                             self.options)
             reconstruction, _, mask_embedding = self._reconstructor(image, self._current_mask)
-            k_space_scores = self._evaluator(clamp(reconstruction[:, :1, ...]), mask_embedding)
+            k_space_scores = self._evaluator(clamp(reconstruction), mask_embedding)
             k_space_scores.masked_fill_(self._current_mask.squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines
 
