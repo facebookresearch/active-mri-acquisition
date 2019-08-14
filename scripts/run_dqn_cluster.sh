@@ -14,7 +14,8 @@ queue=dev
 budget=20
 
 for gamma in 0.0 0.25 0.5 0.75; do
-for num_images in 1 5 10 20; do
+#for gamma in 0.25 0.99; do
+for num_images in 100 200 500 1000; do
     job_name=active_acq_dqn_gamma.${gamma}_num_images.${num_images}
 
     # This creates a slurm script to call training
@@ -37,18 +38,18 @@ for num_images in 1 5 10 20; do
     echo srun --label python acquire_rl.py --dataroot KNEE --policy dqn --sequential_images \
     --checkpoints_dir /checkpoint/lep/active_acq/train_with_evaluator_symmetric \
     --results_dir ${RESULTS_DIR} \
-    --rl_logs_subdir dqn_test_with_train_budget${budget} \
+    --rl_logs_subdir dqn_test_with_train_budget${budget}_rebbuf200k \
     --no_replacement_policy \
     --batchSize 96 --gpu_ids 0 \
-    --num_train_episodes 10000 \
-    --epsilon_decay 150000 \
+    --num_train_episodes 20000 \
+    --epsilon_decay 350000 \
     --target_net_update_freq 1000 \
     --rl_batch_size 32 \
     --gamma ${gamma} \
     --budget ${budget} \
     --num_test_images ${num_images} --num_train_images ${num_images} \
     --freq_save_test_stats ${num_images} \
-    --agent_test_episode_freq 100 --replay_buffer_size 100000 >> ${SLURM}
+    --agent_test_episode_freq 100 --replay_buffer_size 200000 >> ${SLURM}
 
      sbatch ${SLURM}
 done

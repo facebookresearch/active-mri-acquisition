@@ -11,9 +11,16 @@ queue=dev
 
 use_reconstruction=1
 
-# for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net"; do
+#CHECKPOINT_DIR=/checkpoint/lep/active_acq/train_with_greedy_masks_loaded_weights
+CHECKPOINT_DIR=/checkpoint/lep/active_acq/train_with_greedy_masks_dataset_with_evaluator_symmetric
+RL_LOGS_SUB_DIR=all_baselines_best_ckpt
+#RL_LOGS_SUB_DIR=all_baselines_best_ckpt_nlines_0
+
+#for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net"; do
+#for policy in "random" "lowfirst" "greedyfull1_gt"; do
+for policy in "evaluator_net"; do
 #for policy in "random" "lowfirst"; do
-for policy in "greedyzero"; do
+#for policy in "greedyzero"; do
 #for policy in "evaluator++"; do
     if [[ ${policy} == "evaluator++" ]]
     then
@@ -45,13 +52,14 @@ for policy in "greedyzero"; do
     echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
 
     echo srun python acquire_rl.py --dataroot KNEE \
-    --checkpoints_dir /checkpoint/lep/active_acq/train_with_evaluator_symmetric \
+    --checkpoints_dir ${CHECKPOINT_DIR} \
     --seed 0 --batchSize 96 --gpu_ids 0 --policy ${policy} \
     --num_train_episodes 0 --num_train_images 0 \
     --budget 1000 --num_test_images 1000 --freq_save_test_stats 40 --sequential_images \
-    --rl_logs_subdir all_baselines_regular_ckpt \
+    --rl_logs_subdir ${RL_LOGS_SUB_DIR} \
     --evaluator_pp_path evaluator_pp_15k/bs_256_lr_0.0003_beta1_0.5_beta2_0.999/best_checkpoint.pth \
     --obs_type ${obs_type} \
+    --initial_num_lines 10 \
     --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}
 
      sbatch ${SLURM}

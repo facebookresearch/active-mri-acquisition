@@ -20,7 +20,7 @@ class RLOptions(BaseOptions):
         parser.add_argument(
             '--policy',
             choices=[
-                'dqn', 'random', 'random_r', 'lowfirst', 'lowfirst_r', 'evaluator_net',
+                'dqn', 'dqn_r', 'random', 'random_r', 'lowfirst', 'lowfirst_r', 'evaluator_net',
                 'evaluator_net_r', 'evaluator_net_offp', 'evaluator_net_offp_r', 'greedymc',
                 'greedymc_gt', 'greedymc_r', 'greedymc_gt_r', 'greedyfull1_gt_r', 'greedyfull1_r',
                 'greedyzero_r', 'evaluator++_r'
@@ -30,6 +30,12 @@ class RLOptions(BaseOptions):
         parser.add_argument('--budget', type=int, default=5)
         parser.add_argument('--num_test_images', type=int, default=1000)
         parser.add_argument('--num_train_images', type=int, default=10000)
+        parser.add_argument(
+            '--use_score_as_reward',
+            dest='use_score_as_reward',
+            action='store_true',
+            help='If true, the reward is the score (e.g., MSE, SSIM). Otherwise, the reward is the '
+            'decrease in score with respect to previous step.')
         parser.add_argument('--debug', dest='debug', action='store_true')
         parser.add_argument('--seed', type=int, default=0)
         parser.add_argument(
@@ -59,6 +65,7 @@ class RLOptions(BaseOptions):
             dest='dqn_only_test',
             action='store_true',
             help='If true, no training will be done. A policy will be loaded from disk and tested.')
+        parser.add_argument('--dqn_load_dir', type=str, default=None)
         parser.add_argument('--replay_buffer_size', type=int, default=100000)
         parser.add_argument('--epsilon_start', type=float, default=0.99)
         parser.add_argument('--epsilon_end', type=float, default=0.01)

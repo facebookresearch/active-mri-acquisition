@@ -86,7 +86,7 @@ def test_policy(env, policy, writer, num_episodes, step, opts):
         all_actions.append(actions)
         logging.debug('Actions and reward: {}, {}'.format(actions, total_reward))
         if episode % opts.freq_save_test_stats == 0 or episode == num_episodes:
-            logging.info('Episode {}. Saving statistics.'.format(episode))
+            logging.info(f'Episode {episode}. Saving statistics to {opts.tb_logs_dir}.')
             np.save(
                 os.path.join(opts.tb_logs_dir, 'test_stats_mse_{}'.format(episode)), statistics_mse)
             np.save(
@@ -203,9 +203,9 @@ def get_policy(env, writer, opts):
     elif 'evaluator++' in opts.policy:
         assert opts.obs_type == 'concatenate_mask'
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
-            model_path=os.path.join(opts.checkpoints_dir, opts.evaluator_pp_path),
-            device=rl_env.device)
-    elif opts.policy == 'dqn':
+            os.path.join(opts.checkpoints_dir, opts.evaluator_pp_path), opts.initial_num_lines,
+            rl_env.device)
+    elif 'dqn' in opts.policy:
 
         replay_memory = util.rl.replay_buffer.ReplayMemory(opts.replay_buffer_size,
                                                            env.observation_space.shape,
@@ -219,7 +219,13 @@ def get_policy(env, writer, opts):
             # TODO to be able to resume training need some code to store the replay buffer
             raise NotImplementedError
         if opts.dqn_only_test:
-            policy.load(os.path.join(opts.tb_logs_dir, 'policy_best.pt'))
+            policy_path = os.path.join(opts.dqn_load_dir, 'policy_best.pt')
+            if os.path.isfile(policy_path):
+                policy.load(policy_path)
+                logging.info(f'Policy found in {policy_path}.')
+            else:
+                logging.warning(f'No policy found in {policy_path}.')
+
         else:
             train_policy(env, policy, target_net, writer, opts)
     else:
@@ -232,7 +238,7 @@ def main(options):
     writer = tensorboardX.SummaryWriter(options.tb_logs_dir)
     env = rl_env.ReconstructionEnv(rl_env.generate_initial_mask(options.initial_num_lines), options)
     env.set_training()
-    logging.info('Created environment with {} actions'.format(env.action_space.n))
+    logging.info(f'Created environment with {env.action_space.n} actions')
     policy = get_policy(env, writer, options)  # Trains if necessary
     env.set_testing()
     test_policy(env, policy, writer, None, 0, options)
@@ -266,5 +272,7 @@ if __name__ == '__main__':
     fh.setFormatter(formatter)
     logger.addHandler(ch)
     logger.addHandler(fh)
+
+    logging.info(f'Results will be saved at {opts.tb_logs_dir}.')
 
     main(opts)
