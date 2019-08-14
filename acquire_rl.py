@@ -205,7 +205,7 @@ def get_policy(env, writer, opts):
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             os.path.join(opts.checkpoints_dir, opts.evaluator_pp_path), opts.initial_num_lines,
             rl_env.device)
-    elif opts.policy == 'dqn':
+    elif 'dqn' in opts.policy:
 
         replay_memory = util.rl.replay_buffer.ReplayMemory(opts.replay_buffer_size,
                                                            env.observation_space.shape,

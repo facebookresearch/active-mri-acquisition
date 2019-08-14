@@ -20,7 +20,7 @@ class RLOptions(BaseOptions):
         parser.add_argument(
             '--policy',
             choices=[
-                'dqn', 'random', 'random_r', 'lowfirst', 'lowfirst_r', 'evaluator_net',
+                'dqn', 'dqn_r', 'random', 'random_r', 'lowfirst', 'lowfirst_r', 'evaluator_net',
                 'evaluator_net_r', 'evaluator_net_offp', 'evaluator_net_offp_r', 'greedymc',
                 'greedymc_gt', 'greedymc_r', 'greedymc_gt_r', 'greedyfull1_gt_r', 'greedyfull1_r',
                 'greedyzero_r', 'evaluator++_r'
