@@ -36,7 +36,7 @@ def ssim(img1, img2, window_size=11, window=None, size_average=True, full=False,
         # L = img2.max() - img2.min()
         # For MRI data, it is fair to used a fixed L. 
         # We assume it is in the zscore range [-3,3] since slices are approximately 0-1 normalized 
-        z_score = 3
+        z_score = 10    # 3 for dicom
         L = z_score - (-z_score)
     else:
         L = val_range
