@@ -1,6 +1,7 @@
 import argparse
 import ignite.engine
 import logging
+import numpy as np
 import os
 import submitit
 import tempfile
@@ -31,6 +32,8 @@ def run_validation_and_update_best_checkpoint(
         trainer: 'Trainer' = None):
     # TODO: take argument for which metric to use as score for checkpointing. Using MSE for now
     val_engine.run(val_loader)
+    np.save(os.path.join(trainer.options.checkpoints_dir, 'snapshot_' + str(val_engine.state.epoch)),
+            val_engine.state.output['snapshot'])
     metrics = val_engine.state.metrics
     progress_bar.log_message('Validation Results - Epoch: {}  MSE: {:.3f} SSIM: {:.3f}'.format(
         engine.state.epoch, metrics['mse'], metrics['ssim']))
@@ -126,14 +129,18 @@ class Trainer:
                 mse = F.mse_loss(reconstructed_image, target, size_average=True)
                 ssim = util.ssim_metric(reconstructed_image, target)
 
-            return {
-                'MSE': mse,
-                'SSIM': ssim,
-                'ground_truth': target,
-                'zero_filled_image': zero_filled_reconstruction,
-                'reconstructed_image': reconstructed_image,
-                'uncertainty_map': uncertainty_map
-            }
+            # save to disk numpy array containing ground truth image, zero filled image and reconstructed image
+            snapshot = np.array([target, zero_filled_reconstruction, reconstructed_image])
+
+        return {
+            'MSE': mse,
+            'SSIM': ssim,
+            'ground_truth': target,
+            'zero_filled_image': zero_filled_reconstruction,
+            'reconstructed_image': reconstructed_image,
+            'uncertainty_map': uncertainty_map,
+            'snapshot': snapshot
+        }
 
     def load_from_checkpoint_if_present(self):
         if not os.path.exists(self.options.checkpoints_dir):
