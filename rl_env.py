@@ -21,8 +21,8 @@ fft = FFT()
 fft_functions = {'rfft': rfft, 'ifft': ifft, 'fft': fft}
 
 CONJUGATE_SYMMETRIC = True
-IMAGE_WIDTH = 128
-NUM_LINES_INITIAL = 10
+IMAGE_WIDTH = 368
+NUM_LINES_INITIAL = 14
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -115,7 +115,7 @@ class ReconstructionEnv:
             .number_of_layers_residual_bottleneck,
             mask_embed_dim=checkpoint['options'].mask_embed_dim,
             dropout_probability=checkpoint['options'].dropout_probability,
-            img_width=128,  # TODO : CHANGE!
+            img_width=checkpoint['options'].image_width,  # TODO : CHANGE!
             use_deconv=checkpoint['options'].use_deconv)
         self._reconstructor.load_state_dict(
             {key.replace('module.', ''): val
