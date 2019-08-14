@@ -16,12 +16,12 @@ def main(options):
         options,
         options.submitit_logs_dir,
         3,
-        job_name='raw_10',
+        job_name='raw_12',
         time=4320,
-        # constraint='volta32gb',
-        # gres='gpu:8',
+        constraint='volta32gb',
+        gres='gpu:8',
         partition='learnfair',
-        num_gpus=8,
+        # num_gpus=8,
         cpus_per_task=16)
 
     # Specify the hyperparameter names and their possible values (for now only categorical
@@ -35,15 +35,16 @@ def main(options):
         # 'number_of_cascade_blocks': [3, 4],
         'number_of_reconstructor_filters': [128, 256],
         'n_downsampling': [4],   # 5 is distorting the 368 dimension
-        'number_of_layers_residual_bottleneck': [5, 6],
+        'number_of_layers_residual_bottleneck': [3, 4, 5],
         'dropout_probability': [0, 0.1, 0.2],
 
         # Evaluator hyper-parameters
-        'number_of_evaluator_filters': [256],
+        'number_of_evaluator_filters': [64],
         'number_of_evaluator_convolution_layers': [3, 4, 5],
         # 6 is changing the shape of output to (2, 368, 2) instead of (2, 368)
 
-        'mask_embed_dim': [0, 6, 9]
+        'mask_embed_dim': [0, 6, 9],
+        'low_freq_count': [14, 30, 50]
     }
 
     # Create the tuner with evaluator and the specified classes
