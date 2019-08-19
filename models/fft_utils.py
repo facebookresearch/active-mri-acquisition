@@ -1,5 +1,6 @@
+import warnings
+
 import numpy as np
-import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -81,10 +82,6 @@ def preprocess_inputs(target,
     if clamp_target:
         target = clamp(target.to(options.device)).detach()
 
-    if hasattr(options, 'dynamic_mask_type') and options.dynamic_mask_type != 'loader':
-        mask = create_mask(
-            target.shape[0], num_entries=mask.shape[3], mask_type=options.dynamic_mask_type,
-            low_freq_count=options.low_freq_count)
     mask = mask.to(options.device)
 
     if options.dataroot == 'KNEE_RAW':
@@ -102,6 +99,10 @@ def preprocess_inputs(target,
 
 
 def create_mask(batch_size, num_entries=128, mask_type='random', low_freq_count=5):
+    warnings.warn(
+        'This function has been replaced by the code in data.ft_data_loader.ft_util_vaes.py',
+        DeprecationWarning)
+
     mask = np.zeros((batch_size, num_entries)).astype(np.float32)
     for i in range(batch_size):
         if mask_type == 'random_zz':

@@ -94,12 +94,17 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--l2_weight', action='store_true', help='network l2 regularization')
 
         parser.add_argument(
-            '--dynamic_mask_type',
+            '--mask_type',
             type=str,
-            choices=['None', 'loader', 'random_zz', 'random_lowfreq', 'beta_symmetric'],
-            default='random_zz',
-            help='Allows changing the mask during training')
-        parser.add_argument('--low_freq_count', type=int, default=5, help='required for random_zz masks')
+            choices=[
+                'fixed_acc',
+                'symmetric_choice',
+                'grid',
+                'symmetric_grid',
+                'fixed_acc_rnl',
+                'symmetric_choice_rnl',
+            ],
+            help='The type of mask to use.')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
 
         self.isTrain = True

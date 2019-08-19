@@ -1,35 +1,49 @@
 """
 Source : https://gist.github.com/kevinzakka/d33bf8d6c7f06a9d8c76d97a7879f5cb#file-data_loader-py
-
-Create train, valid, test iterators for CIFAR-10 [1].
-Easily extended to MNIST, CIFAR-100 and Imagenet.
-[1]: https://discuss.pytorch.org/t/feedback-on-pytorch-for-kaggle-competitions/2252/4
 """
+import logging
+import pathlib
+import os
 
 import torch
 import numpy as np
-import os, sys
-import pathlib
-import PIL
 
-# from utils import plot_images
-from torchvision import datasets
-from torchvision import transforms
 from torch.utils.data.sampler import SubsetRandomSampler, Sampler
-from .ft_cifar10 import FT_CIFAR10
-from .ft_imagenet import FT_ImageNet
-from .ft_mnist import FT_MNIST
-from .ft_util_vaes import MaskFunc, DicomDataTransform, Slice, FixedAccelerationMaskFunc, RawDataTransform, \
-    RawSliceData, FixedOrderRandomSampler, SliceWithPrecomputedMasks
-import random
+from .ft_util_vaes import MaskFunc, DicomDataTransform, Slice, FixedAccelerationMaskFunc, \
+    SymmetricUniformChoiceMaskFunc, UniformGridMaskFunc, SymmetricUniformGridMaskFunc, \
+    RawDataTransform, RawSliceData, SliceWithPrecomputedMasks
 
 
-def get_train_valid_loader(batch_size, num_workers=4, pin_memory=False, which_dataset='KNEE'):
+def get_mask_func(mask_type):
+    # Whether the number of lines is random or not
+    random_num_lines = (mask_type[-4:] == '_rnl')
+    if 'fixed_acc' in mask_type:
+        # First two parameters are ignored if `random_num_lines` is True
+        logging.info(f'Mask is fixed acceleration mask with random_num_lines={random_num_lines}.')
+        return FixedAccelerationMaskFunc([0.125], [4], random_num_lines=random_num_lines)
+    if 'symmetric_choice' in mask_type:
+        logging.info(f'Mask is symmetric uniform choice with random_num_lines={random_num_lines}.')
+        return SymmetricUniformChoiceMaskFunc([0.125], [4], random_num_lines=random_num_lines)
+    if 'symmetric_grid' in mask_type:
+        logging.info(f'Mask is symmetric grid.')
+        return SymmetricUniformGridMaskFunc([], [], random_num_lines=True)
+    if 'grid' in mask_type:
+        logging.info(f'Mask is grid (not symmetric).')
+        return UniformGridMaskFunc([], [], random_num_lines=True)
+    raise ValueError(f'Invalid mask type: {mask_type}.')
+
+
+def get_train_valid_loader(batch_size,
+                           num_workers=4,
+                           pin_memory=False,
+                           which_dataset='KNEE',
+                           mask_type='fixed_acc'):
 
     if which_dataset == 'KNEE_PRECOMPUTED_MASKS':
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
-        data_transform_train = DicomDataTransform(None, None)
-        data_transform_valid = DicomDataTransform(FixedAccelerationMaskFunc([0.125], [4]), None)
+        data_transform_train = DicomDataTransform(None, fixed_seed=None, seed_per_image=True)
+        data_transform_valid = DicomDataTransform(
+            FixedAccelerationMaskFunc([0.125], [4]), fixed_seed=None, seed_per_image=True)
         train_data = SliceWithPrecomputedMasks(data_transform_train, dicom_root, which='train')
         valid_data = Slice(
             data_transform_valid,
@@ -41,9 +55,9 @@ def get_train_valid_loader(batch_size, num_workers=4, pin_memory=False, which_da
             num_rand_slices=None)
 
     elif which_dataset == 'KNEE':
-        mask_func = FixedAccelerationMaskFunc([0.125], [4])
+        mask_func = get_mask_func(mask_type)
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
-        data_transform = DicomDataTransform(mask_func, None)
+        data_transform = DicomDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         train_data = Slice(
             data_transform,
             dicom_root,
@@ -63,7 +77,6 @@ def get_train_valid_loader(batch_size, num_workers=4, pin_memory=False, which_da
 
     elif which_dataset == 'KNEE_RAW':
         mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4])
-        # TODO: datasource changed to 01_101 since dataset01 is offline (H2 being down). Revert when dataset01 is up.
         raw_root = '/datasets01_101/fastMRI/112718'
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + ' not exists. Change to the right path.')
@@ -118,11 +131,15 @@ class SequentialSampler2(Sampler):
         return len(self.data_source)
 
 
-def get_test_loader(batch_size, num_workers=2, pin_memory=False, which_dataset='KNEE'):
+def get_test_loader(batch_size,
+                    num_workers=2,
+                    pin_memory=False,
+                    which_dataset='KNEE',
+                    mask_type='fixed_acc'):
     if which_dataset in ('KNEE'):
-        mask_func = FixedAccelerationMaskFunc([0.125], [4])
+        mask_func = get_mask_func(mask_type)
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
-        data_transform = DicomDataTransform(mask_func, None)
+        data_transform = DicomDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         test_data = Slice(
             data_transform,
             dicom_root,
@@ -146,8 +163,6 @@ def get_test_loader(batch_size, num_workers=2, pin_memory=False, which_dataset='
             drop_last=True)
     elif which_dataset == 'KNEE_RAW':
         mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4])
-        # TODO: datasource changed to 01_101 since dataset01 is offline (H2 being down).
-        #  Revert when dataset01 is up.
         raw_root = '/datasets01_101/fastMRI/112718'
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + ' not exists. Change to the right path.')

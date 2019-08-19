@@ -115,8 +115,12 @@ class Trainer:
             reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
                 zero_filled_reconstruction, mask)
             if options.dataroot == 'KNEE_RAW':
-                mse = F.mse_loss(reconstructed_image[:, :1, 160:-160, 24:-24], target[:, :1, 160:-160, 24:-24], size_average=True)
-                ssim = util.ssim_metric(reconstructed_image[:, :1, 160:-160, 24:-24], target[:, :1, 160:-160, 24:-24])
+                mse = F.mse_loss(
+                    reconstructed_image[:, :1, 160:-160, 24:-24],
+                    target[:, :1, 160:-160, 24:-24],
+                    size_average=True)
+                ssim = util.ssim_metric(reconstructed_image[:, :1, 160:-160, 24:-24],
+                                        target[:, :1, 160:-160, 24:-24])
 
                 target = target[:, :, 160:-160, 24:-24]
                 zero_filled_reconstruction = zero_filled_reconstruction[:, :, 160:-160, 24:-24]
@@ -354,6 +358,15 @@ if __name__ == '__main__':
     options_ = TrainOptions().parse()  # TODO: need to clean up options list
     options_.device = torch.device('cuda:{}'.format(
         options_.gpu_ids[0])) if options_.gpu_ids else torch.device('cpu')
+
+    # Initializing logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    fh = logging.FileHandler(os.path.join(options_.checkpoints_dir, 'trainer.log'))
+    fh.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
 
     trainer_ = Trainer(options_)
     trainer_()
