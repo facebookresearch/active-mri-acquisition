@@ -385,7 +385,6 @@ class DicomDataTransform:
         shape = np.array(image.shape)
         seed = int(1009 * image.sum().abs()) if self.fixed_seed is None and self.seed_per_image \
             else self.fixed_seed
-        print(seed, flush=True)
         mask = self.mask_func(shape, seed) if self.mask_func is not None else None
         return mask, image
 

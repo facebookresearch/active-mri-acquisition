@@ -54,8 +54,7 @@ def save_checkpoint_function(trainer: 'Trainer', filename: str) -> str:
         raise
     else:
         tmp_filename.close()
-        full_path = os.path.join(trainer.options.checkpoints_dir, trainer.options.name,
-                                 filename + '.pth')
+        full_path = os.path.join(trainer.options.checkpoints_dir, filename + '.pth')
         os.rename(tmp_filename.name, full_path)
         return full_path
 
@@ -63,10 +62,10 @@ def save_checkpoint_function(trainer: 'Trainer', filename: str) -> str:
 def save_regular_checkpoint(engine: ignite.engine.Engine,
                             trainer: 'Trainer' = None,
                             progress_bar: ignite.contrib.handlers.ProgressBar = None):
-    if (engine.state.iteration - 1) % trainer.options.save_freq == 0:
-        full_path = save_checkpoint_function(trainer, 'regular_checkpoint')
-        progress_bar.log_message('Saved regular checkpoint to {}. Epoch: {}, Iteration: {}'.format(
-            full_path, trainer.completed_epochs, engine.state.iteration))
+    full_path = save_checkpoint_function(trainer, 'regular_checkpoint')
+    progress_bar.log_message(
+        f'Saved regular checkpoint to {full_path}. Epoch: {trainer.completed_epochs}, '
+        f'Iteration: {engine.state.iteration}')
 
 
 class Trainer:
@@ -142,11 +141,11 @@ class Trainer:
     def load_from_checkpoint_if_present(self):
         if not os.path.exists(self.options.checkpoints_dir):
             return
-        print('Loading checkpoint found at {}'.format(self.options.checkpoints_dir))
+        logging.info(f'Checkpoint folder found at {self.options.checkpoints_dir}')
         files = os.listdir(self.options.checkpoints_dir)
         for filename in files:
             if 'regular_checkpoint' in filename:
-                logging.info('Loading checkpoint at {}'.format(filename))
+                logging.info(f'Loading checkpoint {filename}.pth')
                 checkpoint = torch.load(os.path.join(self.options.checkpoints_dir, filename))
                 self.reconstructor.load_state_dict(checkpoint['reconstructor'])
                 if self.options.use_evaluator:
@@ -160,7 +159,7 @@ class Trainer:
         if self.options.weights_checkpoint is None or not os.path.exists(
                 self.options.weights_checkpoint):
             return
-        print('Loading weights from checkpoint found at {}'.format(self.options.weights_checkpoint))
+        logging.info(f'Loading weights from checkpoint found at {self.options.weights_checkpoint}.')
         checkpoint = torch.load(
             os.path.join(self.options.checkpoints_dir, self.options.weights_checkpoint))
         self.reconstructor.load_state_dict(checkpoint['reconstructor'])
@@ -219,13 +218,13 @@ class Trainer:
         return {'loss_D': 0 if self.evaluator is None else loss_D.item(), 'loss_G': loss_G.item()}
 
     def __call__(self) -> float:
-        print('Creating trainer with the following options:')
+        logging.info('Creating trainer with the following options:')
         for key, value in vars(self.options).items():
             if key == 'device':
                 value = value.type
             elif key == 'gpu_ids':
                 value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
-            print('    {:>25}: {:<30}'.format(key, 'None' if value is None else value), flush=True)
+            logging.info(f"    {key:>25}: {'None' if value is None else value:<30}")
 
         # Create Reconstructor Model
         self.reconstructor = ReconstructorNetwork(
@@ -266,7 +265,7 @@ class Trainer:
         self.load_from_checkpoint_if_present()
         self.load_weights_from_given_checkpoint()
 
-        writer = SummaryWriter(os.path.join(self.options.checkpoints_dir, self.options.name))
+        writer = SummaryWriter(self.options.checkpoints_dir)
 
         # Training engine and handlers
         train_engine = Engine(lambda engine, batch: self.
@@ -358,10 +357,17 @@ if __name__ == '__main__':
     options_ = TrainOptions().parse()  # TODO: need to clean up options list
     options_.device = torch.device('cuda:{}'.format(
         options_.gpu_ids[0])) if options_.gpu_ids else torch.device('cpu')
+    options_.checkpoints_dir = os.path.join(options_.checkpoints_dir, options_.name)
+
+    if not os.path.exists(options_.checkpoints_dir):
+        os.makedirs(options_.checkpoints_dir)
 
     # Initializing logger
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    if options_.debug:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
     fh = logging.FileHandler(os.path.join(options_.checkpoints_dir, 'trainer.log'))
     fh.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
