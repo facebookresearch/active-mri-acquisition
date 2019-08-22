@@ -1,10 +1,11 @@
 #!/bin/bash
 
-CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors
+CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_no_sign_leakage
 
 cd /private/home/lep/code/Active_Acquisition
 
-for mask in fixed_acc fixed_acc_rnl symmetric_choice symmetric_choice_rnl grid symmetric_grid; do
+#for mask in fixed_acc fixed_acc_rnl symmetric_choice symmetric_choice_rnl grid symmetric_grid; do
+for mask in fixed_acc; do
     python train_submitit.py --dataroot KNEE \
     --mask_type ${mask} \
     --name ${mask} \

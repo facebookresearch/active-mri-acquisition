@@ -16,11 +16,13 @@ from typing import Any, Dict, Tuple
 
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, FFT, clamp, preprocess_inputs, gaussian_nll_loss
-from fft_utils import GANLossKspace
+from models.fft_utils import RFFT, IFFT, FFT, clamp, preprocess_inputs, gaussian_nll_loss, \
+    GANLossKspace
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
 from util import util
+
+logger = logging.getLogger(__name__)
 
 
 def run_validation_and_update_best_checkpoint(
@@ -93,6 +95,12 @@ class Trainer:
         if not os.path.exists(options.checkpoints_dir):
             os.makedirs(options.checkpoints_dir)
 
+        fh = logging.FileHandler(os.path.join(self.options.checkpoints_dir, 'trainer.log'))
+        fh.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
+
     def create_checkpoint(self) -> Dict[str, Any]:
         return {
             'reconstructor': self.reconstructor.state_dict(),
@@ -147,11 +155,11 @@ class Trainer:
     def load_from_checkpoint_if_present(self):
         if not os.path.exists(self.options.checkpoints_dir):
             return
-        logging.info(f'Checkpoint folder found at {self.options.checkpoints_dir}')
+        logger.info(f'Checkpoint folder found at {self.options.checkpoints_dir}')
         files = os.listdir(self.options.checkpoints_dir)
         for filename in files:
             if 'regular_checkpoint' in filename:
-                logging.info(f'Loading checkpoint {filename}.pth')
+                logger.info(f'Loading checkpoint {filename}.pth')
                 checkpoint = torch.load(os.path.join(self.options.checkpoints_dir, filename))
                 self.reconstructor.load_state_dict(checkpoint['reconstructor'])
                 if self.options.use_evaluator:
@@ -166,7 +174,7 @@ class Trainer:
         if self.options.weights_checkpoint is None or not os.path.exists(
                 self.options.weights_checkpoint):
             return
-        logging.info(f'Loading weights from checkpoint found at {self.options.weights_checkpoint}.')
+        logger.info(f'Loading weights from checkpoint found at {self.options.weights_checkpoint}.')
         checkpoint = torch.load(
             os.path.join(self.options.checkpoints_dir, self.options.weights_checkpoint))
         self.reconstructor.load_state_dict(checkpoint['reconstructor'])
@@ -227,13 +235,13 @@ class Trainer:
         return {'loss_D': 0 if self.evaluator is None else loss_D.item(), 'loss_G': loss_G.item()}
 
     def __call__(self) -> float:
-        logging.info('Creating trainer with the following options:')
+        logger.info('Creating trainer with the following options:')
         for key, value in vars(self.options).items():
             if key == 'device':
                 value = value.type
             elif key == 'gpu_ids':
                 value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
-            logging.info(f"    {key:>25}: {'None' if value is None else value:<30}")
+            logger.info(f"    {key:>25}: {'None' if value is None else value:<30}")
 
         # Create Reconstructor Model
         self.reconstructor = ReconstructorNetwork(
@@ -290,10 +298,8 @@ class Trainer:
             loss_fn=lambda x, y: x, output_transform=lambda x: (x['SSIM'], x['ground_truth']))
         validation_ssim.attach(val_engine, name='ssim')
 
-        monitoring_metrics = ['loss_D', 'loss_G']
-
         progress_bar = ProgressBar()
-        progress_bar.attach(train_engine, metric_names=monitoring_metrics)
+        progress_bar.attach(train_engine)
 
         train_engine.add_event_handler(
             Events.EPOCH_COMPLETED,
@@ -305,10 +311,10 @@ class Trainer:
 
         # Tensorboard Plots
         @train_engine.on(Events.ITERATION_COMPLETED)
-        def plot_training_loss(_):
-            writer.add_scalar("training/generator_loss", train_engine.state.output['loss_G'],
+        def plot_training_loss(engine):
+            writer.add_scalar("training/generator_loss", engine.state.output['loss_G'],
                               self.updates_performed)
-            writer.add_scalar("training/discriminator_loss", train_engine.state.output['loss_D'],
+            writer.add_scalar("training/discriminator_loss", engine.state.output['loss_D'],
                               self.updates_performed)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
