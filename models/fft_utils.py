@@ -2,12 +2,13 @@ import warnings
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 
 # note that for IFFT we do not use irfft
 # this function returns two channels where the first one (real part) is in image space
+from torch import nn as nn
+from torch.nn import functional as F
+
+
 class IFFT(nn.Module):
 
     def forward(self, x, normalized=False):
@@ -88,7 +89,8 @@ def preprocess_inputs(target,
         target = torch.norm(
             target, p=2, dim=3, keepdim=True)  #TODO: to be updated based on decision
         target = target.permute(0, 3, 1, 2)
-    masked_true_k_space = fft_functions['rfft'](target) * mask
+    fft_target = fft_functions['rfft'](target)
+    masked_true_k_space = torch.where(mask.byte(), fft_target, torch.tensor(0.).to(options.device))
     zero_filled_reconstruction = fft_functions['ifft'](masked_true_k_space)
 
     target = torch.cat([target, torch.zeros_like(target)], dim=1)
@@ -134,3 +136,70 @@ def create_mask(batch_size, num_entries=128, mask_type='random', low_freq_count=
             raise ValueError('Invalid mask type: {}.'.format(mask_type))
 
     return torch.from_numpy(mask).view(batch_size, 1, 1, num_entries)
+
+
+class GANLossKspace(nn.Module):
+
+    def __init__(self, use_lsgan=True, use_mse_as_energy=False, grad_ctx=False, gamma=100):
+        super(GANLossKspace, self).__init__()
+        # self.register_buffer('real_label', torch.ones(imSize, imSize))
+        # self.register_buffer('fake_label', torch.zeros(imSize, imSize))
+        self.grad_ctx = grad_ctx
+        if use_lsgan:
+            self.loss = nn.MSELoss(size_average=False)
+        else:
+            self.loss = nn.BCELoss(size_average=False)
+        self.use_mse_as_energy = use_mse_as_energy
+        if use_mse_as_energy:
+            self.RFFT = RFFT()
+            self.gamma = gamma
+            self.bin = 5
+
+    def get_target_tensor(self, input, target_is_real, degree, mask, pred_and_gt=None):
+
+        if target_is_real:
+            target_tensor = torch.ones_like(input)
+            target_tensor[:] = degree
+
+        else:
+            target_tensor = torch.zeros_like(input)
+            if not self.use_mse_as_energy:
+                if degree != 1:
+                    target_tensor[:] = degree
+            else:
+                pred, gt = pred_and_gt
+                w = gt.shape[2]
+                ks_gt = self.RFFT(gt[:, :1, :, :], normalized=True)
+                ks_input = self.RFFT(pred, normalized=True)
+                ks_row_mse = F.mse_loss(
+                    ks_input, ks_gt, reduce=False).sum(
+                        1, keepdim=True).sum(
+                            2, keepdim=True).squeeze() / (2 * w)
+                energy = torch.exp(-ks_row_mse * self.gamma)
+
+                # do some bin process
+                # import pdb; pdb.set_trace()
+                # energy = torch.floor(energy * 10 / self.bin) * self.bin / 10
+
+                target_tensor[:] = energy
+            # force observed part to always
+            for i in range(mask.shape[0]):
+                idx = torch.nonzero(mask[i, 0, 0, :])
+                target_tensor[i, idx] = 1
+        return target_tensor
+
+    def __call__(self, input, target_is_real, mask, degree=1, updateG=False, pred_and_gt=None):
+        # input [B, imSize]
+        # degree is the realistic degree of output
+        # set updateG to True when training G.
+        target_tensor = self.get_target_tensor(input, target_is_real, degree, mask, pred_and_gt)
+        b, w = target_tensor.shape
+        if updateG and not self.grad_ctx:
+            mask_ = mask.squeeze()
+            # maskout the observed part loss
+            masked_input = torch.where((1 - mask_).byte(), input, torch.tensor(0.).to(input.device))
+            masked_target = torch.where((1 - mask_).byte(), target_tensor,
+                                        torch.tensor(0.).to(input.device))
+            return self.loss(masked_input, masked_target) / (1 - mask_).sum()
+        else:
+            return self.loss(input, target_tensor) / (b * w)

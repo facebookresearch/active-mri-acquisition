@@ -389,18 +389,19 @@ class DicomDataTransform:
         return mask, image
 
     def postprocess(self, data, hps):
-        inputs = data[1]
-        mask = data[0].repeat(1, 1, hps.resolution, 1)
-        inputs = (inputs.clamp_(-2, 4) + 2) / 6
-        inputs = torch.cat((inputs, torch.zeros(inputs.shape)), 1)
-        inputs = inputs.cuda()
-        mask = mask.cuda()
-        mask_k_space = mask
-        mask = mask.unsqueeze(4).repeat(1, 1, 1, 1, 2)
-        kspace = torch.fft(inputs.permute(0, 2, 3, 1), 2, normalized=False).unsqueeze(1)
-        masked_kspace = kspace * mask
-        masked_image = torch.ifft(masked_kspace, 2, normalized=False).squeeze(1).permute(0, 3, 1, 2)
-        return inputs, masked_image, mask_k_space
+        raise NotImplementedError('Need to fix sign leakage here')
+        # inputs = data[1]
+        # mask = data[0].repeat(1, 1, hps.resolution, 1)
+        # inputs = (inputs.clamp_(-2, 4) + 2) / 6
+        # inputs = torch.cat((inputs, torch.zeros(inputs.shape)), 1)
+        # inputs = inputs.cuda()
+        # mask = mask.cuda()
+        # mask_k_space = mask
+        # mask = mask.unsqueeze(4).repeat(1, 1, 1, 1, 2)
+        # kspace = torch.fft(inputs.permute(0, 2, 3, 1), 2, normalized=False).unsqueeze(1)
+        # masked_kspace = kspace * mask
+        # masked_image = torch.ifft(masked_kspace, 2, normalized=False).squeeze(1).permute(0, 3, 1, 2)
+        # return inputs, masked_image, mask_k_space
 
 
 class RawDataTransform:

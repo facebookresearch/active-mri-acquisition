@@ -16,8 +16,8 @@ from typing import Any, Dict, Tuple
 
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, clamp, preprocess_inputs, gaussian_nll_loss
-from models.networks import GANLossKspace  # TODO: maybe move GANLossKspace to a loss file?
+from models.fft_utils import RFFT, IFFT, FFT, clamp, preprocess_inputs, gaussian_nll_loss
+from fft_utils import GANLossKspace
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
 from util import util
@@ -76,6 +76,7 @@ class Trainer:
         self.options = options
         self.best_validation_score = -float('inf')
         self.completed_epochs = 0
+        self.updates_performed = 0
 
         criterion_gan = GANLossKspace(
             use_mse_as_energy=options.use_mse_as_disc_energy, grad_ctx=options.grad_ctx).to(
@@ -83,7 +84,11 @@ class Trainer:
 
         self.losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}
 
-        self.fft_functions = {'rfft': RFFT().to(options.device), 'ifft': IFFT().to(options.device)}
+        self.fft_functions = {
+            'rfft': RFFT().to(options.device),
+            'ifft': IFFT().to(options.device),
+            'fft': FFT().to(options.device)
+        }
 
         if not os.path.exists(options.checkpoints_dir):
             os.makedirs(options.checkpoints_dir)
@@ -98,6 +103,7 @@ class Trainer:
             if self.options.use_evaluator else None,
             'completed_epochs': self.completed_epochs,
             'best_validation_score': self.best_validation_score,
+            'updates_performed': self.updates_performed
         }
 
     def get_loaders(self) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
@@ -154,6 +160,7 @@ class Trainer:
                 self.optimizers['G'].load_state_dict(checkpoint['optimizer_G'])
                 self.completed_epochs = checkpoint['completed_epochs']
                 self.best_validation_score = checkpoint['best_validation_score']
+                self.updates_performed = checkpoint['updates_performed']
 
     def load_weights_from_given_checkpoint(self):
         if self.options.weights_checkpoint is None or not os.path.exists(
@@ -214,6 +221,8 @@ class Trainer:
 
         loss_G.backward()
         optimizers['G'].step()
+
+        self.updates_performed += 1
 
         return {'loss_D': 0 if self.evaluator is None else loss_D.item(), 'loss_G': loss_G.item()}
 
@@ -296,44 +305,45 @@ class Trainer:
 
         # Tensorboard Plots
         @train_engine.on(Events.ITERATION_COMPLETED)
-        def plot_training_loss(engine):
+        def plot_training_loss(_):
             writer.add_scalar("training/generator_loss", train_engine.state.output['loss_G'],
-                              engine.state.iteration)
+                              self.updates_performed)
             writer.add_scalar("training/discriminator_loss", train_engine.state.output['loss_D'],
-                              engine.state.iteration)
+                              self.updates_performed)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
-        def plot_validation_loss(engine):
-            writer.add_scalar("validation/MSE", val_engine.state.output['MSE'], engine.state.epoch)
+        def plot_validation_loss(_):
+            writer.add_scalar("validation/MSE", val_engine.state.output['MSE'],
+                              self.completed_epochs)
             writer.add_scalar("validation/SSIM", val_engine.state.output['SSIM'],
-                              engine.state.epoch)
+                              self.completed_epochs)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
-        def plot_validation_images(engine):
+        def plot_validation_images(_):
             ground_truth = util.create_grid_from_tensor(val_engine.state.output['ground_truth'])
-            writer.add_image("validation_images/ground_truth", ground_truth, engine.state.epoch)
+            writer.add_image("validation_images/ground_truth", ground_truth, self.completed_epochs)
 
             zero_filled_image = util.create_grid_from_tensor(
                 val_engine.state.output['zero_filled_image'])
             writer.add_image("validation_images/zero_filled_image", zero_filled_image,
-                             engine.state.epoch)
+                             self.completed_epochs)
 
             reconstructed_image = util.create_grid_from_tensor(
                 val_engine.state.output['zero_filled_image'])
             writer.add_image("validation_images/reconstructed_image", reconstructed_image,
-                             engine.state.epoch)
+                             self.completed_epochs)
 
             uncertainty_map = util.gray2heatmap(
                 util.create_grid_from_tensor(val_engine.state.output['uncertainty_map'].exp()),
                 cmap='jet')
             writer.add_image("validation_images/uncertainty_map", uncertainty_map,
-                             engine.state.epoch)
+                             self.completed_epochs)
 
             difference = util.create_grid_from_tensor(
                 torch.abs(val_engine.state.output['ground_truth'] -
                           val_engine.state.output['reconstructed_image']))
             difference = util.gray2heatmap(difference, cmap='gray')
-            writer.add_image("validation_images/difference", difference, engine.state.epoch)
+            writer.add_image("validation_images/difference", difference, self.completed_epochs)
 
         train_engine.add_event_handler(
             Events.EPOCH_COMPLETED,
