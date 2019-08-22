@@ -2,7 +2,7 @@
 #SBATCH --job-name=train_activeacq
 #SBATCH --output=/checkpoint/mdrozdzal/active_acq/lep/logs/stdout/job%j.train_activeacq
 #SBATCH --error=/checkpoint/mdrozdzal/active_acq/lep/logs/stderr/job%j.train_activeacq
-#SBATCH --partition=dev
+#SBATCH --partition=learnfair
 #SBATCH --gres=gpu:volta:8
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks-per-node=1
@@ -20,5 +20,5 @@ srun --label python trainer.py --dataroot KNEE_PRECOMPUTED_MASKS \
 --name train_with_greedy_masks_dataset_with_evaluator_symmetric \
 --checkpoints_dir /checkpoint/mdrozdzal/active_acq/lep --batchSize 40 \
 --gpu_ids 0,1,2,3,4,5,6,7 --print_freq 50 --lr 0.0006 --grad_ctx --max_epochs 100 \
---dynamic_mask_type beta_symmetric --print_freq 50 --use_mse_as_disc_energy --lambda_gan 0.1 \
+--mask_type fixed_acc--print_freq 50 --use_mse_as_disc_energy --lambda_gan 0.1 \
 --save_latest_freq 2000
