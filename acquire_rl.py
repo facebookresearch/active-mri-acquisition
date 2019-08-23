@@ -248,6 +248,7 @@ if __name__ == '__main__':
     # Reading options
     opts = options.rl_options.RLOptions().parse()
     opts.batchSize = 1
+    opts.mask_type = 'grid'  # This is ignored, only here for compatibility with loader
     if opts.results_dir is None:
         opts.results_dir = opts.checkpoints_dir
 
