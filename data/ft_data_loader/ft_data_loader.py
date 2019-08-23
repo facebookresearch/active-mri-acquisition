@@ -64,7 +64,7 @@ def get_train_valid_loader(batch_size,
             which='train',
             resolution=128,
             scan_type='all',
-            num_volumes=None,
+            num_volumes=10,
             num_rand_slices=None)
         valid_data = Slice(
             data_transform,
@@ -72,7 +72,7 @@ def get_train_valid_loader(batch_size,
             which='val',
             resolution=128,
             scan_type='all',
-            num_volumes=None,
+            num_volumes=10,
             num_rand_slices=None)
 
     elif which_dataset == 'KNEE_RAW':

@@ -54,17 +54,37 @@ class FFT(nn.Module):
         return 'FFT()'
 
 
+def center_crop(x, shape):
+    assert 0 < shape[0] <= x.shape[-2]
+    assert 0 < shape[1] <= x.shape[-1]
+    w_from = (x.shape[-1] - shape[0]) // 2
+    h_from = (x.shape[-2] - shape[1]) // 2
+    w_to = w_from + shape[0]
+    h_to = h_from + shape[1]
+    x = x[..., h_from:h_to, w_from:w_to]
+    return x
+
+def to_magnitude(tensor):
+    tensor = clamp_and_scale(tensor)
+    tensor = (tensor[:, 0, :, :]**2 + tensor[:, 1, :, :]**2)**.5
+    return tensor.unsqueeze(1)
+
+def clamp_and_scale(tensor):
+    # TODO: supposed to be clamping to zscore 3, make option for this
+    return clamp(tensor) + 3
+
 def clamp(tensor):
     # TODO: supposed to be clamping to zscore 3, make option for this
     return tensor.clamp(-3, 3)
 
-
-def gaussian_nll_loss(reconstruction, target, logvar):
-    if reconstruction.shape[2] == 640:
-        reconstruction = reconstruction[:, :, 160:-160, 24:-24]
-        target = target[:, :, 160:-160, 24:-24]
-        logvar = logvar[:, :, 160:-160, 24:-24]
-    l2 = F.mse_loss(reconstruction[:, :1, :, :], target[:, :1, :, :], reduce=False)
+def gaussian_nll_loss(reconstruction, target, logvar, options):
+    reconstruction = to_magnitude(reconstruction)
+    target = to_magnitude(target)
+    if options.dataroot == 'KNEE_RAW':
+        reconstruction = center_crop(reconstruction, [320, 320])
+        target = center_crop(target, [320, 320])
+        logvar = center_crop(logvar, [320, 320])
+    l2 = F.mse_loss(reconstruction, target, reduce=False)
     # Clip logvar to make variance in [0.01, 5], for numerical stability
     logvar = logvar.clamp(-4.605, 1.609)
     one_over_var = torch.exp(-logvar)
@@ -87,7 +107,7 @@ def preprocess_inputs(target,
 
     if options.dataroot == 'KNEE_RAW':
         target = torch.norm(
-            target, p=2, dim=3, keepdim=True)  #TODO: to be updated based on decision
+        target, p=2, dim=3, keepdim=True)  #TODO: to be updated based on decision
         target = target.permute(0, 3, 1, 2)
     fft_target = fft_functions['rfft'](target)
     masked_true_k_space = torch.where(mask.byte(), fft_target, torch.tensor(0.).to(options.device))
