@@ -17,7 +17,7 @@ from typing import Any, Dict, Tuple
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
 from models.fft_utils import RFFT, IFFT, FFT, clamp, preprocess_inputs, gaussian_nll_loss, \
-    GANLossKspace
+    GANLossKspace, to_magnitude, center_crop
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
 from util import util
@@ -121,27 +121,28 @@ class Trainer:
     def inference(self, batch, reconstructor, fft_functions, options):
         reconstructor.eval()
         with torch.no_grad():
+            import pdb; pdb.set_trace()
             zero_filled_reconstruction, target, mask = preprocess_inputs(
                 batch[1], batch[0], fft_functions, options)
 
             # Get reconstructor output
             reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
                 zero_filled_reconstruction, mask)
-            if options.dataroot == 'KNEE_RAW':
-                mse = F.mse_loss(
-                    reconstructed_image[:, :1, 160:-160, 24:-24],
-                    target[:, :1, 160:-160, 24:-24],
-                    size_average=True)
-                ssim = util.ssim_metric(reconstructed_image[:, :1, 160:-160, 24:-24],
-                                        target[:, :1, 160:-160, 24:-24])
 
-                target = target[:, :, 160:-160, 24:-24]
-                zero_filled_reconstruction = zero_filled_reconstruction[:, :, 160:-160, 24:-24]
-                reconstructed_image = reconstructed_image[:, :, 160:-160, 24:-24]
-                uncertainty_map = uncertainty_map[:, :, 160:-160, 24:-24]
-            else:
-                mse = F.mse_loss(reconstructed_image, target, size_average=True)
-                ssim = util.ssim_metric(reconstructed_image, target)
+            # convert to magnitude
+            zero_filled_reconstruction = to_magnitude(zero_filled_reconstruction)
+            reconstructed_image = to_magnitude(reconstructed_image)
+            target = to_magnitude(target)
+
+            if options.dataroot == 'KNEE_RAW':
+                # crop data
+                reconstructed_image = center_crop(reconstructed_image, [320, 320])
+                target = center_crop(target, [320, 320])
+                zero_filled_reconstruction = center_crop(zero_filled_reconstruction, [320, 320])
+                uncertainty_map = center_crop(uncertainty_map, [320, 320])
+
+            mse = F.mse_loss(reconstructed_image, target, reduction='mean')
+            ssim = util.ssim_metric(reconstructed_image, target)
 
             return {
                 'MSE': mse,
@@ -149,7 +150,8 @@ class Trainer:
                 'ground_truth': target,
                 'zero_filled_image': zero_filled_reconstruction,
                 'reconstructed_image': reconstructed_image,
-                'uncertainty_map': uncertainty_map
+                'uncertainty_map': uncertainty_map,
+                'mask': mask
             }
 
     def load_from_checkpoint_if_present(self):
@@ -185,6 +187,7 @@ class Trainer:
     # TODO: consider adding learning rate scheduler
     # noinspection PyUnboundLocalVariable
     def update(self, batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
+        import pdb; pdb.set_trace()
         zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0],
                                                                      fft_functions, options)
 
@@ -224,7 +227,7 @@ class Trainer:
         # Update reconstructor
         # ------------------------------------------------------------------------
         optimizers['G'].zero_grad()
-        loss_G = losses['NLL'](reconstructed_image, target, uncertainty_map).mean()
+        loss_G = losses['NLL'](reconstructed_image, target, uncertainty_map, options).mean()
         loss_G += loss_G_GAN
 
         loss_G.backward()
@@ -335,7 +338,7 @@ class Trainer:
                              self.completed_epochs)
 
             reconstructed_image = util.create_grid_from_tensor(
-                val_engine.state.output['zero_filled_image'])
+                val_engine.state.output['reconstructed_image'])
             writer.add_image("validation_images/reconstructed_image", reconstructed_image,
                              self.completed_epochs)
 
@@ -350,6 +353,11 @@ class Trainer:
                           val_engine.state.output['reconstructed_image']))
             difference = util.gray2heatmap(difference, cmap='gray')
             writer.add_image("validation_images/difference", difference, self.completed_epochs)
+
+            mask = util.create_grid_from_tensor(
+                val_engine.state.output['mask'].repeat(1, 1, val_engine.state.output['mask'].shape[3], 1))
+            writer.add_image("validation_images/mask_image", mask,
+                             self.completed_epochs)
 
         train_engine.add_event_handler(
             Events.EPOCH_COMPLETED,
