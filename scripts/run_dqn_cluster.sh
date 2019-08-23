@@ -36,8 +36,9 @@ for num_images in 100 200 500 1000; do
     echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
 
     echo srun --label python acquire_rl.py --dataroot KNEE --policy dqn --sequential_images \
-    --checkpoints_dir /checkpoint/lep/active_acq/train_with_evaluator_symmetric \
-    --results_dir ${RESULTS_DIR} \
+    --reconstructor_dir /checkpoint/lep/active_acq/train_with_evaluator_symmetric \
+    --evaluator_dir /checkpoint/lep/active_acq/train_with_evaluator_symmetric \
+    --checkpoints_dir ${RESULTS_DIR} \
     --rl_logs_subdir dqn_test_with_train_budget${budget}_rebbuf200k \
     --no_replacement_policy \
     --batchSize 96 --gpu_ids 0 \

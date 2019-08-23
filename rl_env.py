@@ -74,7 +74,8 @@ class ReconstructionEnv:
 
             @param `initial_mask`: The initial mask to use at the start of each episode.
             @param `options`: Should specify the following options:
-                -`checkpoints_dir`: directory where models are stored.
+                -`reconstructor_dir`: directory where reconstructor is stored.
+                -`evaluator_dir`: directory where evaluator is stored.
                 -`sequential_images`: If true, each episode presents the next image in the dataset,
                     otherwise a random image is presented.
                 -`budget`: how many actions to choose (the horizon of the episode).
@@ -115,7 +116,7 @@ class ReconstructionEnv:
         self.image_idx_train = 0
         self.is_testing = False
 
-        reconstructor_checkpoint = load_checkpoint(options.checkpoints_dir, 'best_checkpoint.pth')
+        reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
         self._reconstructor = ReconstructorNetwork(
             number_of_cascade_blocks=reconstructor_checkpoint['options'].number_of_cascade_blocks,
             n_downsampling=reconstructor_checkpoint['options'].n_downsampling,
@@ -132,9 +133,7 @@ class ReconstructionEnv:
         })
         self._reconstructor.to(device)
 
-        evaluator_dir = options.checkpoints_dir if options.evaluator_dir is None \
-            else os.path.join(options.checkpoints_dir, options.evaluator_dir)
-        evaluator_checkpoint = load_checkpoint(evaluator_dir, 'best_checkpoint.pth')
+        evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
         self._evaluator = EvaluatorNetwork(
             number_of_filters=evaluator_checkpoint['options'].number_of_evaluator_filters,
             number_of_conv_layers=evaluator_checkpoint['options']
