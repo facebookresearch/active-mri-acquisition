@@ -121,18 +121,17 @@ class Trainer:
     def inference(self, batch, reconstructor, fft_functions, options):
         reconstructor.eval()
         with torch.no_grad():
-            import pdb; pdb.set_trace()
             zero_filled_reconstruction, target, mask = preprocess_inputs(
-                batch[1], batch[0], fft_functions, options)
+                batch, fft_functions, options)
 
             # Get reconstructor output
             reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
                 zero_filled_reconstruction, mask)
 
             # convert to magnitude
-            zero_filled_reconstruction = to_magnitude(zero_filled_reconstruction)
-            reconstructed_image = to_magnitude(reconstructed_image)
-            target = to_magnitude(target)
+            zero_filled_reconstruction = to_magnitude(zero_filled_reconstruction, options)
+            reconstructed_image = to_magnitude(reconstructed_image, options)
+            target = to_magnitude(target, options)
 
             if options.dataroot == 'KNEE_RAW':
                 # crop data
@@ -187,8 +186,7 @@ class Trainer:
     # TODO: consider adding learning rate scheduler
     # noinspection PyUnboundLocalVariable
     def update(self, batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
-        import pdb; pdb.set_trace()
-        zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0],
+        zero_filled_reconstruction, target, mask = preprocess_inputs(batch,
                                                                      fft_functions, options)
 
         # Get reconstructor output
