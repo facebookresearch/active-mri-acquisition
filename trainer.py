@@ -22,8 +22,6 @@ from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
 from util import util
 
-logger = logging.getLogger(__name__)
-
 
 def run_validation_and_update_best_checkpoint(
         engine: ignite.engine.Engine,
@@ -95,12 +93,6 @@ class Trainer:
         if not os.path.exists(options.checkpoints_dir):
             os.makedirs(options.checkpoints_dir)
 
-        fh = logging.FileHandler(os.path.join(self.options.checkpoints_dir, 'trainer.log'))
-        fh.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-
     def create_checkpoint(self) -> Dict[str, Any]:
         return {
             'reconstructor': self.reconstructor.state_dict(),
@@ -121,7 +113,6 @@ class Trainer:
     def inference(self, batch, reconstructor, fft_functions, options):
         reconstructor.eval()
         with torch.no_grad():
-            import pdb; pdb.set_trace()
             zero_filled_reconstruction, target, mask = preprocess_inputs(
                 batch[1], batch[0], fft_functions, options)
 
@@ -157,11 +148,11 @@ class Trainer:
     def load_from_checkpoint_if_present(self):
         if not os.path.exists(self.options.checkpoints_dir):
             return
-        logger.info(f'Checkpoint folder found at {self.options.checkpoints_dir}')
+        self.logger.info(f'Checkpoint folder found at {self.options.checkpoints_dir}')
         files = os.listdir(self.options.checkpoints_dir)
         for filename in files:
             if 'regular_checkpoint' in filename:
-                logger.info(f'Loading checkpoint {filename}.pth')
+                self.logger.info(f'Loading checkpoint {filename}.pth')
                 checkpoint = torch.load(os.path.join(self.options.checkpoints_dir, filename))
                 self.reconstructor.load_state_dict(checkpoint['reconstructor'])
                 if self.options.use_evaluator:
@@ -176,7 +167,8 @@ class Trainer:
         if self.options.weights_checkpoint is None or not os.path.exists(
                 self.options.weights_checkpoint):
             return
-        logger.info(f'Loading weights from checkpoint found at {self.options.weights_checkpoint}.')
+        self.logger.info(
+            f'Loading weights from checkpoint found at {self.options.weights_checkpoint}.')
         checkpoint = torch.load(
             os.path.join(self.options.checkpoints_dir, self.options.weights_checkpoint))
         self.reconstructor.load_state_dict(checkpoint['reconstructor'])
@@ -187,7 +179,6 @@ class Trainer:
     # TODO: consider adding learning rate scheduler
     # noinspection PyUnboundLocalVariable
     def update(self, batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
-        import pdb; pdb.set_trace()
         zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0],
                                                                      fft_functions, options)
 
@@ -238,13 +229,23 @@ class Trainer:
         return {'loss_D': 0 if self.evaluator is None else loss_D.item(), 'loss_G': loss_G.item()}
 
     def __call__(self) -> float:
-        logger.info('Creating trainer with the following options:')
+        self.logger = logging.getLogger()
+        if self.options.debug:
+            self.logger.setLevel(logging.DEBUG)
+        else:
+            self.logger.setLevel(logging.INFO)
+        fh = logging.FileHandler(os.path.join(self.options.checkpoints_dir, 'trainer.log'))
+        formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+
+        self.logger.info('Creating trainer with the following options:')
         for key, value in vars(self.options).items():
             if key == 'device':
                 value = value.type
             elif key == 'gpu_ids':
                 value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
-            logger.info(f"    {key:>25}: {'None' if value is None else value:<30}")
+            self.logger.info(f"    {key:>25}: {'None' if value is None else value:<30}")
 
         # Create Reconstructor Model
         self.reconstructor = ReconstructorNetwork(
@@ -354,10 +355,9 @@ class Trainer:
             difference = util.gray2heatmap(difference, cmap='gray')
             writer.add_image("validation_images/difference", difference, self.completed_epochs)
 
-            mask = util.create_grid_from_tensor(
-                val_engine.state.output['mask'].repeat(1, 1, val_engine.state.output['mask'].shape[3], 1))
-            writer.add_image("validation_images/mask_image", mask,
-                             self.completed_epochs)
+            mask = util.create_grid_from_tensor(val_engine.state.output['mask'].repeat(
+                1, 1, val_engine.state.output['mask'].shape[3], 1))
+            writer.add_image("validation_images/mask_image", mask, self.completed_epochs)
 
         train_engine.add_event_handler(
             Events.EPOCH_COMPLETED,
@@ -385,18 +385,6 @@ if __name__ == '__main__':
 
     if not os.path.exists(options_.checkpoints_dir):
         os.makedirs(options_.checkpoints_dir)
-
-    # Initializing logger
-    logger = logging.getLogger()
-    if options_.debug:
-        logger.setLevel(logging.DEBUG)
-    else:
-        logger.setLevel(logging.INFO)
-    fh = logging.FileHandler(os.path.join(options_.checkpoints_dir, 'trainer.log'))
-    fh.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
 
     trainer_ = Trainer(options_)
     trainer_()

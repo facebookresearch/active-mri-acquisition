@@ -64,18 +64,22 @@ def center_crop(x, shape):
     x = x[..., h_from:h_to, w_from:w_to]
     return x
 
+
 def to_magnitude(tensor):
     tensor = clamp_and_scale(tensor)
     tensor = (tensor[:, 0, :, :]**2 + tensor[:, 1, :, :]**2)**.5
     return tensor.unsqueeze(1)
 
+
 def clamp_and_scale(tensor):
     # TODO: supposed to be clamping to zscore 3, make option for this
     return clamp(tensor) + 3
 
+
 def clamp(tensor):
     # TODO: supposed to be clamping to zscore 3, make option for this
     return tensor.clamp(-3, 3)
+
 
 def gaussian_nll_loss(reconstruction, target, logvar, options):
     reconstruction = to_magnitude(reconstruction)
@@ -107,7 +111,7 @@ def preprocess_inputs(target,
 
     if options.dataroot == 'KNEE_RAW':
         target = torch.norm(
-        target, p=2, dim=3, keepdim=True)  #TODO: to be updated based on decision
+            target, p=2, dim=3, keepdim=True)  #TODO: to be updated based on decision
         target = target.permute(0, 3, 1, 2)
     fft_target = fft_functions['rfft'](target)
     masked_true_k_space = torch.where(mask.byte(), fft_target, torch.tensor(0.).to(options.device))

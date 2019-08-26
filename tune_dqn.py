@@ -7,6 +7,7 @@ import acquire_rl
 import options.rl_options
 
 
+# TODO start by adding checkpoint handling to DQN (model and replay buffer)
 def main(options_):
     # Create a function evaluator to be passed to the tuner. Here you can pass the
     # SLURM arguments as keywords.

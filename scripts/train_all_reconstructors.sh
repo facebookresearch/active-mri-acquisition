@@ -1,11 +1,16 @@
 #!/bin/bash
 
-CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_no_sign_leakage
+CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_no_sign_leakage_michal
 
-cd /private/home/lep/code/Active_Acquisition
+SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/$((RANDOM % 100000))
 
-#for mask in fixed_acc fixed_acc_rnl symmetric_choice symmetric_choice_rnl grid symmetric_grid; do
-for mask in fixed_acc; do
+mkdir -p ${SRC_DIR}
+cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
+
+cd ${SRC_DIR}
+
+for mask in fixed_acc fixed_acc_rnl symmetric_choice symmetric_choice_rnl grid symmetric_grid; do
+#for mask in fixed_acc; do
     python train_submitit.py --dataroot KNEE \
     --mask_type ${mask} \
     --name ${mask} \
