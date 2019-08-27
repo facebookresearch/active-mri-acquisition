@@ -87,17 +87,17 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
         all_actions.append(actions)
         logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
         if episode % options_.freq_save_test_stats == 0 or episode == num_episodes:
-            logger.info(f'Episode {episode}. Saving statistics to {options_.tb_logs_dir}.')
+            logger.info(f'Episode {episode}. Saving statistics to {options_.checkpoints_dir}.')
             np.save(
-                os.path.join(options_.tb_logs_dir, 'test_stats_mse_{}'.format(episode)),
+                os.path.join(options_.checkpoints_dir, 'test_stats_mse_{}'.format(episode)),
                 statistics_mse)
             np.save(
-                os.path.join(options_.tb_logs_dir, 'test_stats_ssim_{}'.format(episode)),
+                os.path.join(options_.checkpoints_dir, 'test_stats_ssim_{}'.format(episode)),
                 statistics_ssim)
             np.save(
-                os.path.join(options_.tb_logs_dir, 'test_stats_psnr_{}'.format(episode)),
+                os.path.join(options_.checkpoints_dir, 'test_stats_psnr_{}'.format(episode)),
                 statistics_ssim)
-            np.save(os.path.join(options_.tb_logs_dir, 'all_actions'), np.array(all_actions))
+            np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
     end = time.time()
     logger.debug('Test run lasted {} seconds.'.format(end - start))
     writer.add_scalar('eval/average_reward', average_total_reward / episode, step)
@@ -119,128 +119,6 @@ def get_experiment_str(options_):
                                                    options_.greedymc_horizon)
     return '{}_bu{}_seed{}_neptest{}'.format(policy_str, options_.budget, options_.seed,
                                              options_.num_test_images)
-
-
-class DQNTrainer:
-
-    def __init__(self, options_, env=None, writer=None, logger=None):
-        self.options = options_
-        self.env = env
-
-        if self.env is not None:
-            self.env = env
-            self.writer = writer
-            self.logger = logger
-
-            max_num_steps = options_.num_train_episodes * self.env.action_space.n
-            replay_memory_size = min(max_num_steps, options_.replay_buffer_size)
-            replay_memory = util.rl.replay_buffer.ReplayMemory(
-                replay_memory_size, self.env.observation_space.shape, options_.rl_batch_size,
-                options_.rl_burn_in)
-            self.policy = util.rl.dqn.DDQN(self.env.action_space.n, rl_env.device, replay_memory,
-                                           options_).to(rl_env.device)
-            self.target_net = util.rl.dqn.DDQN(self.env.action_space.n, rl_env.device, None,
-                                               options_).to(rl_env.device)
-
-    def _train_dqn_policy(self):
-        """ Trains the DQN policy. """
-        steps = 0
-        best_test_score = np.inf
-        for episode in range(self.options.num_train_episodes):
-            self.logger.info('Episode {}'.format(episode + 1))
-            obs, _ = self.env.reset()
-            done = False
-            total_reward = 0
-            episode_actions = []
-            cnt_repeated_actions = 0
-            while not done:
-                epsilon = util.rl.dqn.get_epsilon(steps, self.options)
-                action = self.policy.get_action(obs, epsilon, episode_actions)
-                next_obs, reward, done, _ = self.env.step(action)
-                steps += 1
-                is_zero_target = (
-                    done or
-                    action in episode_actions) if self.options.no_replacement_policy else done
-                self.policy.add_experience(obs, action, next_obs, reward, is_zero_target)
-                loss, grad_norm, mean_q_values, std_q_values = self.policy.update_parameters(
-                    self.target_net)
-
-                if steps % self.options.target_net_update_freq == 0:
-                    self.logger.info('Updating target network.')
-                    self.target_net.load_state_dict(self.policy.state_dict())
-
-                # Adding per-step tensorboard logs
-                self.writer.add_scalar('epsilon', epsilon, steps)
-                if loss is not None:
-                    self.writer.add_scalar('loss', loss, steps)
-                    self.writer.add_scalar('grad_norm', grad_norm, steps)
-                    self.writer.add_scalar('mean_q_values', mean_q_values, steps)
-                    self.writer.add_scalar('std_q_values', std_q_values, steps)
-
-                total_reward += reward
-                obs = next_obs
-                cnt_repeated_actions += int(action in episode_actions)
-                episode_actions.append(action)
-
-            # Adding per-episode tensorboard logs
-            self.writer.add_scalar('episode_reward', total_reward, episode)
-            self.writer.add_scalar('cnt_repeated_actions', cnt_repeated_actions, episode)
-
-            # Evaluate the current policy
-            if (episode + 1) % self.options.agent_test_episode_freq == 0:
-                test_score = test_policy(self.env, self.policy, self.writer, self.logger, None,
-                                         episode, self.options)
-                if test_score < best_test_score:
-                    self.policy.save(os.path.join(self.options.tb_logs_dir, 'policy_best.pt'))
-                    best_test_score = test_score
-                    self.logger.info('Saved model to {}'.format(
-                        os.path.join(self.options.tb_logs_dir, 'policy_checkpoint.pt')))
-
-        return best_test_score
-
-    def __call__(self):
-        if self.env is None:
-            # Initialize everything
-            self.writer = tensorboardX.SummaryWriter(
-                os.path.join(self.options.checkpoints_dir, 'tb_logs'))
-            self.logger = logging.getLogger()
-            self.logger.setLevel(logging.DEBUG)
-            fh = logging.FileHandler(os.path.join(self.options.checkpoints_dir, 'train.log'))
-            fh.setLevel(logging.DEBUG)
-            formatter = logging.Formatter(
-                '%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
-            fh.setFormatter(formatter)
-            self.logger.addHandler(fh)
-            self.env = rl_env.ReconstructionEnv(
-                rl_env.generate_initial_mask(self.options.initial_num_lines), self.options)
-            self.env.set_training()
-
-            self.logger.info(f'Created environment with {self.env.action_space.n} actions')
-            self.policy = get_policy(self.env, self.writer, self.logger, self.options)
-
-            max_num_steps = self.options.num_train_episodes * self.env.action_space.n
-            replay_memory_size = min(max_num_steps, self.options.replay_buffer_size)
-            replay_memory = util.rl.replay_buffer.ReplayMemory(
-                replay_memory_size, self.env.observation_space.shape, self.options.rl_batch_size,
-                self.options.rl_burn_in)
-            self.policy = util.rl.dqn.DDQN(self.env.action_space.n, rl_env.device, replay_memory,
-                                           self.options).to(rl_env.device)
-            self.target_net = util.rl.dqn.DDQN(self.env.action_space.n, rl_env.device, None,
-                                               self.options).to(rl_env.device)
-
-        if self.options.dqn_resume:
-            # TODO to be able to resume training need some code to store the replay buffer
-            raise NotImplementedError
-        if self.options.dqn_only_test:
-            policy_path = os.path.join(self.options.dqn_load_dir, 'policy_best.pt')
-            if os.path.isfile(policy_path):
-                self.policy.load(policy_path)
-                self.logger.info(f'Policy found in {policy_path}.')
-            else:
-                self.logger.warning(f'No policy found in {policy_path}.')
-
-        else:
-            return -self._train_dqn_policy()  # Hyperparameter tuner tries to maximize
 
 
 # Not a great policy specification protocol, but works for now.
@@ -278,7 +156,7 @@ def get_policy(env, writer, logger, options_):
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             options_.options.evaluator_pp_path, options_.initial_num_lines, rl_env.device)
     elif 'dqn' in options_.policy:
-        dqn_trainer = DQNTrainer(options_, env, writer, logger)
+        dqn_trainer = util.rl.dqn.DQNTrainer(options_, env, writer, logger)
         dqn_trainer()
         policy = dqn_trainer.policy
     else:
@@ -309,7 +187,7 @@ if __name__ == '__main__':
     torch.manual_seed(opts.seed)
 
     experiment_str = get_experiment_str(opts)
-    opts.tb_logs_dir = os.path.join(opts.checkpoints_dir, opts.rl_logs_subdir, experiment_str)
+    opts.tb_logs_dir = os.path.join(opts.checkpoints_dir, experiment_str)
     if not os.path.isdir(opts.tb_logs_dir):
         os.makedirs(opts.tb_logs_dir)
 

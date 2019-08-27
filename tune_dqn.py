@@ -3,27 +3,27 @@ import os
 import hyperband
 import hyperband.submitit_function_evaluator
 
-import acquire_rl
+import util.rl.dqn
 import options.rl_options
 
 
-# TODO start by adding checkpoint handling to DQN (model and replay buffer)
+# TODO add epsilon checkpointing to DQN and then test Hyperband code on it
 def main(options_):
     # Create a function evaluator to be passed to the tuner. Here you can pass the
     # SLURM arguments as keywords.
     function_evaluator = hyperband.submitit_function_evaluator.SubmititEvaluator(
-        acquire_rl.DQNTrainer,
+        util.rl.dqn.DQNTrainer,
         options_,
         os.path.join(options_.checkpoints_dir, 'submitit_logs'),
         3,
-        resource_name='num_train_episodes',
-        resource_factor=1,
+        resource_name='num_train_steps',
+        resource_factor=20000,
         job_name='active_acq_tune_dqn',
-        time=4320,
-        partition='dev',
+        time=100,
+        partition='learnfair',
         num_gpus=1,
         cpus_per_task=4,
-        mem=256000)
+        mem=16000)
 
     # Specify the hyperparameter names and their possible values (for now only categorical
     # distributions are supported).
@@ -33,7 +33,8 @@ def main(options_):
         'epsilon_decay': [100000, 500000, 1000000],
         'epsilon_start': [0.99, 0.95, 0.9],
         'rl_batch_size': [8, 16, 32, 64],
-        'replay_buffer_size': [100000, 500000, 1000000],
+        'dqn_learning_rate': [5.0e-4, 2.5e-4, 1.25e-4, 6.25e-5],
+        'replay_buffer_size': [100000, 200000, 400000],
     }
 
     # Create the tuner with evaluator and the specified classes
@@ -57,7 +58,7 @@ if __name__ == '__main__':
 
     opts.R = 10
     opts.eta = 3
-    opts.max_jobs_tuner = 2
+    opts.max_jobs_tuner = 20
     opts.interactive_init = True
 
     main(opts)

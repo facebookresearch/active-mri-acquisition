@@ -13,7 +13,6 @@ use_reconstruction=1
 
 #CHECKPOINT_DIR=/checkpoint/lep/active_acq/train_with_greedy_masks_loaded_weights
 CHECKPOINT_DIR=/checkpoint/lep/active_acq/train_with_greedy_masks_dataset_with_evaluator_symmetric
-RL_LOGS_SUB_DIR=all_baselines_best_ckpt
 #RL_LOGS_SUB_DIR=all_baselines_best_ckpt_nlines_0
 
 #for policy in "random" "lowfirst" "greedyfull1_gt" "evaluator_net"; do
@@ -54,8 +53,7 @@ for policy in "evaluator_net"; do
     echo srun python acquire_rl.py --dataroot KNEE \
     --reconstructor_dir ${CHECKPOINT_DIR} \
     --evaluator_dir ${CHECKPOINT_DIR} \
-    --results_dir ${CHECKPOINT_DIR} \
-    --rl_logs_subdir ${RL_LOGS_SUB_DIR} \
+    --checkpoints_dir ${CHECKPOINT_DIR} \
     --seed 0 --batchSize 96 --gpu_ids 0 --policy ${policy} \
     --num_train_episodes 0 --num_train_images 0 \
     --budget 1000 --num_test_images 1000 --freq_save_test_stats 40 --sequential_images \

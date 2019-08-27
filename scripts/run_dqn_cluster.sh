@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# TODO delete this script once DQN tuner is set up
+
 JOBSCRIPTS_DIR=/private/home/${USER}/jobscripts/active_acq/dqn
 LOGS_DIR=/private/home/${USER}/logs/active_acq/dqn
 
@@ -50,7 +52,7 @@ for num_images in 100 200 500 1000; do
     --budget ${budget} \
     --num_test_images ${num_images} --num_train_images ${num_images} \
     --freq_save_test_stats ${num_images} \
-    --agent_test_episode_freq 100 --replay_buffer_size 200000 >> ${SLURM}
+    --dqn_test_episode_freq 100 --replay_buffer_size 200000 >> ${SLURM}
 
      sbatch ${SLURM}
 done

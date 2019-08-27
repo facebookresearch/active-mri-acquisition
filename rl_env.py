@@ -102,15 +102,13 @@ class ReconstructionEnv:
         else:
             self._dataset_test = test_loader.dataset
 
-        self.num_train_images = self.options.num_train_images
-        self.num_test_images = self.options.num_test_images
-        if self.num_train_images is None or len(self._dataset_train) < self.num_train_images:
-            self.num_train_images = len(self._dataset_train)
-        if self.num_test_images is None or len(self._dataset_test) < self.num_test_images:
-            self.num_test_images = len(self._dataset_test)
+        self.num_train_images = min(self.options.num_train_images, len(self._dataset_train))
+        self.num_test_images = min(self.options.num_test_images, len(self._dataset_test))
 
+        # For the training data the
         rng = np.random.RandomState(options.seed)
-        self._train_order = rng.permutation(len(self._dataset_train))
+        rng_train = np.random.RandomState() if options.rl_env_train_no_seed else rng
+        self._train_order = rng_train.permutation(len(self._dataset_train))
         self._test_order = rng.permutation(len(self._dataset_test))
         self.image_idx_test = 0
         self.image_idx_train = 0
@@ -132,6 +130,7 @@ class ReconstructionEnv:
             for key, val in reconstructor_checkpoint['reconstructor'].items()
         })
         self._reconstructor.to(device)
+        logging.info('Loaded reconstructor from checkpoint.')
 
         evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
         self._evaluator = EvaluatorNetwork(
