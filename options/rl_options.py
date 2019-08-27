@@ -5,7 +5,6 @@ class RLOptions(BaseOptions):
 
     def initialize(self, parser):
         parser = BaseOptions.initialize(self, parser)
-        parser.add_argument('--results_dir', type=str, default=None, help='saves results here.')
         parser.add_argument(
             '--rl_logs_subdir',
             type=str,
@@ -13,6 +12,11 @@ class RLOptions(BaseOptions):
             help='sub-directory of results_dir to store results of RL runs.')
 
         # General options for all active acquisition algorithms
+        parser.add_argument(
+            '--reconstructor_dir',
+            type=str,
+            default=None,
+            help='Directory where reconstructor is stored.')
         parser.add_argument(
             '--obs_type',
             choices=['two_streams', 'concatenate_mask', 'spectral_maps'],
@@ -50,9 +54,15 @@ class RLOptions(BaseOptions):
         # Options for the simple baselines
         parser.add_argument('--greedymc_num_samples', type=int, default=10)
         parser.add_argument('--greedymc_horizon', type=int, default=1)
+        parser.add_argument(
+            '--evaluator_dir', type=str, default=None, help='Directory where evaluator is stored.')
 
         # Evaluator++ options
-        parser.add_argument('--evaluator_pp_path', type=str, default=None)
+        parser.add_argument(
+            '--evaluator_pp_path',
+            type=str,
+            default=None,
+            help='Full path to the evaluator++ model to use.')
 
         # Reinforcement learning options
         parser.add_argument(
@@ -72,8 +82,7 @@ class RLOptions(BaseOptions):
         parser.add_argument('--epsilon_decay', type=float, default=10000)
         parser.add_argument('--num_train_episodes', type=int, default=10000)
         parser.add_argument('--rl_batch_size', type=int, default=16)
-        parser.add_argument(
-            '--test_with_train_set', dest='test_with_train_set', action='store_true')
+        parser.add_argument('--test_set', choices=['train', 'val', 'test'], default='test')
         parser.add_argument(
             '--rl_burn_in',
             type=int,

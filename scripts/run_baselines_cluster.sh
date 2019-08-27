@@ -52,12 +52,14 @@ for policy in "evaluator_net"; do
     echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
 
     echo srun python acquire_rl.py --dataroot KNEE \
-    --checkpoints_dir ${CHECKPOINT_DIR} \
+    --reconstructor_dir ${CHECKPOINT_DIR} \
+    --evaluator_dir ${CHECKPOINT_DIR} \
+    --results_dir ${CHECKPOINT_DIR} \
+    --rl_logs_subdir ${RL_LOGS_SUB_DIR} \
     --seed 0 --batchSize 96 --gpu_ids 0 --policy ${policy} \
     --num_train_episodes 0 --num_train_images 0 \
     --budget 1000 --num_test_images 1000 --freq_save_test_stats 40 --sequential_images \
-    --rl_logs_subdir ${RL_LOGS_SUB_DIR} \
-    --evaluator_pp_path evaluator_pp_15k/bs_256_lr_0.0003_beta1_0.5_beta2_0.999/best_checkpoint.pth \
+    --evaluator_pp_path ${CHECKPOINT_DIR}/evaluator_pp_15k/bs_256_lr_0.0003_beta1_0.5_beta2_0.999/best_checkpoint.pth \
     --obs_type ${obs_type} \
     --initial_num_lines 10 \
     --greedymc_num_samples 60 --greedymc_horizon 1 >> ${SLURM}

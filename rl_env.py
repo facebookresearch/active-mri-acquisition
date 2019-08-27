@@ -74,7 +74,8 @@ class ReconstructionEnv:
 
             @param `initial_mask`: The initial mask to use at the start of each episode.
             @param `options`: Should specify the following options:
-                -`checkpoints_dir`: directory where models are stored.
+                -`reconstructor_dir`: directory where reconstructor is stored.
+                -`evaluator_dir`: directory where evaluator is stored.
                 -`sequential_images`: If true, each episode presents the next image in the dataset,
                     otherwise a random image is presented.
                 -`budget`: how many actions to choose (the horizon of the episode).
@@ -84,6 +85,7 @@ class ReconstructionEnv:
                     then all images will be used.
                 -`num_test_images`: the number of images to use for test. If it's None, then
                     all images will be used.
+                -`test_set`: the name of the test set to use (train, val, or test).
         """
         # TODO remove initial_mask argument (control this generation inside the class)
 
@@ -93,8 +95,13 @@ class ReconstructionEnv:
         test_loader = create_data_loaders(options, is_test=True)
 
         self._dataset_train = train_loader.dataset
-        self._dataset_test = test_loader.dataset if not options.test_with_train_set \
-            else train_loader.dataset
+        if options.test_set == 'train':
+            self._dataset_test = train_loader.dataset
+        elif options.test_set == 'valid':
+            self._dataset_test = valid_loader.dataset
+        else:
+            self._dataset_test = test_loader.dataset
+
         self.num_train_images = self.options.num_train_images
         self.num_test_images = self.options.num_test_images
         if self.num_train_images is None or len(self._dataset_train) < self.num_train_images:
@@ -102,40 +109,44 @@ class ReconstructionEnv:
         if self.num_test_images is None or len(self._dataset_test) < self.num_test_images:
             self.num_test_images = len(self._dataset_test)
 
-        r = np.random.RandomState(options.seed)
-        self._train_order = r.permutation(len(self._dataset_train))
-        self._test_order = r.permutation(len(self._dataset_test))
+        rng = np.random.RandomState(options.seed)
+        self._train_order = rng.permutation(len(self._dataset_train))
+        self._test_order = rng.permutation(len(self._dataset_test))
         self.image_idx_test = 0
         self.image_idx_train = 0
         self.is_testing = False
 
-        checkpoint = load_checkpoint(options.checkpoints_dir, 'best_checkpoint.pth')
+        reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
         self._reconstructor = ReconstructorNetwork(
-            number_of_cascade_blocks=checkpoint['options'].number_of_cascade_blocks,
-            n_downsampling=checkpoint['options'].n_downsampling,
-            number_of_filters=checkpoint['options'].number_of_reconstructor_filters,
-            number_of_layers_residual_bottleneck=checkpoint['options']
+            number_of_cascade_blocks=reconstructor_checkpoint['options'].number_of_cascade_blocks,
+            n_downsampling=reconstructor_checkpoint['options'].n_downsampling,
+            number_of_filters=reconstructor_checkpoint['options'].number_of_reconstructor_filters,
+            number_of_layers_residual_bottleneck=reconstructor_checkpoint['options']
             .number_of_layers_residual_bottleneck,
-            mask_embed_dim=checkpoint['options'].mask_embed_dim,
-            dropout_probability=checkpoint['options'].dropout_probability,
+            mask_embed_dim=reconstructor_checkpoint['options'].mask_embed_dim,
+            dropout_probability=reconstructor_checkpoint['options'].dropout_probability,
             img_width=128,  # TODO : CHANGE!
-            use_deconv=checkpoint['options'].use_deconv)
-        self._reconstructor.load_state_dict(
-            {key.replace('module.', ''): val
-             for key, val in checkpoint['reconstructor'].items()})
+            use_deconv=reconstructor_checkpoint['options'].use_deconv)
+        self._reconstructor.load_state_dict({
+            key.replace('module.', ''): val
+            for key, val in reconstructor_checkpoint['reconstructor'].items()
+        })
         self._reconstructor.to(device)
 
+        evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
         self._evaluator = EvaluatorNetwork(
-            number_of_filters=checkpoint['options'].number_of_evaluator_filters,
-            number_of_conv_layers=checkpoint['options'].number_of_evaluator_convolution_layers,
+            number_of_filters=evaluator_checkpoint['options'].number_of_evaluator_filters,
+            number_of_conv_layers=evaluator_checkpoint['options']
+            .number_of_evaluator_convolution_layers,
             use_sigmoid=False,
-            width=checkpoint['options'].image_width,
-            mask_embed_dim=checkpoint['options'].mask_embed_dim)
-        if checkpoint['evaluator'] is not None:
+            width=evaluator_checkpoint['options'].image_width,
+            mask_embed_dim=evaluator_checkpoint['options'].mask_embed_dim)
+        if evaluator_checkpoint['evaluator'] is not None:
             logging.info(f'Loaded evaluator from checkpoint.')
-            self._evaluator.load_state_dict(
-                {key.replace('module.', ''): val
-                 for key, val in checkpoint['evaluator'].items()})
+            self._evaluator.load_state_dict({
+                key.replace('module.', ''): val
+                for key, val in evaluator_checkpoint['evaluator'].items()
+            })
         self._evaluator.to(device)
 
         obs_shape = None
@@ -164,11 +175,6 @@ class ReconstructionEnv:
         self.is_testing = False
         if reset_index:
             self.image_idx_train = 0
-
-    @staticmethod
-    def compute_masked_rfft(ground_truth: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        state = rfft(ground_truth) * mask
-        return state
 
     @staticmethod
     def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
