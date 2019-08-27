@@ -113,7 +113,6 @@ def preprocess_inputs(batch,
         masked_true_k_space = torch.where(mask.byte(), kspace, torch.tensor(0.).to(options.device))
         zero_filled_reconstruction = fft_functions['ifft'](masked_true_k_space, ifft_shift=True)
         target = target.permute(0, 3, 1, 2)
-        print(target.max(), target.min())
     else:
         target = batch[1].to(options.device)
         if clamp_target:
