@@ -44,6 +44,7 @@ def run_validation_and_update_best_checkpoint(
 
 
 def save_checkpoint_function(trainer: 'Trainer', filename: str) -> str:
+    pass
     # Ensures atomic checkpoint save to avoid corrupted files if preempted during a save operation
     tmp_filename = tempfile.NamedTemporaryFile(delete=False, dir=trainer.options.checkpoints_dir)
     try:
@@ -90,8 +91,10 @@ class Trainer:
             'fft': FFT().to(options.device)
         }
 
-        if not os.path.exists(options.checkpoints_dir):
-            os.makedirs(options.checkpoints_dir)
+        if self.options.only_evaluator:
+            self.options.checkpoints_dir = os.path.join(self.options.checkpoints_dir, 'evaluator')
+        if not os.path.exists(self.options.checkpoints_dir):
+            os.makedirs(self.options.checkpoints_dir)
 
     def create_checkpoint(self) -> Dict[str, Any]:
         return {
@@ -175,12 +178,10 @@ class Trainer:
         if self.options.use_evaluator and 'evaluator' in checkpoint.keys():
             self.evaluator.load_state_dict(checkpoint['evaluator'])
 
-    # TODO: fix sign leakage
     # TODO: consider adding learning rate scheduler
     # noinspection PyUnboundLocalVariable
     def update(self, batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
-        zero_filled_reconstruction, target, mask = preprocess_inputs(batch,
-                                                                     fft_functions, options)
+        zero_filled_reconstruction, target, mask = preprocess_inputs(batch, fft_functions, options)
 
         # Get reconstructor output
         reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
@@ -209,24 +210,33 @@ class Trainer:
             loss_D.backward(retain_graph=True)
             optimizers['D'].step()
 
-            output = evaluator(fake, mask_embedding)
-            loss_G_GAN = losses['GAN'](
-                output, True, mask, degree=1, updateG=True, pred_and_gt=(fake[:, :1, ...], target))
-            loss_G_GAN *= options.lambda_gan
+            if not self.options.only_evaluator:
+                output = evaluator(fake, mask_embedding)
+                loss_G_GAN = losses['GAN'](
+                    output,
+                    True,
+                    mask,
+                    degree=1,
+                    updateG=True,
+                    pred_and_gt=(fake[:, :1, ...], target))
+                loss_G_GAN *= options.lambda_gan
 
         # ------------------------------------------------------------------------
         # Update reconstructor
         # ------------------------------------------------------------------------
-        optimizers['G'].zero_grad()
-        loss_G = losses['NLL'](reconstructed_image, target, uncertainty_map, options).mean()
-        loss_G += loss_G_GAN
-
-        loss_G.backward()
-        optimizers['G'].step()
+        if not self.options.only_evaluator:
+            optimizers['G'].zero_grad()
+            loss_G = losses['NLL'](reconstructed_image, target, uncertainty_map, options).mean()
+            loss_G += loss_G_GAN
+            loss_G.backward()
+            optimizers['G'].step()
 
         self.updates_performed += 1
 
-        return {'loss_D': 0 if self.evaluator is None else loss_D.item(), 'loss_G': loss_G.item()}
+        return {
+            'loss_D': 0 if self.evaluator is None else loss_D.item(),
+            'loss_G': loss_G.item() if not self.options.only_evaluator else 0
+        }
 
     def __call__(self) -> float:
         self.logger = logging.getLogger()
@@ -273,7 +283,7 @@ class Trainer:
             self.evaluator = EvaluatorNetwork(
                 number_of_filters=self.options.number_of_evaluator_filters,
                 number_of_conv_layers=self.options.number_of_evaluator_convolution_layers,
-                use_sigmoid=False,  # TODO : do we keep this? Will add option based on the decision
+                use_sigmoid=False,
                 width=self.options.image_width,
                 mask_embed_dim=self.options.mask_embed_dim)
             self.evaluator = torch.nn.DataParallel(self.evaluator).to(self.options.device)

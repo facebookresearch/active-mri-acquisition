@@ -9,6 +9,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 from data.ft_data_loader.ft_util_vaes import ifftshift
 
+
 class IFFT(nn.Module):
 
     def forward(self, x, normalized=False, ifft_shift=False):
@@ -101,10 +102,7 @@ def gaussian_nll_loss(reconstruction, target, logvar, options):
 
 
 # TODO fix the conditional return
-def preprocess_inputs(batch,
-                      fft_functions,
-                      options,
-                      return_masked_k_space=False,
+def preprocess_inputs(batch, fft_functions, options, return_masked_k_space=False,
                       clamp_target=True):
 
     if options.dataroot == 'KNEE_RAW':
@@ -119,9 +117,10 @@ def preprocess_inputs(batch,
         target = batch[1].to(options.device)
         if clamp_target:
             target = clamp(target)
-        mask = mask.to(options.device)
+        mask = batch[0].to(options.device)
         fft_target = fft_functions['rfft'](target)
-        masked_true_k_space = torch.where(mask.byte(), fft_target, torch.tensor(0.).to(options.device))
+        masked_true_k_space = torch.where(mask.byte(), fft_target,
+                                          torch.tensor(0.).to(options.device))
         zero_filled_reconstruction = fft_functions['ifft'](masked_true_k_space)
         target = torch.cat([target, torch.zeros_like(target)], dim=1)
     if return_masked_k_space:

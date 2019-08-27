@@ -7,7 +7,6 @@ import util.rl.dqn
 import options.rl_options
 
 
-# TODO add epsilon checkpointing to DQN and then test Hyperband code on it
 def main(options_):
     # Create a function evaluator to be passed to the tuner. Here you can pass the
     # SLURM arguments as keywords.
@@ -17,7 +16,7 @@ def main(options_):
         os.path.join(options_.checkpoints_dir, 'submitit_logs'),
         3,
         resource_name='num_train_steps',
-        resource_factor=20000,
+        resource_factor=25000,
         job_name='active_acq_tune_dqn',
         time=100,
         partition='learnfair',

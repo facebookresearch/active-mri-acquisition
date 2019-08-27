@@ -234,7 +234,7 @@ class ReconstructionEnv:
             if mask_to_use is None:
                 mask_to_use = self._current_mask
             image, _, _ = preprocess_inputs(
-                ground_truth, mask_to_use, fft_functions, self.options, clamp_target=False)
+                (mask_to_use, ground_truth), fft_functions, self.options, clamp_target=False)
             if use_reconstruction:
                 image, _, _ = self._reconstructor(
                     image, mask_to_use)  # pass through reconstruction network
@@ -245,8 +245,7 @@ class ReconstructionEnv:
     def _compute_observation_and_score(self) -> Tuple[torch.Tensor, float]:
         with torch.no_grad():
             zero_filled_reconstruction, _, _, masked_rffts = preprocess_inputs(
-                self._ground_truth,
-                self._current_mask,
+                (self._current_mask, self._ground_truth),
                 fft_functions,
                 self.options,
                 return_masked_k_space=True)
@@ -338,7 +337,7 @@ class ReconstructionEnv:
     def get_evaluator_action(self) -> int:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
-            image, _, _ = preprocess_inputs(self._ground_truth, self._current_mask, fft_functions,
+            image, _, _ = preprocess_inputs((self._current_mask, self._ground_truth), fft_functions,
                                             self.options)
             reconstruction, _, mask_embedding = self._reconstructor(image, self._current_mask)
             k_space_scores = self._evaluator(clamp(reconstruction), mask_embedding)

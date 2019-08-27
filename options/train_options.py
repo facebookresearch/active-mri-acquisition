@@ -107,8 +107,6 @@ class TrainOptions(BaseOptions):
             help='The type of mask to use.')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
 
-        self.isTrain = True
-
         # ########################
         # New options
         # ########################
@@ -163,5 +161,9 @@ class TrainOptions(BaseOptions):
             help='GAN criterion computes adversarial loss signal at provided k-space lines')
         parser.add_argument(
             '--lambda_gan', type=float, default=0.01, help='weight for reconstruction loss')
+
+        parser.add_argument('--only_evaluator', dest='only_evaluator', action='store_true')
+
+        self.isTrain = True
 
         return parser

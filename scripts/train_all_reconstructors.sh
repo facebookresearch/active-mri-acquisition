@@ -1,5 +1,7 @@
 #!/bin/bash
 
+EXTRA_OPTIONS=--only_evaluator
+
 CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_no_sign_leakage_michal
 
 SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/$((RANDOM % 100000))
@@ -10,7 +12,6 @@ cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
 cd ${SRC_DIR}
 
 for mask in fixed_acc fixed_acc_rnl symmetric_choice symmetric_choice_rnl grid symmetric_grid; do
-#for mask in fixed_acc; do
     python train_submitit.py --dataroot KNEE \
     --mask_type ${mask} \
     --name ${mask} \
@@ -20,6 +21,5 @@ for mask in fixed_acc fixed_acc_rnl symmetric_choice symmetric_choice_rnl grid s
     --batchSize 40 \
     --gpu_ids 0,1,2,3,4,5,6,7 --print_freq 50 --lr 0.0006 --grad_ctx --max_epochs 50 \
     --print_freq 200 --use_mse_as_disc_energy --lambda_gan 0.1 \
-    --no_evaluator \
-    --save_latest_freq 2000 &
+    --save_latest_freq 2000 ${EXTRA_OPTIONS} &
 done
