@@ -67,9 +67,7 @@ def center_crop(x, shape):
     return x
 
 def to_magnitude(tensor, options):
-    if options.dataroot == 'KNEE_RAW':
-        pass
-    else:
+    if options.dataroot != 'KNEE_RAW':
         tensor = clamp_and_scale(tensor)
     tensor = (tensor[:, 0, :, :]**2 + tensor[:, 1, :, :]**2)**.5
     return tensor.unsqueeze(1)
