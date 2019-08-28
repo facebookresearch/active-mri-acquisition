@@ -1,10 +1,9 @@
-from .fft_utils import RFFT, FFT, IFFT
+from .fft_utils import FFT, IFFT, to_magnitude
 from .reconstruction import init_func
 
 import functools
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class SimpleSequential(nn.Module):
@@ -60,9 +59,9 @@ class SpectralMapDecomposition(nn.Module):
         masked_kspace = masked_kspace.view(batch_size * width, 2, height, width)
 
         # convert spectral maps to image space
-        # discard the imaginary part    #TODO: Future consideration of magnitude
-        separate_images = self.IFFT(masked_kspace)[:, 0, :, :].view(batch_size, width, height,
-                                                                    width)
+        # discard the imaginary part
+        separate_images = to_magnitude(self.IFFT(masked_kspace)).view(batch_size, width, height,
+                                                                      width)
 
         # concatenate mask embedding
         if mask_embedding is not None:

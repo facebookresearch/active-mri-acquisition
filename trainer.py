@@ -32,19 +32,19 @@ def run_validation_and_update_best_checkpoint(
     # TODO: take argument for which metric to use as score for checkpointing. Using MSE for now
     val_engine.run(val_loader)
     metrics = val_engine.state.metrics
-    progress_bar.log_message('Validation Results - Epoch: {}  MSE: {:.3f} SSIM: {:.3f}'.format(
-        engine.state.epoch, metrics['mse'], metrics['ssim']))
+    progress_bar.log_message(f"Validation Results - Epoch: {engine.state.epoch}  "
+                             f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f} loss_D: "
+                             f"{metrics['loss_D']:.3f}")
     trainer.completed_epochs += 1
-    score = -metrics['mse']
+    score = -metrics['loss_D'] if trainer.options.only_evaluator else -metrics['mse']
     if score > trainer.best_validation_score:
         trainer.best_validation_score = score
         full_path = save_checkpoint_function(trainer, 'best_checkpoint')
-        progress_bar.log_message('Saved best checkpoint to {}. Score: {}. Iteration: {}'.format(
-            full_path, score, engine.state.iteration))
+        progress_bar.log_message(f'Saved best checkpoint to {full_path}. Score: {score}. '
+                                 f'Iteration: {engine.state.iteration}')
 
 
 def save_checkpoint_function(trainer: 'Trainer', filename: str) -> str:
-    pass
     # Ensures atomic checkpoint save to avoid corrupted files if preempted during a save operation
     tmp_filename = tempfile.NamedTemporaryFile(delete=False, dir=trainer.options.checkpoints_dir)
     try:
@@ -113,39 +113,30 @@ class Trainer:
         train_data_loader, val_data_loader = create_data_loaders(self.options)
         return train_data_loader, val_data_loader
 
-    def inference(self, batch, reconstructor, fft_functions, options):
-        reconstructor.eval()
+    def inference(self, batch):
+        self.reconstructor.eval()
         with torch.no_grad():
             zero_filled_reconstruction, target, mask = preprocess_inputs(
-                batch, fft_functions, options)
+                batch, self.fft_functions, self.options)
 
             # Get reconstructor output
-            reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
+            reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
                 zero_filled_reconstruction, mask)
 
-            # convert to magnitude
-            zero_filled_reconstruction = to_magnitude(zero_filled_reconstruction, options)
-            reconstructed_image = to_magnitude(reconstructed_image, options)
-            target = to_magnitude(target, options)
-
-            if options.dataroot == 'KNEE_RAW':
-                # crop data
-                reconstructed_image = center_crop(reconstructed_image, [320, 320])
-                target = center_crop(target, [320, 320])
-                zero_filled_reconstruction = center_crop(zero_filled_reconstruction, [320, 320])
-                uncertainty_map = center_crop(uncertainty_map, [320, 320])
-
-            mse = F.mse_loss(reconstructed_image, target, reduction='mean')
-            ssim = util.ssim_metric(reconstructed_image, target)
+            reconstructor_eval = None
+            target_eval = None
+            if self.evaluator is not None:
+                reconstructor_eval = self.evaluator(reconstructed_image, mask_embedding)
+                target_eval = self.evaluator(target, mask_embedding)
 
             return {
-                'MSE': mse,
-                'SSIM': ssim,
                 'ground_truth': target,
                 'zero_filled_image': zero_filled_reconstruction,
                 'reconstructed_image': reconstructed_image,
                 'uncertainty_map': uncertainty_map,
-                'mask': mask
+                'mask': mask,
+                'reconstructor_eval': reconstructor_eval,
+                'target_eval': target_eval
             }
 
     def load_from_checkpoint_if_present(self):
@@ -175,68 +166,71 @@ class Trainer:
         checkpoint = torch.load(
             os.path.join(self.options.checkpoints_dir, self.options.weights_checkpoint))
         self.reconstructor.load_state_dict(checkpoint['reconstructor'])
-        if self.options.use_evaluator and 'evaluator' in checkpoint.keys():
+        if self.options.use_evaluator and 'evaluator' in checkpoint.keys() and \
+                checkpoint['evaluator'] is not None:
             self.evaluator.load_state_dict(checkpoint['evaluator'])
+        else:
+            self.logger.info('Evaluator was not loaded.')
 
     # TODO: consider adding learning rate scheduler
-    # noinspection PyUnboundLocalVariable
-    def update(self, batch, reconstructor, evaluator, optimizers, losses, fft_functions, options):
-        zero_filled_reconstruction, target, mask = preprocess_inputs(batch, fft_functions, options)
+    def update(self, batch):
+        zero_filled_reconstruction, target, mask = preprocess_inputs(batch, self.fft_functions,
+                                                                     self.options)
 
         # Get reconstructor output
-        reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
+        reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
             zero_filled_reconstruction, mask)
 
         # ------------------------------------------------------------------------
         # Update evaluator and compute generator GAN Loss
         # ------------------------------------------------------------------------
         loss_G_GAN = 0
+        loss_D = torch.tensor(0.)
         if self.evaluator is not None:
-            optimizers['D'].zero_grad()
-            fake = clamp(reconstructed_image)
+            self.optimizers['D'].zero_grad()
+            fake = reconstructed_image
             detached_fake = fake.detach()
-            if options.mask_embed_dim != 0:
+            if self.options.mask_embed_dim != 0:
                 mask_embedding = mask_embedding.detach()
-            output = evaluator(detached_fake, mask_embedding)
-            loss_D_fake = losses['GAN'](
-                output, False, mask, degree=0, pred_and_gt=(detached_fake[:, :1, ...], target))
+            output = self.evaluator(detached_fake, mask_embedding)
+            loss_D_fake = self.losses['GAN'](
+                output, False, mask, degree=0, pred_and_gt=(detached_fake, target))
 
-            real = clamp(target)
-            output = evaluator(real, mask_embedding)
-            loss_D_real = losses['GAN'](
-                output, True, mask, degree=1, pred_and_gt=(detached_fake[:, :1, ...], target))
+            real = target
+            output = self.evaluator(real, mask_embedding)
+            loss_D_real = self.losses['GAN'](
+                output, True, mask, degree=1, pred_and_gt=(detached_fake, target))
 
             loss_D = loss_D_fake + loss_D_real
             loss_D.backward(retain_graph=True)
-            optimizers['D'].step()
+            self.optimizers['D'].step()
 
             if not self.options.only_evaluator:
-                output = evaluator(fake, mask_embedding)
-                loss_G_GAN = losses['GAN'](
+                output = self.evaluator(fake, mask_embedding)
+                loss_G_GAN = self.losses['GAN'](
                     output,
                     True,
                     mask,
                     degree=1,
                     updateG=True,
                     pred_and_gt=(fake[:, :1, ...], target))
-                loss_G_GAN *= options.lambda_gan
+                loss_G_GAN *= self.options.lambda_gan
 
         # ------------------------------------------------------------------------
         # Update reconstructor
         # ------------------------------------------------------------------------
+        loss_G = torch.tensor(0.)
         if not self.options.only_evaluator:
-            optimizers['G'].zero_grad()
-            loss_G = losses['NLL'](reconstructed_image, target, uncertainty_map, options).mean()
+            self.optimizers['G'].zero_grad()
+            loss_G = self.losses['NLL'](reconstructed_image, target, uncertainty_map,
+                                        self.options).mean()
             loss_G += loss_G_GAN
             loss_G.backward()
-            optimizers['G'].step()
+            self.optimizers['G'].step()
 
         self.updates_performed += 1
 
-        return {
-            'loss_D': 0 if self.evaluator is None else loss_D.item(),
-            'loss_G': loss_G.item() if not self.options.only_evaluator else 0
-        }
+        return {'loss_D': loss_D.item(), 'loss_G': loss_G.item()}
 
     def __call__(self) -> float:
         self.logger = logging.getLogger()
@@ -299,18 +293,44 @@ class Trainer:
         writer = SummaryWriter(self.options.checkpoints_dir)
 
         # Training engine and handlers
-        train_engine = Engine(lambda engine, batch: self.
-                              update(batch, self.reconstructor, self.evaluator, self.optimizers,
-                                     self.losses, self.fft_functions, self.options))
+        train_engine = Engine(lambda engine, batch: self.update(batch))
+        val_engine = Engine(lambda engine, batch: self.inference(batch))
 
-        val_engine = Engine(lambda engine, batch: self.inference(batch, self.reconstructor, self.
-                                                                 fft_functions, self.options))
         validation_mse = Loss(
-            loss_fn=lambda x, y: x, output_transform=lambda x: (x['MSE'], x['ground_truth']))
+            loss_fn=F.mse_loss,
+            output_transform=lambda x: (x['reconstructed_image'], x['ground_truth']))
         validation_mse.attach(val_engine, name='mse')
         validation_ssim = Loss(
-            loss_fn=lambda x, y: x, output_transform=lambda x: (x['SSIM'], x['ground_truth']))
+            loss_fn=util.compute_ssims,
+            output_transform=lambda x: (x['reconstructed_image'], x['ground_truth']))
         validation_ssim.attach(val_engine, name='ssim')
+
+        def discriminator_loss(reconstructor_eval,
+                               target_eval,
+                               reconstructed_image=None,
+                               target=None,
+                               mask=None):
+            if self.evaluator is None:
+                return 0
+            with torch.no_grad():
+                loss_D_fake = self.losses['GAN'](
+                    reconstructor_eval,
+                    False,
+                    mask,
+                    degree=0,
+                    pred_and_gt=(reconstructed_image, target))
+                loss_D_real = self.losses['GAN'](
+                    target_eval, True, mask, degree=1, pred_and_gt=(reconstructed_image, target))
+                return loss_D_fake + loss_D_real
+
+        validation_loss_d = Loss(
+            loss_fn=discriminator_loss,
+            output_transform=lambda x: (x['reconstructor_eval'], x['target_eval'], {
+                'reconstructed_image': x['reconstructed_image'],
+                'target': x['ground_truth'],
+                'mask': x['mask']
+            }))
+        validation_loss_d.attach(val_engine, name='loss_D')
 
         progress_bar = ProgressBar()
         progress_bar.attach(train_engine)
@@ -333,35 +353,54 @@ class Trainer:
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_loss(_):
-            writer.add_scalar("validation/MSE", val_engine.state.output['MSE'],
+            writer.add_scalar("validation/MSE", val_engine.state.metrics['mse'],
                               self.completed_epochs)
-            writer.add_scalar("validation/SSIM", val_engine.state.output['SSIM'],
+            writer.add_scalar("validation/SSIM", val_engine.state.metrics['ssim'],
+                              self.completed_epochs)
+            writer.add_scalar("validation/loss_D", val_engine.state.metrics['loss_D'],
                               self.completed_epochs)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_images(_):
-            ground_truth = util.create_grid_from_tensor(val_engine.state.output['ground_truth'])
+            ground_truth = val_engine.state.output['ground_truth']
+            zero_filled_image = val_engine.state.output['zero_filled_image']
+            reconstructed_image = val_engine.state.output['reconstructed_image']
+            uncertainty_map = val_engine.state.output['uncertainty_map']
+
+            # Do some post processing
+            # convert to magnitude
+            also_clamp_and_scale = self.options.dataroot != 'KNEE_RAW'
+            zero_filled_image = to_magnitude(
+                zero_filled_image, also_clamp_and_scale=also_clamp_and_scale)
+            reconstructed_image = to_magnitude(
+                reconstructed_image, also_clamp_and_scale=also_clamp_and_scale)
+            ground_truth = to_magnitude(ground_truth, also_clamp_and_scale=also_clamp_and_scale)
+            difference = torch.abs(ground_truth - reconstructed_image)
+
+            if self.options.dataroot == 'KNEE_RAW':  # crop data
+                reconstructed_image = center_crop(reconstructed_image, [320, 320])
+                ground_truth = center_crop(ground_truth, [320, 320])
+                zero_filled_image = center_crop(zero_filled_image, [320, 320])
+                uncertainty_map = center_crop(uncertainty_map, [320, 320])
+
+            # Create plots
+            ground_truth = util.create_grid_from_tensor(ground_truth)
             writer.add_image("validation_images/ground_truth", ground_truth, self.completed_epochs)
 
-            zero_filled_image = util.create_grid_from_tensor(
-                val_engine.state.output['zero_filled_image'])
+            zero_filled_image = util.create_grid_from_tensor(zero_filled_image)
             writer.add_image("validation_images/zero_filled_image", zero_filled_image,
                              self.completed_epochs)
 
-            reconstructed_image = util.create_grid_from_tensor(
-                val_engine.state.output['reconstructed_image'])
+            reconstructed_image = util.create_grid_from_tensor(reconstructed_image)
             writer.add_image("validation_images/reconstructed_image", reconstructed_image,
                              self.completed_epochs)
 
             uncertainty_map = util.gray2heatmap(
-                util.create_grid_from_tensor(val_engine.state.output['uncertainty_map'].exp()),
-                cmap='jet')
+                util.create_grid_from_tensor(uncertainty_map.exp()), cmap='jet')
             writer.add_image("validation_images/uncertainty_map", uncertainty_map,
                              self.completed_epochs)
 
-            difference = util.create_grid_from_tensor(
-                torch.abs(val_engine.state.output['ground_truth'] -
-                          val_engine.state.output['reconstructed_image']))
+            difference = util.create_grid_from_tensor(difference)
             difference = util.gray2heatmap(difference, cmap='gray')
             writer.add_image("validation_images/difference", difference, self.completed_epochs)
 
