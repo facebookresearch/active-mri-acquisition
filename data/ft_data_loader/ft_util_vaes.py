@@ -120,18 +120,19 @@ class FixedOrderRandomSampler(RandomSampler):
 
 
 class MaskFunc:
-    min_lowf_lines = 6
-    max_lowf_lines = 16
-    highf_beta_alpha = 1
-    highf_beta_beta = 5
-
-    def __init__(self, center_fractions, accelerations, random_num_lines=False):
+    def __init__(self, center_fractions, accelerations, which_dataset, random_num_lines=False):
         if len(center_fractions) != len(accelerations):
             raise ValueError('Number of center fractions should match number of accelerations')
 
         self.center_fractions = center_fractions
         self.accelerations = accelerations
         self.random_num_lines = random_num_lines
+
+        # The lines below give approx. 4x acceleration on average.
+        self.min_lowf_lines = 6 if which_dataset != 'KNEE_RAW' else 16
+        self.max_lowf_lines = 16 if which_dataset != 'KNEE_RAW' else 44
+        self.highf_beta_alpha = 1
+        self.highf_beta_beta = 5
 
         self.rng = np.random.RandomState()
 
@@ -174,7 +175,7 @@ class MaskFunc:
         return mask
 
 
-class FixedAccelerationMaskFunc(MaskFunc):
+class BasicMaskFunc(MaskFunc):
 
     def create_lf_focused_mask(self, num_cols, num_high_freqs, num_low_freqs):
         mask = np.zeros([num_cols])
