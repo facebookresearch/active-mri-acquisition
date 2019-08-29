@@ -114,29 +114,34 @@ class Trainer:
         return train_data_loader, val_data_loader
 
     def inference(self, batch):
-        self.reconstructor.eval()
         with torch.no_grad():
-            zero_filled_reconstruction, target, mask = preprocess_inputs(
-                batch, self.fft_functions, self.options)
+            zero_filled_image, ground_truth, mask = preprocess_inputs(batch, self.fft_functions,
+                                                                      self.options)
 
             # Get reconstructor output
             reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
-                zero_filled_reconstruction, mask)
+                zero_filled_image, mask)
 
             reconstructor_eval = None
-            target_eval = None
+            ground_truth_eval = None
             if self.evaluator is not None:
                 reconstructor_eval = self.evaluator(reconstructed_image, mask_embedding)
-                target_eval = self.evaluator(target, mask_embedding)
+                ground_truth_eval = self.evaluator(ground_truth, mask_embedding)
+
+            if self.options.dataroot == 'KNEE_RAW':  # crop data
+                reconstructed_image = center_crop(reconstructed_image, [320, 320])
+                ground_truth = center_crop(ground_truth, [320, 320])
+                zero_filled_image = center_crop(zero_filled_image, [320, 320])
+                uncertainty_map = center_crop(uncertainty_map, [320, 320])
 
             return {
-                'ground_truth': target,
-                'zero_filled_image': zero_filled_reconstruction,
+                'ground_truth': ground_truth,
+                'zero_filled_image': zero_filled_image,
                 'reconstructed_image': reconstructed_image,
                 'uncertainty_map': uncertainty_map,
                 'mask': mask,
                 'reconstructor_eval': reconstructor_eval,
-                'target_eval': target_eval
+                'ground_truth_eval': ground_truth_eval
             }
 
     def load_from_checkpoint_if_present(self):
@@ -174,12 +179,11 @@ class Trainer:
 
     # TODO: consider adding learning rate scheduler
     def update(self, batch):
-        zero_filled_reconstruction, target, mask = preprocess_inputs(batch, self.fft_functions,
-                                                                     self.options)
+        zero_filled_image, target, mask = preprocess_inputs(batch, self.fft_functions, self.options)
 
         # Get reconstructor output
         reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
-            zero_filled_reconstruction, mask)
+            zero_filled_image, mask)
 
         # ------------------------------------------------------------------------
         # Update evaluator and compute generator GAN Loss
@@ -325,7 +329,7 @@ class Trainer:
 
         validation_loss_d = Loss(
             loss_fn=discriminator_loss,
-            output_transform=lambda x: (x['reconstructor_eval'], x['target_eval'], {
+            output_transform=lambda x: (x['reconstructor_eval'], x['ground_truth_eval'], {
                 'reconstructed_image': x['reconstructed_image'],
                 'target': x['ground_truth'],
                 'mask': x['mask']
@@ -376,12 +380,6 @@ class Trainer:
                 reconstructed_image, also_clamp_and_scale=also_clamp_and_scale)
             ground_truth = to_magnitude(ground_truth, also_clamp_and_scale=also_clamp_and_scale)
             difference = torch.abs(ground_truth - reconstructed_image)
-
-            if self.options.dataroot == 'KNEE_RAW':  # crop data
-                reconstructed_image = center_crop(reconstructed_image, [320, 320])
-                ground_truth = center_crop(ground_truth, [320, 320])
-                zero_filled_image = center_crop(zero_filled_image, [320, 320])
-                uncertainty_map = center_crop(uncertainty_map, [320, 320])
 
             # Create plots
             ground_truth = util.create_grid_from_tensor(ground_truth)

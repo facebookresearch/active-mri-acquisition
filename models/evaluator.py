@@ -59,9 +59,9 @@ class SpectralMapDecomposition(nn.Module):
         masked_kspace = masked_kspace.view(batch_size * width, 2, height, width)
 
         # convert spectral maps to image space
-        # discard the imaginary part
-        separate_images = to_magnitude(self.IFFT(masked_kspace)).view(batch_size, width, height,
-                                                                      width)
+        # result is (batch, [real_M0, img_M0, real_M1, img_M1, ...],  height, width]
+        separate_images = self.IFFT(masked_kspace).contiguous().view(batch_size, 2 * width, height,
+                                                                     width)
 
         # concatenate mask embedding
         if mask_embedding is not None:
@@ -86,7 +86,7 @@ class EvaluatorNetwork(nn.Module):
         self.spectral_map = SpectralMapDecomposition()
         self.mask_embed_dim = mask_embed_dim
 
-        number_of_input_channels = width + mask_embed_dim
+        number_of_input_channels = 2 * width + mask_embed_dim
 
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
 
