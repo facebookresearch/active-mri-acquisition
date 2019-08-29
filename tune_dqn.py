@@ -18,7 +18,7 @@ def main(options_):
         resource_name='num_train_steps',
         resource_factor=25000,
         job_name='active_acq_tune_dqn',
-        time=100,
+        time=4320,
         partition='learnfair',
         num_gpus=1,
         cpus_per_task=4,

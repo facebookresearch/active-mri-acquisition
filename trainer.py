@@ -134,14 +134,26 @@ class Trainer:
                 zero_filled_image = center_crop(zero_filled_image, [320, 320])
                 uncertainty_map = center_crop(uncertainty_map, [320, 320])
 
+            # Compute magnitude (for val losses and plots)
+            also_clamp_and_scale = self.options.dataroot != 'KNEE_RAW'
+            zero_filled_image_magnitude = to_magnitude(
+                zero_filled_image, also_clamp_and_scale=also_clamp_and_scale)
+            reconstructed_image_magnitude = to_magnitude(
+                reconstructed_image, also_clamp_and_scale=also_clamp_and_scale)
+            ground_truth_magnitude = to_magnitude(
+                ground_truth, also_clamp_and_scale=also_clamp_and_scale)
+
             return {
                 'ground_truth': ground_truth,
                 'zero_filled_image': zero_filled_image,
                 'reconstructed_image': reconstructed_image,
+                'ground_truth_magnitude': ground_truth_magnitude,
+                'zero_filled_image_magnitude': zero_filled_image_magnitude,
+                'reconstructed_image_magnitude': reconstructed_image_magnitude,
                 'uncertainty_map': uncertainty_map,
                 'mask': mask,
                 'reconstructor_eval': reconstructor_eval,
-                'ground_truth_eval': ground_truth_eval
+                'ground_truth_eval': ground_truth_eval,
             }
 
     def load_from_checkpoint_if_present(self):
@@ -236,6 +248,25 @@ class Trainer:
 
         return {'loss_D': loss_D.item(), 'loss_G': loss_G.item()}
 
+    def discriminator_loss(self,
+                           reconstructor_eval,
+                           target_eval,
+                           reconstructed_image=None,
+                           target=None,
+                           mask=None):
+        if self.evaluator is None:
+            return 0
+        with torch.no_grad():
+            loss_D_fake = self.losses['GAN'](
+                reconstructor_eval,
+                False,
+                mask,
+                degree=0,
+                pred_and_gt=(reconstructed_image, target))
+            loss_D_real = self.losses['GAN'](
+                target_eval, True, mask, degree=1, pred_and_gt=(reconstructed_image, target))
+            return loss_D_fake + loss_D_real
+
     def __call__(self) -> float:
         self.logger = logging.getLogger()
         if self.options.debug:
@@ -302,33 +333,17 @@ class Trainer:
 
         validation_mse = Loss(
             loss_fn=F.mse_loss,
-            output_transform=lambda x: (x['reconstructed_image'], x['ground_truth']))
+            output_transform=lambda x: (x['reconstructed_image_magnitude'],
+                                        x['ground_truth_magnitude']))
         validation_mse.attach(val_engine, name='mse')
         validation_ssim = Loss(
             loss_fn=util.compute_ssims,
-            output_transform=lambda x: (x['reconstructed_image'], x['ground_truth']))
+            output_transform=lambda x: (x['reconstructed_image_magnitude'],
+                                        x['ground_truth_magnitude']))
         validation_ssim.attach(val_engine, name='ssim')
 
-        def discriminator_loss(reconstructor_eval,
-                               target_eval,
-                               reconstructed_image=None,
-                               target=None,
-                               mask=None):
-            if self.evaluator is None:
-                return 0
-            with torch.no_grad():
-                loss_D_fake = self.losses['GAN'](
-                    reconstructor_eval,
-                    False,
-                    mask,
-                    degree=0,
-                    pred_and_gt=(reconstructed_image, target))
-                loss_D_real = self.losses['GAN'](
-                    target_eval, True, mask, degree=1, pred_and_gt=(reconstructed_image, target))
-                return loss_D_fake + loss_D_real
-
         validation_loss_d = Loss(
-            loss_fn=discriminator_loss,
+            loss_fn=self.discriminator_loss,
             output_transform=lambda x: (x['reconstructor_eval'], x['ground_truth_eval'], {
                 'reconstructed_image': x['reconstructed_image'],
                 'target': x['ground_truth'],
@@ -366,19 +381,10 @@ class Trainer:
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_images(_):
-            ground_truth = val_engine.state.output['ground_truth']
-            zero_filled_image = val_engine.state.output['zero_filled_image']
-            reconstructed_image = val_engine.state.output['reconstructed_image']
+            ground_truth = val_engine.state.output['ground_truth_magnitude']
+            zero_filled_image = val_engine.state.output['zero_filled_image_magnitude']
+            reconstructed_image = val_engine.state.output['reconstructed_image_magnitude']
             uncertainty_map = val_engine.state.output['uncertainty_map']
-
-            # Do some post processing
-            # convert to magnitude
-            also_clamp_and_scale = self.options.dataroot != 'KNEE_RAW'
-            zero_filled_image = to_magnitude(
-                zero_filled_image, also_clamp_and_scale=also_clamp_and_scale)
-            reconstructed_image = to_magnitude(
-                reconstructed_image, also_clamp_and_scale=also_clamp_and_scale)
-            ground_truth = to_magnitude(ground_truth, also_clamp_and_scale=also_clamp_and_scale)
             difference = torch.abs(ground_truth - reconstructed_image)
 
             # Create plots
