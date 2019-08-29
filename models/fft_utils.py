@@ -68,8 +68,8 @@ def center_crop(x, shape):
     return x
 
 
-def to_magnitude(tensor, options):
-    if options.dataroot != 'KNEE_RAW':
+def to_magnitude(tensor, also_clamp_and_scale=False):
+    if also_clamp_and_scale:
         tensor = clamp_and_scale(tensor)
     tensor = (tensor[:, 0, :, :]**2 + tensor[:, 1, :, :]**2)**.5
     return tensor.unsqueeze(1)
@@ -86,8 +86,9 @@ def clamp(tensor):
 
 
 def gaussian_nll_loss(reconstruction, target, logvar, options):
-    reconstruction = to_magnitude(reconstruction, options)
-    target = to_magnitude(target, options)
+    reconstruction = to_magnitude(
+        reconstruction, also_clamp_and_scale=options.dataroot != 'KNEE_RAW')
+    target = to_magnitude(target, also_clamp_and_scale=options.dataroot != 'KNEE_RAW')
     if options.dataroot == 'KNEE_RAW':
         reconstruction = center_crop(reconstruction, [320, 320])
         target = center_crop(target, [320, 320])
@@ -179,7 +180,7 @@ class GANLossKspace(nn.Module):
             self.loss = nn.BCELoss(size_average=False)
         self.use_mse_as_energy = use_mse_as_energy
         if use_mse_as_energy:
-            self.RFFT = RFFT()
+            self.FFT = FFT()
             self.gamma = gamma
             self.bin = 5
 
@@ -197,8 +198,8 @@ class GANLossKspace(nn.Module):
             else:
                 pred, gt = pred_and_gt
                 w = gt.shape[2]
-                ks_gt = self.RFFT(gt[:, :1, :, :], normalized=True)
-                ks_input = self.RFFT(pred, normalized=True)
+                ks_gt = self.FFT(gt, normalized=True)
+                ks_input = self.FFT(pred, normalized=True)
                 ks_row_mse = F.mse_loss(
                     ks_input, ks_gt, reduce=False).sum(
                         1, keepdim=True).sum(
