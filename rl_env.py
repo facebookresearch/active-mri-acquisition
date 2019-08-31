@@ -132,21 +132,22 @@ class ReconstructionEnv:
         self._reconstructor.to(device)
         logging.info('Loaded reconstructor from checkpoint.')
 
+        self._evaluator = None
         evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
-        self._evaluator = EvaluatorNetwork(
-            number_of_filters=evaluator_checkpoint['options'].number_of_evaluator_filters,
-            number_of_conv_layers=evaluator_checkpoint['options']
-            .number_of_evaluator_convolution_layers,
-            use_sigmoid=False,
-            width=evaluator_checkpoint['options'].image_width,
-            mask_embed_dim=evaluator_checkpoint['options'].mask_embed_dim)
-        if evaluator_checkpoint['evaluator'] is not None:
+        if evaluator_checkpoint is not None and evaluator_checkpoint['evaluator'] is not None:
+            self._evaluator = EvaluatorNetwork(
+                number_of_filters=evaluator_checkpoint['options'].number_of_evaluator_filters,
+                number_of_conv_layers=evaluator_checkpoint['options']
+                .number_of_evaluator_convolution_layers,
+                use_sigmoid=False,
+                width=evaluator_checkpoint['options'].image_width,
+                mask_embed_dim=evaluator_checkpoint['options'].mask_embed_dim)
             logging.info(f'Loaded evaluator from checkpoint.')
             self._evaluator.load_state_dict({
                 key.replace('module.', ''): val
                 for key, val in evaluator_checkpoint['evaluator'].items()
             })
-        self._evaluator.to(device)
+            self._evaluator.to(device)
 
         obs_shape = None
         if options.obs_type == 'spectral_maps':
@@ -326,7 +327,8 @@ class ReconstructionEnv:
 
         reward_ = -new_score if self.options.use_score_as_reward \
             else self._current_score - new_score
-        reward = -1.0 if has_already_been_scanned else reward_.item() / 0.01
+        factor = 1 if self.options.use_score_as_reward else 100
+        reward = -1.0 if has_already_been_scanned else reward_.item() * factor
         self._current_score = new_score
 
         self._scans_left -= 1

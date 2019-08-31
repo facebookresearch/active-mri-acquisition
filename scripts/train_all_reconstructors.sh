@@ -4,7 +4,9 @@ EXTRA_OPTIONS=--only_evaluator
 
 CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_no_sign_leakage_michal
 
-SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/$((RANDOM % 100000))
+SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/train_reconstructors_$(date +%Y%m%d_%H.%M.%S)
+
+echo $SRC_DIR
 
 mkdir -p ${SRC_DIR}
 cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
