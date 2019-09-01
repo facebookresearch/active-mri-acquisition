@@ -32,9 +32,13 @@ def run_validation_and_update_best_checkpoint(
     # TODO: take argument for which metric to use as score for checkpointing. Using MSE for now
     val_engine.run(val_loader)
     metrics = val_engine.state.metrics
-    progress_bar.log_message(f"Validation Results - Epoch: {engine.state.epoch}  "
-                             f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f} loss_D: "
-                             f"{metrics['loss_D']:.3f}")
+    if trainer.options.use_evaluator:
+        progress_bar.log_message(f"Validation Results - Epoch: {engine.state.epoch}  "
+                                f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f} loss_D: "
+                                f"{metrics['loss_D']:.3f}")
+    else:
+        progress_bar.log_message(f"Validation Results - Epoch: {engine.state.epoch}  "
+                                f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f}")
     trainer.completed_epochs += 1
     score = -metrics['loss_D'] if trainer.options.only_evaluator else -metrics['mse']
     if score > trainer.best_validation_score:
@@ -336,20 +340,23 @@ class Trainer:
             output_transform=lambda x: (x['reconstructed_image_magnitude'],
                                         x['ground_truth_magnitude']))
         validation_mse.attach(val_engine, name='mse')
+
         validation_ssim = Loss(
             loss_fn=util.compute_ssims,
             output_transform=lambda x: (x['reconstructed_image_magnitude'],
                                         x['ground_truth_magnitude']))
         validation_ssim.attach(val_engine, name='ssim')
 
-        validation_loss_d = Loss(
-            loss_fn=self.discriminator_loss,
-            output_transform=lambda x: (x['reconstructor_eval'], x['ground_truth_eval'], {
-                'reconstructed_image': x['reconstructed_image'],
-                'target': x['ground_truth'],
-                'mask': x['mask']
-            }))
-        validation_loss_d.attach(val_engine, name='loss_D')
+        if self.options.use_evaluator:
+            validation_loss_d = Loss(
+                loss_fn=self.discriminator_loss,
+                output_transform=lambda x: (x['reconstructor_eval'], x['ground_truth_eval'], {
+                    'reconstructed_image': x['reconstructed_image'],
+                    'target': x['ground_truth'],
+                    'mask': x['mask']
+                }))
+            validation_loss_d.attach(val_engine, name='loss_D')
+
 
         progress_bar = ProgressBar()
         progress_bar.attach(train_engine)
@@ -367,8 +374,9 @@ class Trainer:
         def plot_training_loss(engine):
             writer.add_scalar("training/generator_loss", engine.state.output['loss_G'],
                               self.updates_performed)
-            writer.add_scalar("training/discriminator_loss", engine.state.output['loss_D'],
-                              self.updates_performed)
+            if 'loss_D' in engine.state.output:
+                writer.add_scalar("training/discriminator_loss", engine.state.output['loss_D'],
+                                self.updates_performed)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_loss(_):
@@ -376,8 +384,9 @@ class Trainer:
                               self.completed_epochs)
             writer.add_scalar("validation/SSIM", val_engine.state.metrics['ssim'],
                               self.completed_epochs)
-            writer.add_scalar("validation/loss_D", val_engine.state.metrics['loss_D'],
-                              self.completed_epochs)
+            if 'loss_D' in val_engine.state.output:
+                writer.add_scalar("validation/loss_D", val_engine.state.metrics['loss_D'],
+                                self.completed_epochs)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_images(_):
