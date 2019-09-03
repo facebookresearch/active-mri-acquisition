@@ -1,3 +1,4 @@
+import gym
 import logging
 import os
 
@@ -6,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+# from gym.envs.registration import register
 from typing import Dict, List, Optional, Tuple, Union
 
 from data import create_data_loaders
@@ -20,8 +22,8 @@ fft = FFT()
 fft_functions = {'rfft': rfft, 'ifft': ifft, 'fft': fft}
 
 CONJUGATE_SYMMETRIC = True
-IMAGE_WIDTH = 368
-NUM_LINES_INITIAL = 14
+IMAGE_WIDTH = 128
+NUM_LINES_INITIAL = 10
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -69,7 +71,7 @@ class KSpaceMap(nn.Module):
 
 
 # noinspection PyAttributeOutsideInit
-class ReconstructionEnv:
+class ReconstructionEnv(gym.Env):
     """ RL environment representing the active acquisition process with reconstruction model. """
 
     def __init__(self, initial_mask, options):

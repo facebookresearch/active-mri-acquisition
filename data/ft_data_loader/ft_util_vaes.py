@@ -185,7 +185,7 @@ class Slice(Dataset):
                  num_rand_slices=None):
         self.transform = transform
         self.dataset = _DicomDataset(
-            dicom_root / str(resolution) / which, scan_type, num_volumes=num_volumes)
+            dicom_root / which, scan_type, num_volumes=num_volumes)
         self.num_slices = self.dataset.metadata['num_slices']
         self.num_rand_slices = num_rand_slices
         self.rng = np.random.RandomState()

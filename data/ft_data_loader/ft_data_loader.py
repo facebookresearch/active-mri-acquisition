@@ -42,7 +42,7 @@ def get_train_valid_loader(batch_size, num_workers=4, pin_memory=False, which_da
 
     elif which_dataset == 'KNEE':
         mask_func = FixedAccelerationMaskFunc([0.125], [4])
-        dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
+        dicom_root = pathlib.Path('/datasets01_101/fastMRI/081419/knee_dicoms')
         data_transform = DicomDataTransform(mask_func, None)
         train_data = Slice(
             data_transform,
@@ -121,7 +121,7 @@ class SequentialSampler2(Sampler):
 def get_test_loader(batch_size, num_workers=2, pin_memory=False, which_dataset='KNEE'):
     if which_dataset in ('KNEE'):
         mask_func = FixedAccelerationMaskFunc([0.125], [4])
-        dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
+        dicom_root = pathlib.Path('/datasets01_101/fastMRI/081419/knee_dicoms')
         data_transform = DicomDataTransform(mask_func, None)
         test_data = Slice(
             data_transform,
