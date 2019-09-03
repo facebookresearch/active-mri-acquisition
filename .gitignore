@@ -18,3 +18,4 @@ options/__pycache__/
 experiments/*
 .idea
 *personal*
+*.orig
