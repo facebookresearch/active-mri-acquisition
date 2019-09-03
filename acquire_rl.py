@@ -117,16 +117,14 @@ def get_experiment_str(options_):
         if 'greedymc' in options_.policy:
             policy_str = '{}.nsam{}.hor{}_'.format(policy_str, options_.greedymc_num_samples,
                                                    options_.greedymc_horizon)
-    return '{}_bu{}_seed{}_neptest{}'.format(policy_str, options_.budget, options_.seed,
-                                             options_.num_test_images)
+    return f'{policy_str}_bu{options_.budget}_seed{options_.seed}_neptest{options_.num_test_images}'
 
 
 # Not a great policy specification protocol, but works for now.
 def get_policy(env, writer, logger, options_):
     # This options affects how the score is computed by the environment
     # (whether it passes through reconstruction network or not after a new col. is scanned)
-    options_.use_reconstructions = (options_.policy[-2:] == '_r')
-    logger.info('Use reconstructions is {}'.format(options_.use_reconstructions))
+    logger.info(f'Use reconstructions is {options_.use_reconstructions}')
     if 'random' in options_.policy:
         policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
     elif 'lowfirst' in options_.policy:
@@ -166,7 +164,7 @@ def get_policy(env, writer, logger, options_):
 
 
 def main(options_, logger):
-    writer = tensorboardX.SummaryWriter(options_.tb_logs_dir)
+    writer = tensorboardX.SummaryWriter(options_.checkpoints_dir)
     env = rl_env.ReconstructionEnv(
         rl_env.generate_initial_mask(options_.initial_num_lines), options_)
     env.set_training()
@@ -187,16 +185,16 @@ if __name__ == '__main__':
     torch.manual_seed(opts.seed)
 
     experiment_str = get_experiment_str(opts)
-    opts.tb_logs_dir = os.path.join(opts.checkpoints_dir, experiment_str)
-    if not os.path.isdir(opts.tb_logs_dir):
-        os.makedirs(opts.tb_logs_dir)
+    opts.checkpoints_dir = os.path.join(opts.checkpoints_dir, experiment_str)
+    if not os.path.isdir(opts.checkpoints_dir):
+        os.makedirs(opts.checkpoints_dir)
 
     # Initializing logger
     logger_ = logging.getLogger()
     logger_.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(os.path.join(opts.tb_logs_dir, 'train.log'))
+    fh = logging.FileHandler(os.path.join(opts.checkpoints_dir, 'train.log'))
     fh.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
     ch.setFormatter(formatter)
@@ -204,6 +202,6 @@ if __name__ == '__main__':
     logger_.addHandler(ch)
     logger_.addHandler(fh)
 
-    logger_.info(f'Results will be saved at {opts.tb_logs_dir}.')
+    logger_.info(f'Results will be saved at {opts.checkpoints_dir}.')
 
     main(opts, logger_)

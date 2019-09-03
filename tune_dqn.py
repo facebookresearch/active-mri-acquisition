@@ -16,10 +16,10 @@ def main(options_):
         os.path.join(options_.checkpoints_dir, 'submitit_logs'),
         3,
         resource_name='num_train_steps',
-        resource_factor=25000,
+        resource_factor=50000,
         job_name='active_acq_tune_dqn',
         time=4320,
-        partition='learnfair',
+        partition='scavenge',
         num_gpus=1,
         cpus_per_task=4,
         mem=16000)
@@ -33,7 +33,7 @@ def main(options_):
         'epsilon_start': [0.99, 0.95, 0.9],
         'rl_batch_size': [8, 16, 32, 64],
         'dqn_learning_rate': [5.0e-4, 2.5e-4, 1.25e-4, 6.25e-5],
-        'replay_buffer_size': [100000, 200000, 400000],
+        'replay_buffer_size': [400000],
     }
 
     # Create the tuner with evaluator and the specified classes
@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     opts.R = 10
     opts.eta = 3
-    opts.max_jobs_tuner = 20
+    opts.max_jobs_tuner = 40
     opts.interactive_init = True
 
     main(opts)
