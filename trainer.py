@@ -16,7 +16,7 @@ from typing import Any, Dict, Tuple
 
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, FFT, clamp, preprocess_inputs, gaussian_nll_loss, \
+from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, gaussian_nll_loss, \
     GANLossKspace, to_magnitude, center_crop
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
@@ -34,11 +34,11 @@ def run_validation_and_update_best_checkpoint(
     metrics = val_engine.state.metrics
     if trainer.options.use_evaluator:
         progress_bar.log_message(f"Validation Results - Epoch: {engine.state.epoch}  "
-                                f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f} loss_D: "
-                                f"{metrics['loss_D']:.3f}")
+                                 f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f} loss_D: "
+                                 f"{metrics['loss_D']:.3f}")
     else:
         progress_bar.log_message(f"Validation Results - Epoch: {engine.state.epoch}  "
-                                f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f}")
+                                 f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f}")
     trainer.completed_epochs += 1
     score = -metrics['loss_D'] if trainer.options.only_evaluator else -metrics['mse']
     if score > trainer.best_validation_score:
@@ -357,7 +357,6 @@ class Trainer:
                 }))
             validation_loss_d.attach(val_engine, name='loss_D')
 
-
         progress_bar = ProgressBar()
         progress_bar.attach(train_engine)
 
@@ -376,7 +375,7 @@ class Trainer:
                               self.updates_performed)
             if 'loss_D' in engine.state.output:
                 writer.add_scalar("training/discriminator_loss", engine.state.output['loss_D'],
-                                self.updates_performed)
+                                  self.updates_performed)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_loss(_):
@@ -384,9 +383,9 @@ class Trainer:
                               self.completed_epochs)
             writer.add_scalar("validation/SSIM", val_engine.state.metrics['ssim'],
                               self.completed_epochs)
-            if 'loss_D' in val_engine.state.output:
+            if 'loss_D' in val_engine.state.metrics:
                 writer.add_scalar("validation/loss_D", val_engine.state.metrics['loss_D'],
-                                self.completed_epochs)
+                                  self.completed_epochs)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_images(_):
