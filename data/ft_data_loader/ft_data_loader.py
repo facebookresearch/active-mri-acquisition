@@ -23,7 +23,8 @@ def get_mask_func(mask_type, which_dataset):
         return BasicMaskFunc([0.125], [4], which_dataset, random_num_lines=random_num_lines)
     if 'symmetric_choice' in mask_type:
         logging.info(f'Mask is symmetric uniform choice with random_num_lines={random_num_lines}.')
-        return SymmetricUniformChoiceMaskFunc([0.125], [4], which_dataset, random_num_lines=random_num_lines)
+        return SymmetricUniformChoiceMaskFunc(
+            [0.125], [4], which_dataset, random_num_lines=random_num_lines)
     if 'symmetric_grid' in mask_type:
         logging.info(f'Mask is symmetric grid.')
         return SymmetricUniformGridMaskFunc([], [], which_dataset, random_num_lines=True)
@@ -82,7 +83,10 @@ def get_train_valid_loader(batch_size,
             raise ImportError(raw_root + ' not exists. Change to the right path.')
         data_transform = RawDataTransform(mask_func)
         train_data = RawSliceData(
-            raw_root + '/singlecoil_train', transform=data_transform, num_cols=368, num_volumes=None)
+            raw_root + '/singlecoil_train',
+            transform=data_transform,
+            num_cols=368,
+            num_volumes=None)
         valid_data = RawSliceData(
             raw_root + '/singlecoil_val', transform=data_transform, num_cols=368, num_volumes=None)
     else:
@@ -137,7 +141,7 @@ def get_test_loader(batch_size,
                     which_dataset='KNEE',
                     mask_type='fixed_acc'):
     if which_dataset in ('KNEE'):
-        mask_func = get_mask_func(mask_type)
+        mask_func = get_mask_func(mask_type, which_dataset)
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
         data_transform = DicomDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         test_data = Slice(
