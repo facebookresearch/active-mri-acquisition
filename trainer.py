@@ -181,9 +181,10 @@ class Trainer:
                 self.updates_performed = checkpoint['updates_performed']
 
     def load_weights_from_given_checkpoint(self):
-        if self.options.weights_checkpoint is None or not os.path.exists(
-                self.options.weights_checkpoint):
+        if self.options.weights_checkpoint is None:
             return
+        elif not os.path.exists(self.options.weights_checkpoint):
+            raise('Specified weights checkpoint do not exist!')
         self.logger.info(
             f'Loading weights from checkpoint found at {self.options.weights_checkpoint}.')
         checkpoint = torch.load(
