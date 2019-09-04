@@ -79,7 +79,8 @@ class ReconstructionEnv(gym.Env):
 
             @param `initial_mask`: The initial mask to use at the start of each episode.
             @param `options`: Should specify the following options:
-                -`checkpoints_dir`: directory where models are stored.
+                -`reconstructor_dir`: directory where reconstructor is stored.
+                -`evaluator_dir`: directory where evaluator is stored.
                 -`sequential_images`: If true, each episode presents the next image in the dataset,
                     otherwise a random image is presented.
                 -`budget`: how many actions to choose (the horizon of the episode).
@@ -89,6 +90,7 @@ class ReconstructionEnv(gym.Env):
                     then all images will be used.
                 -`num_test_images`: the number of images to use for test. If it's None, then
                     all images will be used.
+                -`test_set`: the name of the test set to use (train, val, or test).
         """
         # TODO remove initial_mask argument (control this generation inside the class)
 
@@ -98,28 +100,31 @@ class ReconstructionEnv(gym.Env):
         test_loader = create_data_loaders(options, is_test=True)
 
         self._dataset_train = train_loader.dataset
-        self._dataset_test = test_loader.dataset if not options.test_with_train_set \
-            else train_loader.dataset
-        self.num_train_images = self.options.num_train_images
-        self.num_test_images = self.options.num_test_images
-        if self.num_train_images is None or len(self._dataset_train) < self.num_train_images:
-            self.num_train_images = len(self._dataset_train)
-        if self.num_test_images is None or len(self._dataset_test) < self.num_test_images:
-            self.num_test_images = len(self._dataset_test)
+        if options.test_set == 'train':
+            self._dataset_test = train_loader.dataset
+        elif options.test_set == 'valid':
+            self._dataset_test = valid_loader.dataset
+        else:
+            self._dataset_test = test_loader.dataset
 
-        r = np.random.RandomState(options.seed)
-        self._train_order = r.permutation(len(self._dataset_train))
-        self._test_order = r.permutation(len(self._dataset_test))
+        self.num_train_images = min(self.options.num_train_images, len(self._dataset_train))
+        self.num_test_images = min(self.options.num_test_images, len(self._dataset_test))
+
+        # For the training data the
+        rng = np.random.RandomState(options.seed)
+        rng_train = np.random.RandomState() if options.rl_env_train_no_seed else rng
+        self._train_order = rng_train.permutation(len(self._dataset_train))
+        self._test_order = rng.permutation(len(self._dataset_test))
         self.image_idx_test = 0
         self.image_idx_train = 0
         self.is_testing = False
 
-        checkpoint = load_checkpoint(options.checkpoints_dir, 'best_checkpoint.pth')
+        reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
         self._reconstructor = ReconstructorNetwork(
-            number_of_cascade_blocks=checkpoint['options'].number_of_cascade_blocks,
-            n_downsampling=checkpoint['options'].n_downsampling,
-            number_of_filters=checkpoint['options'].number_of_reconstructor_filters,
-            number_of_layers_residual_bottleneck=checkpoint['options']
+            number_of_cascade_blocks=reconstructor_checkpoint['options'].number_of_cascade_blocks,
+            n_downsampling=reconstructor_checkpoint['options'].n_downsampling,
+            number_of_filters=reconstructor_checkpoint['options'].number_of_reconstructor_filters,
+            number_of_layers_residual_bottleneck=reconstructor_checkpoint['options']
             .number_of_layers_residual_bottleneck,
             mask_embed_dim=checkpoint['options'].mask_embed_dim,
             dropout_probability=checkpoint['options'].dropout_probability,
@@ -129,19 +134,24 @@ class ReconstructionEnv(gym.Env):
             {key.replace('module.', ''): val
              for key, val in checkpoint['reconstructor'].items()})
         self._reconstructor.to(device)
+        logging.info('Loaded reconstructor from checkpoint.')
 
-        self._evaluator = EvaluatorNetwork(
-            number_of_filters=checkpoint['options'].number_of_evaluator_filters,
-            number_of_conv_layers=checkpoint['options'].number_of_evaluator_convolution_layers,
-            use_sigmoid=False,
-            width=checkpoint['options'].image_width,
-            mask_embed_dim=checkpoint['options'].mask_embed_dim)
-        if checkpoint['evaluator'] is not None:
+        self._evaluator = None
+        evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
+        if evaluator_checkpoint is not None and evaluator_checkpoint['evaluator'] is not None:
+            self._evaluator = EvaluatorNetwork(
+                number_of_filters=evaluator_checkpoint['options'].number_of_evaluator_filters,
+                number_of_conv_layers=evaluator_checkpoint['options']
+                .number_of_evaluator_convolution_layers,
+                use_sigmoid=False,
+                width=evaluator_checkpoint['options'].image_width,
+                mask_embed_dim=evaluator_checkpoint['options'].mask_embed_dim)
             logging.info(f'Loaded evaluator from checkpoint.')
-            self._evaluator.load_state_dict(
-                {key.replace('module.', ''): val
-                 for key, val in checkpoint['evaluator'].items()})
-        self._evaluator.to(device)
+            self._evaluator.load_state_dict({
+                key.replace('module.', ''): val
+                for key, val in evaluator_checkpoint['evaluator'].items()
+            })
+            self._evaluator.to(device)
 
         obs_shape = None
         if options.obs_type == 'spectral_maps':
@@ -169,11 +179,6 @@ class ReconstructionEnv(gym.Env):
         self.is_testing = False
         if reset_index:
             self.image_idx_train = 0
-
-    @staticmethod
-    def compute_masked_rfft(ground_truth: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        state = rfft(ground_truth) * mask
-        return state
 
     @staticmethod
     def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
@@ -234,7 +239,7 @@ class ReconstructionEnv(gym.Env):
             if mask_to_use is None:
                 mask_to_use = self._current_mask
             image, _, _ = preprocess_inputs(
-                ground_truth, mask_to_use, fft_functions, self.options, clamp_target=False)
+                (mask_to_use, ground_truth), fft_functions, self.options, clamp_target=False)
             if use_reconstruction:
                 image, _, _ = self._reconstructor(
                     image, mask_to_use)  # pass through reconstruction network
@@ -245,8 +250,7 @@ class ReconstructionEnv(gym.Env):
     def _compute_observation_and_score(self) -> Tuple[torch.Tensor, float]:
         with torch.no_grad():
             zero_filled_reconstruction, _, _, masked_rffts = preprocess_inputs(
-                self._ground_truth,
-                self._current_mask,
+                (self._current_mask, self._ground_truth),
                 fft_functions,
                 self.options,
                 return_masked_k_space=True)
@@ -327,7 +331,8 @@ class ReconstructionEnv(gym.Env):
 
         reward_ = -new_score if self.options.use_score_as_reward \
             else self._current_score - new_score
-        reward = -1.0 if has_already_been_scanned else reward_.item() / 0.01
+        factor = 1 if self.options.use_score_as_reward else 100
+        reward = -1.0 if has_already_been_scanned else reward_.item() * factor
         self._current_score = new_score
 
         self._scans_left -= 1
@@ -338,7 +343,7 @@ class ReconstructionEnv(gym.Env):
     def get_evaluator_action(self) -> int:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
-            image, _, _ = preprocess_inputs(self._ground_truth, self._current_mask, fft_functions,
+            image, _, _ = preprocess_inputs((self._current_mask, self._ground_truth), fft_functions,
                                             self.options)
             reconstruction, _, mask_embedding = self._reconstructor(image, self._current_mask)
             k_space_scores = self._evaluator(clamp(reconstruction), mask_embedding)

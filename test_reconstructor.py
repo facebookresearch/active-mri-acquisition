@@ -18,8 +18,7 @@ from util import util
 def inference(batch, reconstructor, fft_functions, options):
     reconstructor.eval()
     with torch.no_grad():
-        zero_filled_reconstruction, target, mask = preprocess_inputs(batch[1], batch[0],
-                                                                     fft_functions, options)
+        zero_filled_reconstruction, target, mask = preprocess_inputs(batch, fft_functions, options)
 
         # Get reconstructor output
         reconstructed_image, uncertainty_map, mask_embedding = reconstructor(

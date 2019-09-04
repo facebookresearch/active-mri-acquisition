@@ -120,13 +120,20 @@ class FixedOrderRandomSampler(RandomSampler):
 
 
 class MaskFunc:
-
-    def __init__(self, center_fractions, accelerations):
+    def __init__(self, center_fractions, accelerations, which_dataset, random_num_lines=False):
         if len(center_fractions) != len(accelerations):
             raise ValueError('Number of center fractions should match number of accelerations')
 
         self.center_fractions = center_fractions
         self.accelerations = accelerations
+        self.random_num_lines = random_num_lines
+
+        # The lines below give approx. 4x acceleration on average.
+        self.min_lowf_lines = 6 if which_dataset != 'KNEE_RAW' else 16
+        self.max_lowf_lines = 16 if which_dataset != 'KNEE_RAW' else 44
+        self.highf_beta_alpha = 1
+        self.highf_beta_beta = 5
+
         self.rng = np.random.RandomState()
 
     def __call__(self, shape, seed=None):
@@ -136,15 +143,23 @@ class MaskFunc:
         self.rng.seed(seed)
         num_cols = shape[-2]
 
-        choice = self.rng.randint(0, len(self.accelerations))
-        center_fraction = self.center_fractions[choice]
-        acceleration = self.accelerations[choice]
+        # Determine number of low and high frequency lines to scan
+        if self.random_num_lines:
+            # These are guaranteed to be an even number (useful for symmetric masks)
+            num_low_freqs = self.rng.choice(range(self.min_lowf_lines, self.max_lowf_lines, 2))
+            num_high_freqs = int(
+                self.rng.beta(self.highf_beta_alpha, self.highf_beta_beta) *
+                (num_cols - num_low_freqs) // 2) * 2
+        else:
+            choice = self.rng.randint(0, len(self.accelerations))
+            center_fraction = self.center_fractions[choice]
+            acceleration = self.accelerations[choice]
+
+            num_low_freqs = int(round(num_cols * center_fraction))
+            num_high_freqs = int(num_cols // acceleration - num_low_freqs)
 
         # Create the mask
-        num_low_freqs = int(round(num_cols * center_fraction))
-        num_high_freqs = int(num_cols // acceleration - num_low_freqs)
         mask = self.create_lf_focused_mask(num_cols, num_high_freqs, num_low_freqs)
-        mask = np.fft.ifftshift(mask, axes=0)
 
         # Reshape the mask
         mask_shape = [1 for _ in shape]
@@ -160,7 +175,7 @@ class MaskFunc:
         return mask
 
 
-class FixedAccelerationMaskFunc(MaskFunc):
+class BasicMaskFunc(MaskFunc):
 
     def create_lf_focused_mask(self, num_cols, num_high_freqs, num_low_freqs):
         mask = np.zeros([num_cols])
@@ -170,6 +185,49 @@ class FixedAccelerationMaskFunc(MaskFunc):
         mask[hf_cols] = True
         pad = (num_cols - num_low_freqs + 1) // 2
         mask[pad:pad + num_low_freqs] = True
+        mask = np.fft.ifftshift(mask, axes=0)
+        return mask
+
+
+class SymmetricUniformChoiceMaskFunc(MaskFunc):
+
+    def create_lf_focused_mask(self, num_cols, num_high_freqs, num_low_freqs):
+        mask = np.zeros([num_cols])
+        num_cols //= 2
+        num_low_freqs //= 2
+        num_high_freqs //= 2
+        hf_cols = self.rng.choice(
+            np.arange(num_cols - num_low_freqs), num_high_freqs, replace=False)
+        mask[hf_cols] = True
+        pad = (num_cols - num_low_freqs)
+        mask[pad:num_cols] = True
+        mask[:-(num_cols + 1):-1] = mask[:num_cols]
+        mask = np.fft.ifftshift(mask, axes=0)
+        return mask
+
+
+class UniformGridMaskFunc(MaskFunc):
+
+    def create_lf_focused_mask(self, num_cols, num_high_freqs, num_low_freqs):
+        mask = np.zeros([num_cols])
+        acceleration = self.rng.choice([4, 8, 16])
+        hf_cols = np.arange(acceleration, num_cols, acceleration)
+        mask[hf_cols] = True
+        mask[:num_low_freqs // 2] = mask[-(num_low_freqs // 2):] = True
+        return mask
+
+
+class SymmetricUniformGridMaskFunc(MaskFunc):
+
+    def create_lf_focused_mask(self, num_cols, num_high_freqs, num_low_freqs):
+        mask = np.zeros([num_cols])
+        acceleration = self.rng.choice([4, 8, 16])
+        num_cols //= 2
+        num_low_freqs //= 2
+        hf_cols = np.arange(acceleration, num_cols, acceleration)
+        mask[hf_cols] = True
+        mask[:num_low_freqs] = True
+        mask[:-(num_cols + 1):-1] = mask[:num_cols]
         return mask
 
 
@@ -315,36 +373,36 @@ class RawSliceData(Dataset):
 
 class DicomDataTransform:
 
-    def __init__(self, mask_func, seed=None):
+    # If `seed` is none and `seed_per_image` is True, masks will be generated with a unique seed
+    # per image, computed as `seed = int( 1009 * image.sum().abs())`.
+    def __init__(self, mask_func, fixed_seed=None, seed_per_image=False):
         self.mask_func = mask_func
-        self.seed = seed
+        self.fixed_seed = fixed_seed
+        self.seed_per_image = seed_per_image
 
     def __call__(self, image, mean, std):
         image = (image - mean) / (std + 1e-12)
         image = torch.from_numpy(image)
-        # kspace = rfft2(image)
-
-        # shape = np.array(kspace.shape)
-        # shape[:-3] = 1
         shape = np.array(image.shape)
-        mask = self.mask_func(shape, self.seed) if self.mask_func is not None else None
-        # masked_kspace = mask * kspace
-        # return masked_kspace, mask, image
+        seed = int(1009 * image.sum().abs()) if self.fixed_seed is None and self.seed_per_image \
+            else self.fixed_seed
+        mask = self.mask_func(shape, seed) if self.mask_func is not None else None
         return mask, image
 
     def postprocess(self, data, hps):
-        inputs = data[1]
-        mask = data[0].repeat(1, 1, hps.resolution, 1)
-        inputs = (inputs.clamp_(-2, 4) + 2) / 6
-        inputs = torch.cat((inputs, torch.zeros(inputs.shape)), 1)
-        inputs = inputs.cuda()
-        mask = mask.cuda()
-        mask_k_space = mask
-        mask = mask.unsqueeze(4).repeat(1, 1, 1, 1, 2)
-        kspace = torch.fft(inputs.permute(0, 2, 3, 1), 2, normalized=False).unsqueeze(1)
-        masked_kspace = kspace * mask
-        masked_image = torch.ifft(masked_kspace, 2, normalized=False).squeeze(1).permute(0, 3, 1, 2)
-        return inputs, masked_image, mask_k_space
+        raise NotImplementedError('Need to fix sign leakage here')
+        # inputs = data[1]
+        # mask = data[0].repeat(1, 1, hps.resolution, 1)
+        # inputs = (inputs.clamp_(-2, 4) + 2) / 6
+        # inputs = torch.cat((inputs, torch.zeros(inputs.shape)), 1)
+        # inputs = inputs.cuda()
+        # mask = mask.cuda()
+        # mask_k_space = mask
+        # mask = mask.unsqueeze(4).repeat(1, 1, 1, 1, 2)
+        # kspace = torch.fft(inputs.permute(0, 2, 3, 1), 2, normalized=False).unsqueeze(1)
+        # masked_kspace = kspace * mask
+        # masked_image = torch.ifft(masked_kspace, 2, normalized=False).squeeze(1).permute(0, 3, 1, 2)
+        # return inputs, masked_image, mask_k_space
 
 
 class RawDataTransform:

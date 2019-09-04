@@ -6,11 +6,21 @@ from PIL import Image
 import os
 from . import pytorch_mssim
 import matplotlib.pyplot as plt
+from skimage.measure import compare_ssim
 
+def compute_ssims(xs, ys):
+    ssims = []
+    for i in range(xs.shape[0]):
+        ssim = compare_ssim(xs[i, 0].cpu().numpy(), ys[i, 0].cpu().numpy(), win_size=11, data_range=ys[i, 0].cpu().numpy().max())
+        ssims.append(ssim)
+    return np.array(ssims).mean()
 
 def ssim_metric(src, tar, full=False, size_average=True):
-    return pytorch_mssim.ssim(
-        src[:, :1, :, :], tar[:, :1, :, :], full=full, size_average=size_average)
+    return compute_ssims(src, tar)
+
+
+# def ssim_metric(src, tar, full=False, size_average=True):
+#     return pytorch_mssim.ssim(src[:, :1, :, :], tar[:, :1, :, :], full=full, size_average=size_average)
 
 
 def sum_axes(input, axes=[], keepdim=False):
@@ -70,7 +80,7 @@ def tensor2im(input_image, imtype=np.uint8, renormalize=True):
     return image_numpy.astype(imtype)
 
 
-def create_grid_from_tensor(tensor_of_images, num_rows=6):
+def create_grid_from_tensor(tensor_of_images, num_rows=4):
     """
 
     Args:
@@ -84,7 +94,7 @@ def create_grid_from_tensor(tensor_of_images, num_rows=6):
     tensor_of_images = tensor_of_images.norm(dim=1, keepdim=True)
 
     #make image grid
-    tensor_grid = tvutil.make_grid(tensor_of_images, nrow=num_rows, normalize=True, scale_each=True)
+    tensor_grid = tvutil.make_grid(tensor_of_images, nrow=num_rows, normalize=True, scale_each=False)
     numpy_grid = tensor2im(tensor_grid, renormalize=False)
 
     return numpy_grid

@@ -1,3 +1,6 @@
+import os
+import tempfile
+
 import numpy as np
 import torch
 
@@ -8,6 +11,7 @@ def infinite_iterator(iterator):
 
 
 class ReplayMemory:
+
     def __init__(self, capacity, obs_shape, batch_size, burn_in):
         assert burn_in >= batch_size
         self.batch_size = batch_size
@@ -63,6 +67,64 @@ class ReplayMemory:
             'rewards': self.rewards[indices],
             'dones': self.dones[indices]
         }
+
+    def save(self, directory, name):
+        data = {
+            'observations': self.observations,
+            'actions': self.actions,
+            'next_observations': self.next_observations,
+            'rewards': self.rewards,
+            'dones': self.dones,
+            'position': self.position,
+            'mean_obs': self.mean_obs,
+            'std_obs': self.std_obs,
+            'm2_obs': self._m2_obs,
+            'count_seen': self.count_seen
+        }
+
+        tmp_filename = tempfile.NamedTemporaryFile(delete=False, dir=directory)
+        try:
+            torch.save(data, tmp_filename)
+        except BaseException:
+            tmp_filename.close()
+            os.remove(tmp_filename.name)
+            raise
+        else:
+            tmp_filename.close()
+            full_path = os.path.join(directory, name)
+            os.rename(tmp_filename.name, full_path)
+            return full_path
+
+    def load(self, directory, capacity=None):
+        data = torch.load(directory)
+        self.position = data['position']
+        self.mean_obs = data['mean_obs']
+        self.std_obs = data['std_obs']
+        self._m2_obs = data['m2_obs']
+        self.count_seen = data['count_seen']
+
+        old_len = data['observations'].shape[0]
+        if capacity is None:
+            self.observations = data['observations']
+            self.actions = data['actions']
+            self.next_observations = data['next_observations']
+            self.rewards = data['rewards']
+            self.dones = data['dones']
+        else:
+            assert capacity > len(data['observations'])
+            obs_shape = data['observations'].shape[1:]
+            self.observations = torch.zeros(capacity, *obs_shape, dtype=torch.float32)
+            self.actions = torch.zeros(capacity, dtype=torch.long)
+            self.next_observations = torch.zeros(capacity, *obs_shape, dtype=torch.float32)
+            self.rewards = torch.zeros(capacity, dtype=torch.float32)
+            self.dones = torch.zeros(capacity, dtype=torch.uint8)
+            self.observations[:old_len] = data['observations']
+            self.actions[:old_len] = data['actions']
+            self.next_observations[:old_len] = data['next_observations']
+            self.rewards[:old_len] = data['rewards']
+            self.dones[:old_len] = data['dones']
+
+        return old_len
 
     def __len__(self):
         return len(self.observations)

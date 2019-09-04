@@ -6,7 +6,7 @@ from data.ft_data_loader import ft_data_loader
 def find_dataset_using_name(dataset_name):
     # Given the option --dataset [datasetname],
     # the file "datasets/datasetname_dataset.py"
-    # will be imported. 
+    # will be imported.
     dataset_filename = "data." + dataset_name + "_dataset"
     datasetlib = importlib.import_module(dataset_filename)
 
@@ -19,35 +19,35 @@ def find_dataset_using_name(dataset_name):
         if name.lower() == target_dataset_name.lower() \
            and issubclass(cls, BaseDataset):
             dataset = cls
-            
+
     if dataset is None:
-        print("In %s.py, there should be a subclass of BaseDataset with class name that matches %s in lowercase." % (
-            dataset_filename, target_dataset_name))
+        print(f"In {dataset_filename}.py, there should be a subclass of BaseDataset with class "
+              f"name that matches {target_dataset_name} in lowercase.")
         exit(0)
 
     return dataset
 
 
-def get_option_setter(dataset_name):    
+def get_option_setter(dataset_name):
     dataset_class = find_dataset_using_name(dataset_name)
     return dataset_class.modify_commandline_options
 
 
 def create_data_loaders(options, is_test=False):
-    
+
     if not is_test:
-        trainloader, validloader = ft_data_loader.get_train_valid_loader(
+        train_loader, valid_loader = ft_data_loader.get_train_valid_loader(
             batch_size=options.batchSize,
             num_workers=options.nThreads,
             pin_memory=True,
-            which_dataset=options.dataroot
-        )
-        return trainloader, validloader
+            which_dataset=options.dataroot,
+            mask_type=options.mask_type)
+        return train_loader, valid_loader
     else:
-        testloader = ft_data_loader.get_test_loader(
+        test_loader = ft_data_loader.get_test_loader(
             batch_size=options.batchSize,
             num_workers=0,
             pin_memory=True,
-            which_dataset=options.dataroot
-        )
-        return testloader
+            which_dataset=options.dataroot,
+            mask_type=options.mask_type)
+        return test_loader

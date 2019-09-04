@@ -175,8 +175,7 @@ class ZeroStepGreedy:
 
     def get_action(self, unused_obs_, _, __):
         zero_filled_reconstruction, _, __ = models.fft_utils.preprocess_inputs(
-            self.env._ground_truth,
-            self.env._current_mask,
+            (self.env._current_mask, self.env._ground_truth),
             rl_env.fft_functions,
             self.env.options,
             clamp_target=False)
