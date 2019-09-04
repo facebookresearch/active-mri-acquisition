@@ -19,7 +19,7 @@ def main(options_):
         resource_factor=50000,
         job_name='active_acq_tune_dqn',
         time=4320,
-        partition='scavenge',
+        partition='learnfair',
         num_gpus=1,
         cpus_per_task=2,
         signal_delay_s=600,
