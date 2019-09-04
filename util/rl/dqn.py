@@ -243,6 +243,9 @@ class DQNTrainer:
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
 
     def _init_all(self):
+        # This is here so that it appears in SLURM stdout logs
+        print(f'Checkpoint dir for this job is {self.options.checkpoints_dir}', flush=True)
+
         # Initialize writer and logger
         self.writer = tensorboardX.SummaryWriter(
             os.path.join(self.options.checkpoints_dir, 'tb_logs'))
@@ -308,6 +311,7 @@ class DQNTrainer:
                     self.replay_memory = util.rl.replay_buffer.ReplayMemory(
                         mem_capacity, self.env.observation_space.shape, self.options.rl_batch_size,
                         self.options.rl_burn_in)
+                    self.logger.info('Finished allocating replay buffer.')
                     self.policy.memory = self.replay_memory
 
     def _train_dqn_policy(self):
@@ -338,12 +342,13 @@ class DQNTrainer:
                     self.target_net.load_state_dict(self.policy.state_dict())
 
                 # Adding per-step tensorboard logs
-                self.writer.add_scalar('epsilon', epsilon, self.steps)
-                if loss is not None:
-                    self.writer.add_scalar('loss', loss, self.steps)
-                    self.writer.add_scalar('grad_norm', grad_norm, self.steps)
-                    self.writer.add_scalar('mean_q_values', mean_q_values, self.steps)
-                    self.writer.add_scalar('std_q_values', std_q_values, self.steps)
+                if self.steps % 50 == 0:
+                    self.writer.add_scalar('epsilon', epsilon, self.steps)
+                    if loss is not None:
+                        self.writer.add_scalar('loss', loss, self.steps)
+                        self.writer.add_scalar('grad_norm', grad_norm, self.steps)
+                        self.writer.add_scalar('mean_q_values', mean_q_values, self.steps)
+                        self.writer.add_scalar('std_q_values', std_q_values, self.steps)
 
                 total_reward += reward
                 obs = next_obs

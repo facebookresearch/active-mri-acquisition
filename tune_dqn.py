@@ -32,7 +32,7 @@ def main(options_):
         'target_net_update_freq': [1000, 2000, 5000, 10000],
         'epsilon_decay': [100000, 500000, 1000000],
         'epsilon_start': [0.99, 0.95, 0.9],
-        'rl_batch_size': [32, 64],
+        'rl_batch_size': [16, 32, 64],
         'dqn_learning_rate': [1.25e-4, 6.25e-5],
         'replay_buffer_size': [400000],
     }
@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     opts.R = 10
     opts.eta = 3
-    opts.max_jobs_tuner = 20
+    opts.max_jobs_tuner = 30
     opts.interactive_init = True
 
     main(opts)
