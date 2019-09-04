@@ -28,11 +28,11 @@ def main(rl_opts, train_opts):
     env = make_env(rl_opts, train_opts)
     print(env.observation_space)
 
-    envs = env
+    # envs = env
 
     actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space)
+        env.observation_space.shape,
+        env.action_space)
     actor_critic.to(train_opts.device)
 
     agent = algo.PPO(
@@ -47,10 +47,9 @@ def main(rl_opts, train_opts):
         max_grad_norm=train_opts.max_grad_norm)
 
     rollouts = RolloutStorage(train_opts.num_steps, train_opts.num_processes,
-                              envs.observation_space.shape, envs.action_space,
-                              actor_critic.recurrent_hidden_state_size)
+                              env.observation_space.shape, env.action_space)
 
-    obs, _ = envs.reset()
+    obs, _ = env.reset()
     rollouts.obs[0].copy_(torch.from_numpy(obs))
     rollouts.to(train_opts.device)
 
@@ -70,12 +69,11 @@ def main(rl_opts, train_opts):
         for step in range(train_opts.num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
-                    rollouts.obs[step], rollouts.recurrent_hidden_states[step],
-                    rollouts.masks[step])
+                value, action, action_log_prob = actor_critic.act(
+                    rollouts.obs[step])
 
             # Obser reward and next obs
-            obs, reward, done, infos = envs.step(action)
+            obs, reward, done, infos = env.step(action)
 
             for info in infos:
                 if 'episode' in info.keys():
@@ -113,7 +111,7 @@ def main(rl_opts, train_opts):
 
             torch.save([
                 actor_critic,
-                getattr(utils.get_vec_normalize(envs), 'ob_rms', None)
+                getattr(utils.get_vec_normalize(env), 'ob_rms', None)
             ], os.path.join(save_path, args.env_name + ".pt"))
 
         if j % args.log_interval == 0 and len(episode_rewards) > 1:
