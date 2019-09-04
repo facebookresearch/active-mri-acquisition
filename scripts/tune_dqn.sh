@@ -1,6 +1,7 @@
 #!/bin/bash
 
-MODELS_DIR=/checkpoint/lep/active_acq/all_reconstructors
+CHECKPOINTS_BASE=/checkpoint/lep/active_acq
+MODELS_DIR=${CHECKPOINTS_BASE}/all_reconstructors
 MODEL_TYPE=symmetric_choice_rnl
 
 SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/tune_dqn_$(date +%Y%m%d_%H.%M.%S)
@@ -13,7 +14,7 @@ cd ${SRC_DIR}
 python tune_dqn.py --dataroot KNEE \
     --reconstructor_dir ${MODELS_DIR}/${MODEL_TYPE}\
     --evaluator_dir ${MODELS_DIR}/${MODEL_TYPE}/evaluator \
-    --checkpoints_dir ${MODELS_DIR}/${MODEL_TYPE}/dqn_tuning \
+    --checkpoints_dir ${CHECKPOINTS_BASE}/dqn_tuning/${MODEL_TYPE} \
     --test_set val \
     --num_test_images 100 \
     --use_reconstructions \

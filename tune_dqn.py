@@ -21,7 +21,8 @@ def main(options_):
         time=4320,
         partition='scavenge',
         num_gpus=1,
-        cpus_per_task=4,
+        cpus_per_task=2,
+        signal_delay_s=600,
         mem=16000)
 
     # Specify the hyperparameter names and their possible values (for now only categorical
@@ -31,8 +32,8 @@ def main(options_):
         'target_net_update_freq': [1000, 2000, 5000, 10000],
         'epsilon_decay': [100000, 500000, 1000000],
         'epsilon_start': [0.99, 0.95, 0.9],
-        'rl_batch_size': [8, 16, 32, 64],
-        'dqn_learning_rate': [5.0e-4, 2.5e-4, 1.25e-4, 6.25e-5],
+        'rl_batch_size': [32, 64],
+        'dqn_learning_rate': [1.25e-4, 6.25e-5],
         'replay_buffer_size': [400000],
     }
 
@@ -57,7 +58,7 @@ if __name__ == '__main__':
 
     opts.R = 10
     opts.eta = 3
-    opts.max_jobs_tuner = 40
+    opts.max_jobs_tuner = 20
     opts.interactive_init = True
 
     main(opts)

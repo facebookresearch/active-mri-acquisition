@@ -381,9 +381,10 @@ class DQNTrainer:
         return -self._train_dqn_policy()
 
     def checkpoint(self, submit_job=True):
+        self.logger.info('Received preemption signal.')
         policy_path = os.path.join(self.options.checkpoints_dir, 'policy_checkpoint.pt')
         self.save(policy_path)
-        self.logger.info(f'Saved DQN checkpoint to {policy_path}.')
+        self.logger.info(f'Saved DQN checkpoint to {policy_path}. Now saving replay memory.')
         memory_path = self.replay_memory.save(self.options.checkpoints_dir, 'replay_buffer.pt')
         self.logger.info(f'Saved replay buffer to {memory_path}.')
         trainer = DQNTrainer(self.options, load_replay_mem=True)
