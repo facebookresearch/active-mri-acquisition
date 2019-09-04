@@ -100,10 +100,11 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
             np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
     end = time.time()
     logger.debug('Test run lasted {} seconds.'.format(end - start))
-    writer.add_scalar('eval/average_reward', average_total_reward / episode, step)
+    test_score = compute_test_score_from_stats(statistics_mse)
+    writer.add_scalar('eval/average_reward', test_score, step)
     env.set_training()
 
-    return compute_test_score_from_stats(statistics_mse)
+    return test_score
 
 
 def get_experiment_str(options_):
