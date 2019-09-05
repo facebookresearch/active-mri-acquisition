@@ -278,7 +278,7 @@ class DQNTrainer:
 
     def load_checkpoint_if_needed(self):
         if self.options.dqn_only_test:
-            policy_path = os.path.join(self.options.checkpoints_dir, 'policy_best.pt')
+            policy_path = os.path.join(self.options.dqn_weights_dir, 'policy_best.pt')
             if os.path.isfile(policy_path):
                 self.load(policy_path)
                 self.logger.info(f'Loaded DQN policy found at {policy_path}.')

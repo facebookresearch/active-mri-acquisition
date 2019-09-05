@@ -120,6 +120,7 @@ class FixedOrderRandomSampler(RandomSampler):
 
 
 class MaskFunc:
+
     def __init__(self, center_fractions, accelerations, which_dataset, random_num_lines=False):
         if len(center_fractions) != len(accelerations):
             raise ValueError('Number of center fractions should match number of accelerations')
@@ -280,35 +281,28 @@ class SliceWithPrecomputedMasks(Dataset):
         Only a subset of the masks where computed, specified by the list `self.available_masks`.
     """
 
-    def __init__(self, transform, dicom_root, which='train'):
+    def __init__(self, transform, dicom_root, masks_dir, which='train'):
         self.transform = transform
         self.dataset = _DicomDataset(dicom_root / str(128) / which, 'all', num_volumes=None)
         self.num_slices = self.dataset.metadata['num_slices']
         self.rng = np.random.RandomState()
 
-        self.masks_location = '/checkpoint/lep/active_acq/' \
-                              'train_with_evaluator_symmetric/greedy_masks'
-        self.available_masks = [
-            0, 4000, 8000, 12000, 16000, 20000, 74000, 78000, 82000, 86000, 90000, 94000, 148000,
-            152000, 156000, 160000, 164000, 168000, 222000, 226000, 230000, 234000, 238000, 242000,
-            296000, 300000, 304000, 308000, 312000, 316000, 370000, 374000, 378000, 382000, 386000,
-            390000, 444000, 448000, 452000, 456000, 460000, 464000, 518000, 522000, 526000, 530000,
-            534000, 538000, 592000, 596000, 600000, 604000, 608000, 612000, 666000, 670000, 674000,
-            678000, 682000, 686000, 740000, 744000, 748000, 752000, 756000, 760000, 814000, 818000,
-            822000, 826000, 830000, 834000, 888000, 892000, 896000, 900000, 904000, 908000, 962000,
-            966000, 970000, 974000, 978000, 982000, 1036000, 1040000, 1044000, 1048000, 1052000,
-            1056000
-        ]
-        self.masks_per_file = 4000
+        self.masks_location = masks_dir
+        self.masks_location = os.path.join(self.masks_location, which)
+        # File format is masks_{begin_idx}-{end_idx}.p. The lines below obtain all begin_idx
+        self.available_masks = sorted([
+            int(x.split('_')[1].split('-')[0])
+            for x in os.listdir(self.masks_location)
+            if 'masks' in x
+        ])
+        self.masks_per_file = self.available_masks[1] - self.available_masks[0]
 
     def __getitem__(self, i):
         available_mask_index = i // self.masks_per_file
         mask_file_index = self.available_masks[available_mask_index]
-        mask_index = i % 4000
+        mask_index = i % self.masks_per_file
 
-        img_index = mask_file_index + mask_index
-
-        volume_i, slice_i = divmod(img_index, self.num_slices)
+        volume_i, slice_i = divmod(i, self.num_slices)
         volume, volume_metadata = self.dataset[volume_i]
         slice = volume[slice_i:slice_i + 1]
         slice = slice.astype(np.float32)
@@ -317,10 +311,10 @@ class SliceWithPrecomputedMasks(Dataset):
         # Now load the pre-computed mask
         filename = os.path.join(
             self.masks_location,
-            f'masks_{mask_file_index}-{mask_file_index + self.masks_per_file - 1}.p')
+            f'masks_{mask_file_index}-{mask_file_index + self.masks_per_file}.p')
         with open(filename, 'rb') as f:
             data = pickle.load(f)
-            mask = torch.from_numpy(data[img_index]).view(1, 1, 128)
+            mask = torch.from_numpy(data[mask_index]).view(1, 1, 128).float()
 
         return mask, image
 
