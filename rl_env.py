@@ -110,8 +110,8 @@ class ReconstructionEnv:
         rng_train = np.random.RandomState() if options.rl_env_train_no_seed else rng
         self._train_order = rng_train.permutation(len(self._dataset_train))
         self._test_order = rng.permutation(len(self._dataset_test))
-        self.image_idx_test = 0
-        self.image_idx_train = 0
+        self._image_idx_test = 0
+        self._image_idx_train = 0
         self.is_testing = False
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
@@ -169,12 +169,12 @@ class ReconstructionEnv:
     def set_testing(self, reset_index=True):
         self.is_testing = True
         if reset_index:
-            self.image_idx_test = 0
+            self._image_idx_test = 0
 
     def set_training(self, reset_index=False):
         self.is_testing = False
         if reset_index:
-            self.image_idx_train = 0
+            self._image_idx_train = 0
 
     @staticmethod
     def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
@@ -279,23 +279,23 @@ class ReconstructionEnv:
         info = {}
         if self.options.sequential_images:
             if self.is_testing:
-                if self.image_idx_test == min(self.num_test_images, len(self._dataset_test)):
+                if self._image_idx_test == min(self.num_test_images, len(self._dataset_test)):
                     return None, info  # Returns None to signal that testing is done
                 info['split'] = 'test'
-                info['image_idx'] = f'{self._test_order[self.image_idx_test]}'
+                info['image_idx'] = self._test_order[self._image_idx_test]
                 _, self._ground_truth = self._dataset_test.__getitem__(
-                    self._test_order[self.image_idx_test])
+                    self._test_order[self._image_idx_test])
                 logging.debug(
-                    f'Testing episode started with image {self._test_order[self.image_idx_test]}')
-                self.image_idx_test += 1
+                    f'Testing episode started with image {self._test_order[self._image_idx_test]}')
+                self._image_idx_test += 1
             else:
                 info['split'] = 'train'
-                info['image_idx'] = f'{self._train_order[self.image_idx_train]}'
+                info['image_idx'] = self._train_order[self._image_idx_train]
                 _, self._ground_truth = self._dataset_train.__getitem__(
-                    self._train_order[self.image_idx_train])
+                    self._train_order[self._image_idx_train])
                 logging.debug(
-                    f'Train episode started with image {self._train_order[self.image_idx_train]}')
-                self.image_idx_train = (self.image_idx_train + 1) % self.num_train_images
+                    f'Train episode started with image {self._train_order[self._image_idx_train]}')
+                self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
         else:
             dataset_to_check = self._dataset_test if self.is_testing else self._dataset_train
             info['split'] = 'test' if self.is_testing else 'train'
@@ -305,7 +305,7 @@ class ReconstructionEnv:
                 max_num_images = self.num_train_images
             dataset_len = min(len(dataset_to_check), max_num_images)
             index_chosen_image = np.random.choice(dataset_len)
-            info['image_idx'] = f'{index_chosen_image}'
+            info['image_idx'] = index_chosen_image
             logging.debug('{} episode started with randomly chosen image {}/{}'.format(
                 'Testing' if self.is_testing else 'Training', index_chosen_image, dataset_len))
             _, self._ground_truth = self._dataset_train.__getitem__(index_chosen_image)
