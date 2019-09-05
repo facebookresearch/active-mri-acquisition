@@ -111,7 +111,7 @@ class ReplayMemory:
             self.rewards = data['rewards']
             self.dones = data['dones']
         else:
-            assert capacity > len(data['observations'])
+            assert capacity >= len(data['observations'])
             obs_shape = data['observations'].shape[1:]
             self.observations = torch.zeros(capacity, *obs_shape, dtype=torch.float32)
             self.actions = torch.zeros(capacity, dtype=torch.long)
