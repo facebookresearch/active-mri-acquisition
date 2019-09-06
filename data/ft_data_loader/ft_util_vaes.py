@@ -290,16 +290,21 @@ class SliceWithPrecomputedMasks(Dataset):
         self.masks_location = masks_dir
         self.masks_location = os.path.join(self.masks_location, which)
         # File format is masks_{begin_idx}-{end_idx}.p. The lines below obtain all begin_idx
-        self.available_masks = sorted([
+        self.maskfile_begin_indices = sorted([
             int(x.split('_')[1].split('-')[0])
             for x in os.listdir(self.masks_location)
             if 'masks' in x
         ])
-        self.masks_per_file = self.available_masks[1] - self.available_masks[0]
+        self.maskfile_end_indices = sorted([
+            int(x.split('_')[1].split('-')[1].split('.')[0])
+            for x in os.listdir(self.masks_location)
+            if 'masks' in x
+        ])
+        self.masks_per_file = self.maskfile_begin_indices[1] - self.maskfile_begin_indices[0]
 
     def __getitem__(self, i):
         available_mask_index = i // self.masks_per_file
-        mask_file_index = self.available_masks[available_mask_index]
+        mask_file_index = self.maskfile_begin_indices[available_mask_index]
         mask_index = i % self.masks_per_file
 
         volume_i, slice_i = divmod(i, self.num_slices)
@@ -311,7 +316,7 @@ class SliceWithPrecomputedMasks(Dataset):
         # Now load the pre-computed mask
         filename = os.path.join(
             self.masks_location,
-            f'masks_{mask_file_index}-{mask_file_index + self.masks_per_file}.p')
+            f'masks_{mask_file_index}-{self.maskfile_end_indices[available_mask_index]}.p')
         with open(filename, 'rb') as f:
             data = pickle.load(f)
             mask = torch.from_numpy(data[mask_index]).view(1, 1, 128).float()
@@ -319,7 +324,7 @@ class SliceWithPrecomputedMasks(Dataset):
         return mask, image
 
     def __len__(self):
-        return self.masks_per_file * len(self.available_masks)
+        return self.maskfile_end_indices[-1]
 
 
 class RawSliceData(Dataset):
