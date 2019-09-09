@@ -38,22 +38,17 @@ def get_train_valid_loader(batch_size,
                            num_workers=4,
                            pin_memory=False,
                            which_dataset='KNEE',
-                           mask_type='fixed_acc'):
+                           mask_type='fixed_acc',
+                           masks_dir=None):
 
     if which_dataset == 'KNEE_PRECOMPUTED_MASKS':
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
         data_transform_train = DicomDataTransform(None, fixed_seed=None, seed_per_image=True)
-        data_transform_valid = DicomDataTransform(
-            BasicMaskFunc([0.125], [4]), fixed_seed=None, seed_per_image=True)
-        train_data = SliceWithPrecomputedMasks(data_transform_train, dicom_root, which='train')
-        valid_data = Slice(
-            data_transform_valid,
-            dicom_root,
-            which='val',
-            resolution=128,
-            scan_type='all',
-            num_volumes=None,
-            num_rand_slices=None)
+        data_transform_valid = DicomDataTransform(None, fixed_seed=None, seed_per_image=True)
+        train_data = SliceWithPrecomputedMasks(
+            data_transform_train, dicom_root, masks_dir, which='train')
+        valid_data = SliceWithPrecomputedMasks(
+            data_transform_valid, dicom_root, masks_dir, which='val')
 
     elif which_dataset == 'KNEE':
         mask_func = get_mask_func(mask_type, which_dataset)

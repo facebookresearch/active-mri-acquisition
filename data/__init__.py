@@ -41,7 +41,8 @@ def create_data_loaders(options, is_test=False):
             num_workers=options.nThreads,
             pin_memory=True,
             which_dataset=options.dataroot,
-            mask_type=options.mask_type)
+            mask_type=options.mask_type,
+            masks_dir=options.masks_dir)
         return train_loader, valid_loader
     else:
         test_loader = ft_data_loader.get_test_loader(
