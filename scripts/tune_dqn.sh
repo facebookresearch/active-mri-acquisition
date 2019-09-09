@@ -4,7 +4,7 @@ CHECKPOINTS_BASE=/checkpoint/lep/active_acq
 MODELS_DIR=${CHECKPOINTS_BASE}/all_reconstructors
 MODEL_TYPE=symmetric_choice_rnl
 
-SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/tune_dqn_$(date +%Y%m%d_%H.%M.%S)
+SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/tune_dqn_b11_rs_$(date +%Y%m%d_%H.%M.%S)
 
 mkdir -p ${SRC_DIR}
 cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
@@ -14,7 +14,7 @@ cd ${SRC_DIR}
 python tune_dqn.py --dataroot KNEE \
     --reconstructor_dir ${MODELS_DIR}/${MODEL_TYPE}\
     --evaluator_dir ${MODELS_DIR}/${MODEL_TYPE}/evaluator \
-    --checkpoints_dir ${CHECKPOINTS_BASE}/dqn_tuning/${MODEL_TYPE} \
+    --checkpoints_dir ${CHECKPOINTS_BASE}/dqn_tuning/budget11_randomsearch/${MODEL_TYPE} \
     --test_set val \
     --num_test_images 100 \
     --use_reconstructions \
@@ -25,5 +25,5 @@ python tune_dqn.py --dataroot KNEE \
     --obs_type two_streams \
     --dqn_resume \
     --rl_env_train_no_seed \
-    --budget 65 \
+    --budget 11 \
     --no_replacement_policy
