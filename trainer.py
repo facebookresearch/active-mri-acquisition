@@ -431,6 +431,10 @@ class Trainer:
 
     def checkpoint(self) -> submitit.helpers.DelayedSubmission:  # submitit expects this function
         save_checkpoint_function(self, 'regular_checkpoint')
+        if self.options.only_evaluator and \
+                os.path.basename(self.options.checkpoints_dir) == 'evaluator':
+            # remove the added /evaluator subdir
+            self.options.checkpoints_dir = os.path.dirname(self.options.checkpoints_dir)
         trainer = Trainer(self.options)
         return submitit.helpers.DelayedSubmission(trainer)
 
