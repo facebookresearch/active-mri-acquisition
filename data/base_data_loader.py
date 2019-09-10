@@ -105,23 +105,6 @@ def get_train_valid_loader(batch_size,
     return train_loader, valid_loader
 
 
-class SequentialSampler2(Sampler):
-    r"""Samples elements sequentially, in the order of given list.
-
-    Arguments:
-        data_source (Dataset): dataset to sample from
-    """
-
-    def __init__(self, data_source):
-        self.data_source = data_source
-
-    def __iter__(self):
-        return iter(self.data_source)
-
-    def __len__(self):
-        return len(self.data_source)
-
-
 def get_test_loader(batch_size,
                     num_workers=2,
                     pin_memory=False,

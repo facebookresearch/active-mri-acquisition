@@ -17,7 +17,7 @@ def create_data_loaders(options, is_test=False):
     else:
         test_loader = get_test_loader(
             batch_size=options.batchSize,
-            num_workers=2,
+            num_workers=0,
             pin_memory=True,
             which_dataset=options.dataroot,
             mask_type=options.mask_type)

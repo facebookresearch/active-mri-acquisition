@@ -93,7 +93,7 @@ class RawDataTransform:
 
     def __init__(self, mask_func, fixed_seed=None, seed_per_image=False):
         self.mask_func = mask_func
-        self.seed = fixed_seed
+        self.fixed_seed = fixed_seed
         self.seed_per_image = seed_per_image
 
     def __call__(self, kspace, attrs):
