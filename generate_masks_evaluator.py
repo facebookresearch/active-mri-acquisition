@@ -100,8 +100,8 @@ if __name__ == '__main__':
 
     # Adding config options expected by `rl_env.ReconstructionEnv`
     options_.sequential_images = True
-    options_.budget = rl_env.IMAGE_WIDTH
-    options_.obs_type = 'two_streams'
+    options_.budget = 368 if options_.dataroot == 'KNEE_RAW' else 128
+    options_.obs_type = 'image_space'
     options_.num_train_images = 2000000
     options_.num_test_images = 2000000
     options_.batchSize = 1

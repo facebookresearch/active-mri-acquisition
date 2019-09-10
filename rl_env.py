@@ -78,7 +78,7 @@ class ReconstructionEnv:
                 -`sequential_images`: If true, each episode presents the next image in the dataset,
                     otherwise a random image is presented.
                 -`budget`: how many actions to choose (the horizon of the episode).
-                -`obs_type`: one of {'spectral_maps', 'two_streams', 'concatenate_mask'}
+                -`obs_type`: one of {'fourier_space', 'image_space'}
                 -`initial_num_lines`: how many k-space lines to start with.
                 -'num_train_images`: the number of images to use for training. If it's None,
                     then all images will be used.
@@ -90,6 +90,7 @@ class ReconstructionEnv:
 
         self.options = options
         self.options.device = device
+        self.image_height = 640 if options.dataroot == 'KNEE_RAW' else 128
         self.image_width = 368 if options.dataroot == 'KNEE_RAW' else 128
         train_loader, valid_loader = create_data_loaders(options, is_test=False)
         test_loader = create_data_loaders(options, is_test=True)
@@ -123,7 +124,7 @@ class ReconstructionEnv:
             .number_of_layers_residual_bottleneck,
             mask_embed_dim=reconstructor_checkpoint['options'].mask_embed_dim,
             dropout_probability=reconstructor_checkpoint['options'].dropout_probability,
-            img_width=368 if options.dataroot == 'KNEE_RAW' else 128,
+            img_width=self.image_width,
             use_deconv=reconstructor_checkpoint['options'].use_deconv)
         self._reconstructor.load_state_dict({
             key.replace('module.', ''): val
@@ -149,13 +150,8 @@ class ReconstructionEnv:
             })
             self._evaluator.to(device)
 
-        obs_shape = None
-        if options.obs_type == 'spectral_maps':
-            obs_shape = (self.image_width+6, self.image_width, self.image_width)
-        if options.obs_type == 'two_streams':
-            obs_shape = (4, self.image_width, self.image_width)
-        if options.obs_type == 'concatenate_mask':
-            obs_shape = (2, self.image_width+1, self.image_width)
+        # The extra row represents the current mask
+        obs_shape = (2, self.image_height + 1, self.image_width)
         self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
 
         factor = 2 if CONJUGATE_SYMMETRIC else 1
@@ -177,18 +173,17 @@ class ReconstructionEnv:
             self._image_idx_train = 0
 
     @staticmethod
-    def _compute_score(self, reconstruction: torch.Tensor, ground_truth: torch.Tensor,
+    def _compute_score(self,
+                       reconstruction: torch.Tensor,
+                       ground_truth: torch.Tensor,
                        kind: str = 'mse') -> torch.Tensor:
-
 
         # Compute magnitude (for metrics)
         also_clamp_and_scale = self.options.dataroot != 'KNEE_RAW'
-        reconstruction = to_magnitude(
-            reconstruction, also_clamp_and_scale=also_clamp_and_scale)
-        ground_truth = to_magnitude(
-            ground_truth, also_clamp_and_scale=also_clamp_and_scale)
+        reconstruction = to_magnitude(reconstruction, also_clamp_and_scale=also_clamp_and_scale)
+        ground_truth = to_magnitude(ground_truth, also_clamp_and_scale=also_clamp_and_scale)
         if self.options.dataroot == 'KNEE_RAW':  # crop data
-            reconstruction = center_crop(reconstruction,[320, 320])
+            reconstruction = center_crop(reconstruction, [320, 320])
             ground_truth = center_crop(ground_truth, [320, 320])
 
         # reconstruction = reconstruction[:, :1, ...]
@@ -219,12 +214,14 @@ class ReconstructionEnv:
             new_mask[self.image_width - line_to_scan - 1] = 1
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
-    def compute_score(self,
-                      use_reconstruction: bool = True,
-                      kind: str = 'mse',
-                      ground_truth: Optional[torch.Tensor] = None,
-                      mask_to_use: Optional[torch.Tensor] = None,
-                      kspace: Optional[torch.Tensor] = None,) -> List[torch.Tensor]:
+    def compute_score(
+            self,
+            use_reconstruction: bool = True,
+            kind: str = 'mse',
+            ground_truth: Optional[torch.Tensor] = None,
+            mask_to_use: Optional[torch.Tensor] = None,
+            kspace: Optional[torch.Tensor] = None,
+    ) -> List[torch.Tensor]:
         """ Computes the score (MSE or SSIM) of current state with respect to current ground truth.
 
             This method takes the current ground truth, masks it with the current mask and creates
@@ -255,12 +252,16 @@ class ReconstructionEnv:
                 if kspace is None:
                     kspace = self._k_space
                 image, _, _ = preprocess_inputs(
-                    (mask_to_use, ground_truth, kspace), fft_functions, self.options, clamp_target=False)
+                    (mask_to_use, ground_truth, kspace),
+                    fft_functions,
+                    self.options,
+                    clamp_target=False)
             if use_reconstruction:
                 image, _, _ = self._reconstructor(
                     image, mask_to_use)  # pass through reconstruction network
         return [
-            ReconstructionEnv._compute_score(self, img.unsqueeze(0), ground_truth, kind) for img in image
+            ReconstructionEnv._compute_score(self, img.unsqueeze(0), ground_truth, kind)
+            for img in image
         ]
 
     def _compute_observation_and_score(self) -> Tuple[torch.Tensor, float]:
@@ -276,23 +277,16 @@ class ReconstructionEnv:
                     (self._current_mask, self._ground_truth, self._k_space),
                     fft_functions,
                     self.options,
-                    return_masked_k_space=True, rl_env=True)
+                    return_masked_k_space=True)
             reconstruction, _, mask_embed = self._reconstructor(zero_filled_reconstruction,
                                                                 self._current_mask)
             score = ReconstructionEnv._compute_score(self, reconstruction, self._ground_truth)
 
-            if self.options.obs_type == 'spectral_maps':
-                spectral_maps = self.k_space_map(reconstruction, self._current_mask)
-                observation = torch.cat([spectral_maps, mask_embed], dim=1)
-            elif self.options.obs_type == 'two_streams':
-                observation = torch.cat([reconstruction, masked_rffts], dim=1)
-            elif self.options.obs_type == 'concatenate_mask':
-                observation = torch.cat(
-                    [reconstruction,
-                     self._current_mask.repeat(1, reconstruction.shape[1], 1, 1)],
-                    dim=2)
-            else:
-                raise ValueError
+            # TODO add if for fourier/image
+            observation = torch.cat(
+                [reconstruction,
+                 self._current_mask.repeat(1, reconstruction.shape[1], 1, 1)],
+                dim=2)
         return observation.squeeze().cpu().numpy().astype(np.float32), score
 
     def reset(self) -> Tuple[Union[np.ndarray, None], Dict]:
@@ -375,11 +369,12 @@ class ReconstructionEnv:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
             if self.options.dataroot != 'KNEE_RAW':
-                image, _, _ = preprocess_inputs((self._current_mask, self._ground_truth), fft_functions,
-                                                self.options)
+                image, _, _ = preprocess_inputs((self._current_mask, self._ground_truth),
+                                                fft_functions, self.options)
             else:
-                image, _, _ = preprocess_inputs((self._current_mask, self._ground_truth, self._k_space), fft_functions,
-                                                self.options)
+                image, _, _ = preprocess_inputs(
+                    (self._current_mask, self._ground_truth, self._k_space), fft_functions,
+                    self.options)
 
             reconstruction, _, mask_embedding = self._reconstructor(image, self._current_mask)
             k_space_scores = self._evaluator(reconstruction, mask_embedding)

@@ -12,9 +12,7 @@ class RLOptions(BaseOptions):
             default=None,
             help='Directory where reconstructor is stored.')
         parser.add_argument(
-            '--obs_type',
-            choices=['two_streams', 'concatenate_mask', 'spectral_maps'],
-            default='two_streams')
+            '--obs_type', choices=['fourier_space', 'image_space'], default='fourier_space')
         parser.add_argument(
             '--policy',
             choices=[
@@ -65,10 +63,7 @@ class RLOptions(BaseOptions):
             help='Full path to the evaluator++ model to use.')
 
         # Reinforcement learning options
-        parser.add_argument(
-            '--rl_model_type',
-            choices=['two_streams', 'spectral_maps', 'large_two_streams'],
-            default='two_streams')
+        parser.add_argument('--rl_model_type', choices=['cnn_plus_masks'], default='cnn_plus_masks')
         parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
         parser.add_argument(
             '--dqn_only_test',
