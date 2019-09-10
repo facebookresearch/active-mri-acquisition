@@ -24,7 +24,7 @@ class RolloutStorage(object):
 
         # Masks that indicate whether it's a true terminal state
         # or time limit end state
-        self.bad_masks = torch.ones(num_steps + 1, num_processes, 1)
+        # self.bad_masks = torch.ones(num_steps + 1, num_processes, 1)
 
         self.num_steps = num_steps
         self.step = 0
@@ -37,24 +37,23 @@ class RolloutStorage(object):
         self.action_log_probs = self.action_log_probs.to(device)
         self.actions = self.actions.to(device)
         self.masks = self.masks.to(device)
-        self.bad_masks = self.bad_masks.to(device)
+        # self.bad_masks = self.bad_masks.to(device)
 
-    def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
-               value_preds, rewards, masks, bad_masks):
-        self.obs[self.step + 1].copy_(obs)
+    def insert(self, obs, actions, action_log_probs,
+               value_preds, rewards, masks):
+        self.obs[self.step + 1].copy_(torch.from_numpy(obs))
         self.actions[self.step].copy_(actions)
         self.action_log_probs[self.step].copy_(action_log_probs)
         self.value_preds[self.step].copy_(value_preds)
-        self.rewards[self.step].copy_(rewards)
+        self.rewards[self.step].copy_(torch.tensor(rewards))
         self.masks[self.step + 1].copy_(masks)
-        self.bad_masks[self.step + 1].copy_(bad_masks)
 
         self.step = (self.step + 1) % self.num_steps
 
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
         self.masks[0].copy_(self.masks[-1])
-        self.bad_masks[0].copy_(self.bad_masks[-1])
+        # self.bad_masks[0].copy_(self.bad_masks[-1])
 
     def compute_returns(self,
                         next_value,
