@@ -129,44 +129,6 @@ def preprocess_inputs(batch, fft_functions, options, return_masked_k_space=False
     return zero_filled_reconstruction, target, mask
 
 
-def create_mask(batch_size, num_entries=128, mask_type='random', low_freq_count=5):
-    warnings.warn(
-        'This function has been replaced by the code in data.ft_data_loader.ft_util_vaes.py',
-        DeprecationWarning)
-
-    mask = np.zeros((batch_size, num_entries)).astype(np.float32)
-    for i in range(batch_size):
-        if mask_type == 'random_zz':
-            mask_fraction = 0.25
-            mask_low_freqs = low_freq_count
-            # we sample fraction and mask_low_freqs lines
-            ratio = np.random.rand(1) + 0.5
-            mask_frac = mask_fraction * ratio
-            mask_lf = np.random.choice(
-                range(int(mask_low_freqs * 0.5),
-                      int(mask_low_freqs * 1.5) + 1))
-            seed = np.random.randint(10000)
-            s_fft = (np.random.RandomState(seed).rand(num_entries) < mask_frac).astype(np.float32)
-            mask[i, :] = s_fft
-            mask[i, :mask_lf] = mask[i, -mask_lf:] = 1
-        elif mask_type == 'random_lowfreq':
-            p_lines = 0.25 * np.random.random() + 0.125  # ~U(0.125, 0.375)
-            num_low_freq_lines = np.random.binomial(num_entries, p_lines)
-            mask[i, :num_low_freq_lines] = mask[i, -num_low_freq_lines:] = 1
-        elif mask_type == 'beta_symmetric':
-            half_entries = num_entries // 2
-            p = np.random.beta(1, 4)
-            mask_lf = np.random.choice(range(5, 11))
-            s_fft = (np.random.random(half_entries) < p).astype(np.float32)
-            mask[i, :half_entries] = s_fft
-            mask[i, :mask_lf] = 1
-            mask[i, :-(half_entries + 1):-1] = mask[i, :half_entries]
-        else:
-            raise ValueError('Invalid mask type: {}.'.format(mask_type))
-
-    return torch.from_numpy(mask).view(batch_size, 1, 1, num_entries)
-
-
 class GANLossKspace(nn.Module):
 
     def __init__(self, use_lsgan=True, use_mse_as_energy=False, grad_ctx=False, gamma=100):
