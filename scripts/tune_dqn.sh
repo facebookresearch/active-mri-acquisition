@@ -2,7 +2,7 @@
 
 CHECKPOINTS_BASE=/checkpoint/lep/active_acq
 MODELS_DIR=${CHECKPOINTS_BASE}/all_reconstructors
-MODEL_TYPE=symmetric_choice_rnl
+MODEL_TYPE=symmetric_basic_rnl
 
 SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/tune_fourier_$(date +%Y%m%d_%H.%M.%S)
 
