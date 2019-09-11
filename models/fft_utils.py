@@ -93,7 +93,6 @@ class GANLossKspace(nn.Module):
             self.loss = nn.BCELoss(size_average=False)
         self.use_mse_as_energy = use_mse_as_energy
         if use_mse_as_energy:
-            self.FFT = FFT()
             self.gamma = gamma
             self.bin = 5
 
@@ -111,8 +110,8 @@ class GANLossKspace(nn.Module):
             else:
                 pred, gt = pred_and_gt
                 w = gt.shape[2]
-                ks_gt = self.FFT(gt, normalized=True)
-                ks_input = self.FFT(pred, normalized=True)
+                ks_gt = fft(gt, normalized=True)
+                ks_input = fft(pred, normalized=True)
                 ks_row_mse = F.mse_loss(
                     ks_input, ks_gt, reduce=False).sum(
                         1, keepdim=True).sum(
