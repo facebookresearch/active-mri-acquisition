@@ -16,7 +16,7 @@ from typing import Any, Dict, Tuple
 
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, gaussian_nll_loss, \
+from models.fft_utils import preprocess_inputs, gaussian_nll_loss, \
     GANLossKspace, to_magnitude, center_crop
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
@@ -89,12 +89,6 @@ class Trainer:
 
         self.losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}
 
-        self.fft_functions = {
-            'rfft': RFFT().to(options.device),
-            'ifft': IFFT().to(options.device),
-            'fft': FFT().to(options.device)
-        }
-
         if self.options.only_evaluator:
             self.options.checkpoints_dir = os.path.join(self.options.checkpoints_dir, 'evaluator')
         if not os.path.exists(self.options.checkpoints_dir):
@@ -119,8 +113,8 @@ class Trainer:
 
     def inference(self, batch):
         with torch.no_grad():
-            zero_filled_image, ground_truth, mask = preprocess_inputs(batch, self.fft_functions,
-                                                                      self.options)
+            zero_filled_image, ground_truth, mask = preprocess_inputs(batch, self.options.dataroot,
+                                                                      self.options.device)
 
             # Get reconstructor output
             reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
@@ -133,13 +127,9 @@ class Trainer:
                 ground_truth_eval = self.evaluator(ground_truth, mask_embedding)
 
             # Compute magnitude (for val losses and plots)
-            also_clamp_and_scale = self.options.dataroot != 'KNEE_RAW'
-            zero_filled_image_magnitude = to_magnitude(
-                zero_filled_image, also_clamp_and_scale=also_clamp_and_scale)
-            reconstructed_image_magnitude = to_magnitude(
-                reconstructed_image, also_clamp_and_scale=also_clamp_and_scale)
-            ground_truth_magnitude = to_magnitude(
-                ground_truth, also_clamp_and_scale=also_clamp_and_scale)
+            zero_filled_image_magnitude = to_magnitude(zero_filled_image)
+            reconstructed_image_magnitude = to_magnitude(reconstructed_image)
+            ground_truth_magnitude = to_magnitude(ground_truth)
 
             if self.options.dataroot == 'KNEE_RAW':  # crop data
                 reconstructed_image_magnitude = center_crop(reconstructed_image_magnitude,
@@ -197,7 +187,8 @@ class Trainer:
 
     # TODO: consider adding learning rate scheduler
     def update(self, batch):
-        zero_filled_image, target, mask = preprocess_inputs(batch, self.fft_functions, self.options)
+        zero_filled_image, target, mask = preprocess_inputs(batch, self.options.dataroot,
+                                                            self.options.device)
 
         # Get reconstructor output
         reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(

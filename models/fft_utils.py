@@ -7,51 +7,25 @@ from torch.nn import functional as F
 from data.ft_data_loader.ft_util_vaes import ifftshift
 
 
-class IFFT(nn.Module):
-
-    def forward(self, x, normalized=False, ifft_shift=False):
-        x = x.permute(0, 2, 3, 1)
-        y = torch.ifft(x, 2, normalized=normalized)
-        if ifft_shift:
-            y = ifftshift(y, dim=(1, 2))
-        return y.permute(0, 3, 1, 2)
-
-    def __repr__(self):
-        return 'IFFT()'
+def ifft(x, normalized=False, ifft_shift=False):
+    x = x.permute(0, 2, 3, 1)
+    y = torch.ifft(x, 2, normalized=normalized)
+    if ifft_shift:
+        y = ifftshift(y, dim=(1, 2))
+    return y.permute(0, 3, 1, 2)
 
 
-class IRFFT(nn.Module):
-
-    def forward(self, x, normalized=False):
-        x = x.permute(0, 2, 3, 1)
-        y = torch.irfft(x, 2, onesided=False, normalized=normalized).unsqueeze(3)
-        return y.permute(0, 3, 1, 2)
-
-    def __repr__(self):
-        return 'IRFFT()'
+def rfft(x, normalized=False):
+    # x is in gray scale and has 1-d in the 1st dimension
+    x = x.squeeze(1)
+    y = torch.rfft(x, 2, onesided=False, normalized=normalized)
+    return y.permute(0, 3, 1, 2)
 
 
-class RFFT(nn.Module):
-
-    def forward(self, x, normalized=False):
-        # x is in gray scale and has 1-d in the 1st dimension
-        x = x.squeeze(1)
-        y = torch.rfft(x, 2, onesided=False, normalized=normalized)
-        return y.permute(0, 3, 1, 2)
-
-    def __repr__(self):
-        return 'RFFT()'
-
-
-class FFT(nn.Module):
-
-    def forward(self, x, normalized=False):
-        x = x.permute(0, 2, 3, 1)
-        y = torch.fft(x, 2, normalized=normalized)
-        return y.permute(0, 3, 1, 2)
-
-    def __repr__(self):
-        return 'FFT()'
+def fft(x, normalized=False):
+    x = x.permute(0, 2, 3, 1)
+    y = torch.fft(x, 2, normalized=normalized)
+    return y.permute(0, 3, 1, 2)
 
 
 def center_crop(x, shape):
@@ -65,27 +39,18 @@ def center_crop(x, shape):
     return x
 
 
-def to_magnitude(tensor, also_clamp_and_scale=False):
-    if also_clamp_and_scale:
-        tensor = clamp_and_scale(tensor)
+def to_magnitude(tensor):
     tensor = (tensor[:, 0, :, :]**2 + tensor[:, 1, :, :]**2)**.5
     return tensor.unsqueeze(1)
 
 
-def clamp_and_scale(tensor):
-    # TODO: supposed to be clamping to zscore 3, make option for this
-    return clamp(tensor) + 3
-
-
-def clamp(tensor):
-    # TODO: supposed to be clamping to zscore 3, make option for this
-    return tensor.clamp(-3, 3)
+def dicom_to_0_1_range(tensor):
+    return (tensor.clamp(-3, 3) + 3) / 6
 
 
 def gaussian_nll_loss(reconstruction, target, logvar, options):
-    reconstruction = to_magnitude(
-        reconstruction, also_clamp_and_scale=options.dataroot != 'KNEE_RAW')
-    target = to_magnitude(target, also_clamp_and_scale=options.dataroot != 'KNEE_RAW')
+    reconstruction = to_magnitude(reconstruction)
+    target = to_magnitude(target)
     if options.dataroot == 'KNEE_RAW':
         reconstruction = center_crop(reconstruction, [320, 320])
         target = center_crop(target, [320, 320])
@@ -99,23 +64,18 @@ def gaussian_nll_loss(reconstruction, target, logvar, options):
     return 0.5 * (one_over_var * l2 + logvar)
 
 
-# TODO fix the conditional return
-def preprocess_inputs(batch, fft_functions, options):
-    if options.dataroot == 'KNEE_RAW':
-        mask = batch[0].to(options.device)
-        target = batch[1].to(options.device)
-        kspace = batch[2].permute(0, 3, 1, 2).to(options.device)
-        masked_true_k_space = torch.where(mask.byte(), kspace, torch.tensor(0.).to(options.device))
-        zero_filled_reconstruction = fft_functions['ifft'](masked_true_k_space, ifft_shift=True)
+def preprocess_inputs(batch, dataroot, device):
+    mask = batch[0].to(device)
+    target = batch[1].to(device)
+    if dataroot == 'KNEE_RAW':
+        k_space = batch[2].permute(0, 3, 1, 2).to(device)
+        masked_true_k_space = torch.where(mask.byte(), k_space, torch.tensor(0.).to(device))
+        zero_filled_reconstruction = ifft(masked_true_k_space, ifft_shift=True)
         target = target.permute(0, 3, 1, 2)
     else:
-        target = batch[1].to(options.device)
-        mask = batch[0].to(options.device)
-        fft_target = fft_functions['rfft'](target)
-        masked_true_k_space = torch.where(mask.byte(), fft_target,
-                                          torch.tensor(0.).to(options.device))
-        zero_filled_reconstruction = fft_functions['ifft'](masked_true_k_space)
-        target = torch.cat([target, torch.zeros_like(target)], dim=1)
+        fft_target = fft(target)
+        masked_true_k_space = torch.where(mask.byte(), fft_target, torch.tensor(0.).to(device))
+        zero_filled_reconstruction = ifft(masked_true_k_space)
 
     return zero_filled_reconstruction, target, mask
 

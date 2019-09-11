@@ -174,22 +174,21 @@ class ZeroStepGreedy:
     def __init__(self, env):
         self.env = env
         self.actions = list(range(env.action_space.n))
+        raise NotImplementedError('Need to adjust for new observation types and loader refactor')
 
     def get_action(self, unused_obs_, _, __):
         zero_filled_reconstruction, _, __ = models.fft_utils.preprocess_inputs(
-            (self.env._current_mask, self.env._ground_truth),
-            rl_env.fft_functions,
-            self.env.options,
-            clamp_target=False)
+            (self.env._current_mask, self.env._ground_truth), self.env.options.dataroot,
+            self.env.options.device)
 
         reconstruction, _, mask_embed = self.env._reconstructor(zero_filled_reconstruction,
                                                                 self.env._current_mask)
 
-        rfft_gt = rl_env.fft_functions['rfft'](self.env._ground_truth)
-        rfft_reconstr = rl_env.fft_functions['fft'](reconstruction)
+        rfft_gt = models.fft_utils.fft(self.env._ground_truth)
+        rfft_reconstr = models.fft_utils.fft(reconstruction)
         diff = torch.nn.functional.mse_loss(
             rfft_gt[0], rfft_reconstr[0], reduction='none').sum([0, 1])
-        return diff[:rl_env.IMAGE_WIDTH // 2].argmax().item() - self.env.options.initial_num_lines
+        return diff[:self.env.image_width // 2].argmax().item() - self.env.options.initial_num_lines
 
     def init_episode(self):
         pass

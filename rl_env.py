@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 
@@ -7,23 +8,16 @@ import torch
 import torch.nn.functional as F
 from typing import Dict, List, Optional, Tuple, Union
 
-from data import create_data_loaders
-from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, FFT, preprocess_inputs, to_magnitude, center_crop
-from models.reconstruction import ReconstructorNetwork
-from util import util
-
-rfft = RFFT()
-ifft = IFFT()
-fft = FFT()
-fft_functions = {'rfft': rfft, 'ifft': ifft, 'fft': fft}
+import data
+import models.evaluator
+import models.fft_utils
+import models.reconstruction
+import util.util
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# TODO Organize imports and finish adding type info
 
-
-def load_checkpoint(checkpoints_dir, name='best_checkpoint.pth'):
+def load_checkpoint(checkpoints_dir: str, name: str = 'best_checkpoint.pth') -> Optional[Dict]:
     checkpoint_path = os.path.join(checkpoints_dir, name)
     if os.path.isfile(checkpoint_path):
         logging.info(f'Found checkpoint at {checkpoint_path}.')
@@ -35,7 +29,7 @@ def load_checkpoint(checkpoints_dir, name='best_checkpoint.pth'):
 class ReconstructionEnv:
     """ RL environment representing the active acquisition process with reconstruction model. """
 
-    def __init__(self, options):
+    def __init__(self, options: argparse.Namespace):
         """Creates a new environment.
 
             @param `options`: Should specify the following options:
@@ -57,8 +51,8 @@ class ReconstructionEnv:
         self.image_height = 640 if options.dataroot == 'KNEE_RAW' else 128
         self.image_width = 368 if options.dataroot == 'KNEE_RAW' else 128
         self.conjugate_symmetry = (options.dataroot != 'KNEE_RAW')
-        train_loader, valid_loader = create_data_loaders(options, is_test=False)
-        test_loader = create_data_loaders(options, is_test=True)
+        train_loader, valid_loader = data.create_data_loaders(options, is_test=False)
+        test_loader = data.create_data_loaders(options, is_test=True)
 
         self._dataset_train = train_loader.dataset
         if options.test_set == 'train':
@@ -81,7 +75,7 @@ class ReconstructionEnv:
         self.is_testing = False
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
-        self._reconstructor = ReconstructorNetwork(
+        self._reconstructor = models.reconstruction.ReconstructorNetwork(
             number_of_cascade_blocks=reconstructor_checkpoint['options'].number_of_cascade_blocks,
             n_downsampling=reconstructor_checkpoint['options'].n_downsampling,
             number_of_filters=reconstructor_checkpoint['options'].number_of_reconstructor_filters,
@@ -102,7 +96,7 @@ class ReconstructionEnv:
         self._evaluator = None
         evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
         if evaluator_checkpoint is not None and evaluator_checkpoint['evaluator'] is not None:
-            self._evaluator = EvaluatorNetwork(
+            self._evaluator = models.evaluator.EvaluatorNetwork(
                 number_of_filters=evaluator_checkpoint['options'].number_of_evaluator_filters,
                 number_of_conv_layers=evaluator_checkpoint['options']
                 .number_of_evaluator_convolution_layers,
@@ -138,21 +132,15 @@ class ReconstructionEnv:
         self._scans_left = None
 
     def _generate_initial_mask(self):
-        mask = torch.zeros(1, 1, 1, 368 if self.options.dataroot == 'KNEE_RAW' else 128)
+        mask = torch.zeros(1, 1, 1, self.image_width)
         for i in range(self.options.initial_num_lines):
             mask[0, 0, 0, i] = 1
-            if self.conjugate_symmetry:
-                mask[0, 0, 0, -(i + 1)] = 1
+            mask[0, 0, 0, -(i + 1)] = 1
         return mask
 
     def _get_current_reconstruction_and_mask_embedding(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        if self.options.dataroot != 'KNEE_RAW':
-            zero_filled_image, _, _ = preprocess_inputs((self._current_mask, self._ground_truth),
-                                                        fft_functions, self.options)
-        else:
-            zero_filled_image, _, _ = preprocess_inputs(
-                (self._current_mask, self._ground_truth, self._k_space), fft_functions,
-                self.options)
+        zero_filled_image, _, _ = models.fft_utils.preprocess_inputs(
+            (self._current_mask, self._ground_truth, self._k_space), self.options.dataroot, device)
 
         reconstruction, _, mask_embed = self._reconstructor(zero_filled_image, self._current_mask)
 
@@ -169,22 +157,18 @@ class ReconstructionEnv:
             self._image_idx_train = 0
 
     @staticmethod
-    def _compute_score(reconstruction_: torch.Tensor, ground_truth_: torch.Tensor,
+    def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
                        is_raw: bool) -> Dict[str, torch.Tensor]:
         # Compute magnitude (for metrics)
-        reconstruction = to_magnitude(reconstruction_, also_clamp_and_scale=not is_raw)
-        # If DICOM, then ground truth is only real part
-        ground_truth = to_magnitude(ground_truth_, also_clamp_and_scale=not is_raw) if is_raw \
-            else ground_truth_
-        data_range = 6  # data range is 6 for DICOMS
+        reconstruction = models.fft_utils.to_magnitude(reconstruction)
+        ground_truth = models.fft_utils.to_magnitude(ground_truth)
         if is_raw:  # crop data
-            data_range = 1  # data range is 1 for RAW
-            reconstruction = center_crop(reconstruction, [320, 320])
-            ground_truth = center_crop(ground_truth, [320, 320])
+            reconstruction = models.fft_utils.center_crop(reconstruction, [320, 320])
+            ground_truth = models.fft_utils.center_crop(ground_truth, [320, 320])
 
         mse = F.mse_loss(reconstruction, ground_truth)
-        ssim = util.ssim_metric(reconstruction, ground_truth)
-        psnr = util.psnr_metric(reconstruction, ground_truth, data_range)
+        ssim = util.util.ssim_metric(reconstruction, ground_truth)
+        psnr = util.util.psnr_metric(reconstruction, ground_truth)
 
         score = {'mse': mse, 'ssim': ssim, 'psnr': psnr}
 
@@ -236,12 +220,8 @@ class ReconstructionEnv:
             if k_space is None:
                 k_space = self._k_space
 
-            if self.options.dataroot != 'KNEE_RAW':
-                image, _, _ = preprocess_inputs((mask_to_use, ground_truth), fft_functions,
-                                                self.options)
-            else:
-                image, _, _ = preprocess_inputs((mask_to_use, ground_truth, k_space), fft_functions,
-                                                self.options)
+            image, ground_truth, _ = models.fft_utils.preprocess_inputs(
+                (mask_to_use, ground_truth, k_space), self.options.dataroot, device)
             if use_reconstruction:  # pass through reconstruction network
                 image, _, _ = self._reconstructor(image, mask_to_use)
         return [
@@ -257,7 +237,7 @@ class ReconstructionEnv:
                                                      self.options.dataroot == 'KNEE_RAW')
 
             if self.options.obs_type == 'fourier_space':
-                reconstruction = fft_functions['fft'](reconstruction)
+                reconstruction = models.fft_utils.fft(reconstruction)
 
             observation = {'reconstruction': reconstruction, 'mask': self._current_mask}
 

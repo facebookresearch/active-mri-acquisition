@@ -99,7 +99,7 @@ class SliceWithPrecomputedMasks(Dataset):
             data = pickle.load(f)
             mask = torch.from_numpy(data[mask_index]).view(1, 1, 128).float()
 
-        return mask, image
+        return mask, image, None
 
     def __len__(self):
         return self.maskfile_end_indices[-1]
@@ -117,11 +117,12 @@ class DicomDataTransform:
     def __call__(self, image, mean, std):
         image = (image - mean) / (std + 1e-12)
         image = torch.from_numpy(image)
-        image = models.fft_utils.clamp(image)
+        image = models.fft_utils.dicom_to_0_1_range(image)
         shape = np.array(image.shape)
         seed = int(1009 * image.sum().abs()) if self.fixed_seed is None and self.seed_per_image \
             else self.fixed_seed
         mask = self.mask_func(shape, seed) if self.mask_func is not None else None
+        image = torch.cat([image, torch.zeros_like(image)], dim=0)
         return mask, image
 
 
