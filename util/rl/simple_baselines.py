@@ -200,8 +200,8 @@ class EvaluatorNetwork:
         if evaluator_name is not None:
             self.env.set_evaluator(evaluator_name)
 
-    def get_action(self, *_):
-        return self.env.get_evaluator_action()
+    def get_action(self, obs, _, __):
+        return self.env.get_evaluator_action(obs)
 
     def init_episode(self):
         pass

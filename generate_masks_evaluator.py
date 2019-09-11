@@ -27,14 +27,14 @@ def get_num_lines(min_lowf_lines: int = 3,
 
 # noinspection PyProtectedMember
 def generate_masks(env: rl_env.ReconstructionEnv,
-                   greedy_policy: util.rl.simple_baselines.EvaluatorNetwork,
+                   evaluator_policy: util.rl.simple_baselines.EvaluatorNetwork,
                    how_many_images: int) -> List[np.ndarray]:
     import time
     start = time.time()
     masks = []
     for episode in range(how_many_images):
         obs, info = env.reset()
-        greedy_policy.init_episode()
+        evaluator_policy.init_episode()
         episode += 1
         initial_num_lines, additional_lines = get_num_lines()
         logging.info(f'Will generate mask with {2 * initial_num_lines} low freq. lines and '
@@ -45,7 +45,7 @@ def generate_masks(env: rl_env.ReconstructionEnv,
             1, 1, 1, rl_env.IMAGE_WIDTH)
         env.options.initial_num_lines = initial_num_lines
         for i in range(additional_lines):
-            action = greedy_policy.get_action(obs, None, None)
+            action = evaluator_policy.get_action(obs, None, None)
             assert mask[initial_num_lines + action] == 0
             assert mask[rl_env.IMAGE_WIDTH - initial_num_lines - action - 1] == 0
             mask[initial_num_lines + action] = 1

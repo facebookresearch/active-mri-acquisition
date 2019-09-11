@@ -4,7 +4,6 @@ import os
 import gym.spaces
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -35,36 +34,6 @@ def load_checkpoint(checkpoints_dir, name='best_checkpoint.pth'):
     return None
 
 
-class KSpaceMap(nn.Module):
-    """Auxiliary module used to compute spectral maps of a zero-filled reconstruction.
-        See https://arxiv.org/pdf/1902.03051.pdf for details.
-    """
-
-    def __init__(self, img_width=128):
-        super(KSpaceMap, self).__init__()
-
-        self.img_width = img_width
-        self.register_buffer('separated_masks', torch.FloatTensor(1, img_width, 1, 1, img_width))
-        self.separated_masks.fill_(0)
-        for i in range(img_width):
-            self.separated_masks[0, i, 0, 0, i] = 1
-
-    def forward(self, input, mask):
-        batch_size, _, img_height, img_width = input.shape
-        assert img_width == self.img_width
-        k_space = rfft(input[:, :1, ...])  # Take only real part
-
-        # This code creates w channels, where the i-th channel is a copy of k_space
-        # with everything but the i-th column masked out
-        k_space = k_space.unsqueeze(1).repeat(1, img_width, 1, 1, 1)  # [batch_size , w, 2, h, w]
-        masked_kspace = self.separated_masks * k_space
-        masked_kspace = masked_kspace.view(batch_size * img_width, 2, img_height, img_width)
-
-        # The imaginary part is discarded
-        return ifft(masked_kspace)[:, 0, ...].view(batch_size, img_width, img_height, img_width)
-
-
-# noinspection PyAttributeOutsideInit
 class ReconstructionEnv:
     """ RL environment representing the active acquisition process with reconstruction model. """
 
@@ -158,9 +127,25 @@ class ReconstructionEnv:
         num_actions = (self.image_width - factor * options.initial_num_lines) // 2
         self.action_space = gym.spaces.Discrete(num_actions)
 
-        self._ground_truth = None
         self._initial_mask = initial_mask.to(device)
-        self.k_space_map = KSpaceMap(img_width=self.image_width).to(device)
+        self._ground_truth = None
+        self._k_space = None
+        self._current_mask = None
+        self._current_score = None
+        self._scans_left = None
+
+    def _get_current_reconstruction_and_mask_embedding(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        if self.options.dataroot != 'KNEE_RAW':
+            zero_filled_image, _, _ = preprocess_inputs((self._current_mask, self._ground_truth),
+                                                        fft_functions, self.options)
+        else:
+            zero_filled_image, _, _ = preprocess_inputs(
+                (self._current_mask, self._ground_truth, self._k_space), fft_functions,
+                self.options)
+
+        reconstruction, _, mask_embed = self._reconstructor(zero_filled_image, self._current_mask)
+
+        return reconstruction, mask_embed
 
     def set_testing(self, reset_index=True):
         self.is_testing = True
@@ -173,21 +158,18 @@ class ReconstructionEnv:
             self._image_idx_train = 0
 
     @staticmethod
-    def _compute_score(self,
-                       reconstruction: torch.Tensor,
+    def _compute_score(reconstruction: torch.Tensor,
                        ground_truth: torch.Tensor,
+                       is_raw: bool,
                        kind: str = 'mse') -> torch.Tensor:
 
         # Compute magnitude (for metrics)
-        also_clamp_and_scale = self.options.dataroot != 'KNEE_RAW'
-        reconstruction = to_magnitude(reconstruction, also_clamp_and_scale=also_clamp_and_scale)
-        ground_truth = to_magnitude(ground_truth, also_clamp_and_scale=also_clamp_and_scale)
-        if self.options.dataroot == 'KNEE_RAW':  # crop data
+        reconstruction = to_magnitude(reconstruction, also_clamp_and_scale=not is_raw)
+        if is_raw:  # crop data
+            ground_truth = to_magnitude(ground_truth, also_clamp_and_scale=not is_raw)
             reconstruction = center_crop(reconstruction, [320, 320])
             ground_truth = center_crop(ground_truth, [320, 320])
 
-        # reconstruction = reconstruction[:, :1, ...]
-        # ground_truth = ground_truth[:, :1, ...]
         if kind == 'mse':
             score = F.mse_loss(reconstruction, ground_truth)
         elif kind == 'ssim':
@@ -220,7 +202,7 @@ class ReconstructionEnv:
             kind: str = 'mse',
             ground_truth: Optional[torch.Tensor] = None,
             mask_to_use: Optional[torch.Tensor] = None,
-            kspace: Optional[torch.Tensor] = None,
+            k_space: Optional[torch.Tensor] = None,
     ) -> List[torch.Tensor]:
         """ Computes the score (MSE or SSIM) of current state with respect to current ground truth.
 
@@ -244,15 +226,15 @@ class ReconstructionEnv:
                 ground_truth = self._ground_truth
             if mask_to_use is None:
                 mask_to_use = self._current_mask
+            if k_space is None:
+                k_space = self._k_space
 
             if self.options.dataroot != 'KNEE_RAW':
                 image, _, _ = preprocess_inputs(
                     (mask_to_use, ground_truth), fft_functions, self.options, clamp_target=False)
             else:
-                if kspace is None:
-                    kspace = self._k_space
                 image, _, _ = preprocess_inputs(
-                    (mask_to_use, ground_truth, kspace),
+                    (mask_to_use, ground_truth, k_space),
                     fft_functions,
                     self.options,
                     clamp_target=False)
@@ -260,36 +242,28 @@ class ReconstructionEnv:
                 image, _, _ = self._reconstructor(
                     image, mask_to_use)  # pass through reconstruction network
         return [
-            ReconstructionEnv._compute_score(self, img.unsqueeze(0), ground_truth, kind)
+            ReconstructionEnv._compute_score(
+                img.unsqueeze(0), ground_truth, self.options.dataroot == 'KNEE_RAW', kind=kind)
             for img in image
         ]
 
-    def _compute_observation_and_score(self) -> Tuple[torch.Tensor, float]:
+    def _compute_observation_and_score(self) -> Tuple[Dict, float]:
         with torch.no_grad():
-            if self.options.dataroot != 'KNEE_RAW':
-                zero_filled_reconstruction, _, _, masked_rffts = preprocess_inputs(
-                    (self._current_mask, self._ground_truth),
-                    fft_functions,
-                    self.options,
-                    return_masked_k_space=True)
-            else:
-                zero_filled_reconstruction, _, _, masked_rffts = preprocess_inputs(
-                    (self._current_mask, self._ground_truth, self._k_space),
-                    fft_functions,
-                    self.options,
-                    return_masked_k_space=True)
-            reconstruction, _, mask_embed = self._reconstructor(zero_filled_reconstruction,
-                                                                self._current_mask)
-            score = ReconstructionEnv._compute_score(self, reconstruction, self._ground_truth)
+            reconstruction, mask_embedding = self._get_current_reconstruction_and_mask_embedding()
+            score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth,
+                                                     self.options.dataroot == 'KNEE_RAW')
 
-            # TODO add if for fourier/image
-            observation = torch.cat(
-                [reconstruction,
-                 self._current_mask.repeat(1, reconstruction.shape[1], 1, 1)],
-                dim=2)
-        return observation.squeeze().cpu().numpy().astype(np.float32), score
+            if self.options.obs_type == 'fourier_space':
+                reconstruction = fft_functions['fft'](reconstruction)
 
-    def reset(self) -> Tuple[Union[np.ndarray, None], Dict]:
+            observation = {'reconstruction': reconstruction.cpu(), 'mask': self._current_mask.cpu()}
+
+            if self.options.obs_type == 'mask_embedding':
+                observation['mask_embedding'] = mask_embedding.cpu()
+
+        return observation, score
+
+    def reset(self) -> Tuple[Union[Dict, None], Dict]:
         """ Loads a new image from the dataset and starts a new episode with this image.
 
             If `self.options.sequential_images` is True, it loops over images in the dataset in
@@ -344,7 +318,7 @@ class ReconstructionEnv:
         observation, self._current_score = self._compute_observation_and_score()
         return observation, info
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, Dict]:
+    def step(self, action: int) -> Tuple[Dict[str, torch.Tensor], float, bool, Dict]:
         """ Adds a new line (specified by the action) to the current mask and computes the
             resulting observation and reward (drop in MSE after reconstructing with respect to the
             current ground truth).
@@ -365,20 +339,13 @@ class ReconstructionEnv:
 
         return observation, reward, done, {}
 
-    def get_evaluator_action(self) -> int:
+    def get_evaluator_action(self, obs: Dict[str, torch.Tensor]) -> int:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
-            if self.options.dataroot != 'KNEE_RAW':
-                image, _, _ = preprocess_inputs((self._current_mask, self._ground_truth),
-                                                fft_functions, self.options)
-            else:
-                image, _, _ = preprocess_inputs(
-                    (self._current_mask, self._ground_truth, self._k_space), fft_functions,
-                    self.options)
-
-            reconstruction, _, mask_embedding = self._reconstructor(image, self._current_mask)
-            k_space_scores = self._evaluator(reconstruction, mask_embedding)
-            k_space_scores.masked_fill_(self._current_mask.squeeze().byte(), 100000)
+            assert self.options.obs_type == 'mask_embedding'
+            k_space_scores = self._evaluator(obs['reconstruction'].to(device),
+                                             obs['mask_embedding'].to(device))
+            k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines
 
 

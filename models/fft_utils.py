@@ -103,8 +103,7 @@ def gaussian_nll_loss(reconstruction, target, logvar, options):
 
 
 # TODO fix the conditional return
-def preprocess_inputs(batch, fft_functions, options, return_masked_k_space=False,
-                      clamp_target=True):
+def preprocess_inputs(batch, fft_functions, options, clamp_target=True):
 
     if options.dataroot == 'KNEE_RAW':
         mask = batch[0].to(options.device)
@@ -124,8 +123,7 @@ def preprocess_inputs(batch, fft_functions, options, return_masked_k_space=False
                                           torch.tensor(0.).to(options.device))
         zero_filled_reconstruction = fft_functions['ifft'](masked_true_k_space)
         target = torch.cat([target, torch.zeros_like(target)], dim=1)
-    if return_masked_k_space:
-        return zero_filled_reconstruction, target, mask, masked_true_k_space
+
     return zero_filled_reconstruction, target, mask
 
 

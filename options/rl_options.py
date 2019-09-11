@@ -12,13 +12,12 @@ class RLOptions(BaseOptions):
             default=None,
             help='Directory where reconstructor is stored.')
         parser.add_argument(
-            '--obs_type', choices=['fourier_space', 'image_space'], default='fourier_space')
+            '--obs_type',
+            choices=['fourier_space', 'image_space', 'mask_embedding'],
+            default='fourier_space')
         parser.add_argument(
             '--policy',
-            choices=[
-                'dqn', 'random', 'lowfirst', 'evaluator_net', 'evaluator_net_offp', 'greedymc',
-                'greedymc_gt', 'greedyfull1_gt', 'greedyfull1', 'greedyzero', 'evaluator++'
-            ],
+            choices=['dqn', 'random', 'lowfirst', 'evaluator_net', 'evaluator++'],
             default='random')
         parser.add_argument('--initial_num_lines', type=int, default=10)
         parser.add_argument('--budget', type=int, default=5)

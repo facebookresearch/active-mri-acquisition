@@ -131,27 +131,11 @@ def get_policy(env, writer, logger, options_):
     elif 'lowfirst' in options_.policy:
         assert rl_env.CONJUGATE_SYMMETRIC
         policy = util.rl.simple_baselines.NextIndexPolicy(range(env.action_space.n))
-    elif 'greedymc' in options_.policy:
-        policy = util.rl.simple_baselines.GreedyMC(
-            env,
-            samples=options_.greedymc_num_samples,
-            horizon=options_.greedymc_horizon,
-            use_reconstructions=options_.use_reconstructions,
-            use_ground_truth='_gt' in options_.policy)
-    elif 'greedyfull1' in options_.policy:
-        assert options_.use_reconstructions
-        policy = util.rl.simple_baselines.FullGreedy(
-            env, num_steps=1, use_ground_truth='_gt' in options_.policy, use_reconstructions=True)
-    elif 'greedyzero' in options_.policy:
-        assert options_.use_reconstructions
-        policy = util.rl.simple_baselines.ZeroStepGreedy(env)
     elif 'evaluator_net' in options_.policy:
-        policy = util.rl.simple_baselines.EvaluatorNetwork(env)
-    elif 'evaluator_net_offp' in options_.policy:
-        assert options_.evaluator_name is not None and options_.evaluator_name != options_.name
+        assert options_.obs_type == 'mask_embedding'
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator++' in options_.policy:
-        assert options_.obs_type == 'concatenate_mask'
+        assert options_.obs_type == 'mask_embedding'
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             options_.options.evaluator_pp_path, options_.initial_num_lines, rl_env.device)
     elif 'dqn' in options_.policy:
