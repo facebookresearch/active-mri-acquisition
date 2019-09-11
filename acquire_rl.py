@@ -114,7 +114,7 @@ def get_policy(env, writer, logger, options_):
     if 'random' in options_.policy:
         policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
     elif 'lowfirst' in options_.policy:
-        assert rl_env.CONJUGATE_SYMMETRIC
+        assert env.conjugate_symmetry
         policy = util.rl.simple_baselines.NextIndexPolicy(range(env.action_space.n))
     elif 'evaluator_net' in options_.policy:
         assert options_.obs_type == 'mask_embedding'
@@ -124,6 +124,7 @@ def get_policy(env, writer, logger, options_):
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             options_.options.evaluator_pp_path, options_.initial_num_lines, rl_env.device)
     elif 'dqn' in options_.policy:
+        assert options_.obs_to_numpy
         dqn_trainer = util.rl.dqn.DQNTrainer(options_, env, writer, logger)
         dqn_trainer()
         policy = dqn_trainer.policy

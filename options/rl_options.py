@@ -63,7 +63,8 @@ class RLOptions(BaseOptions):
             help='Full path to the evaluator++ model to use.')
 
         # Reinforcement learning options
-        parser.add_argument('--rl_model_type', choices=['cnn_plus_masks'], default='cnn_plus_masks')
+        parser.add_argument(
+            '--rl_model_type', choices=['basic_value_network'], default='basic_value_network')
         parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
         parser.add_argument(
             '--dqn_only_test',

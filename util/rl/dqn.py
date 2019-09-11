@@ -35,23 +35,26 @@ class BasicValueNetwork(nn.Module):
 
     def __init__(self, num_actions):
         super(BasicValueNetwork, self).__init__()
-        raise NotImplementedError
 
-        # self.conv_image = nn.Sequential(
-        #     nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-        #     nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-        #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
-        #
-        # self.conv_fft = nn.Sequential(
-        #     nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-        #     nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-        #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
-        #
-        # self.fc = nn.Sequential(
-        #     nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
-        #     nn.Linear(256, num_actions))
+        self.conv_image = nn.Sequential(
+            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
+
+        self.conv_fft = nn.Sequential(
+            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
+
+        self.fc = nn.Sequential(
+            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
+            nn.Linear(256, num_actions))
 
     def forward(self, x):
+        # TODO Don't store the full embedding as returned by reconstructor (it's tiled)
+        #  store only the D-dim and re-tile it here before passing to evaluator.
+        #  Also make another class to try the evaluator network architecture
+        #  (instead of BasicValueNetwork)
         reconstructions = x[:, :2, :, :]
         masked_rffts = x[:, 2:, :, :]
         image_encoding = self.conv_image(reconstructions)
@@ -62,6 +65,7 @@ class BasicValueNetwork(nn.Module):
 def get_model(num_actions, model_type='basic_value_network'):
     if model_type == 'basic_value_network':
         return BasicValueNetwork(num_actions)
+    raise ValueError('Unknown model specified for DQN.')
 
 
 class DDQN(nn.Module):
@@ -169,7 +173,7 @@ class DQNTrainer:
             self.logger = logger
 
             # If replay will be loaded set capacity to zero (defer allocation to `__call__()`)
-            mem_capacity = 0 if load_replay_mem or options_.dqn_only_test \
+            mem_capacity = 0 if self.load_replay_mem or options_.dqn_only_test \
                 else self._max_replay_buffer_size()
             self.replay_memory = util.rl.replay_buffer.ReplayMemory(
                 mem_capacity, self.env.observation_space.shape, options_.rl_batch_size,
