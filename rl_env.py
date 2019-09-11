@@ -116,9 +116,15 @@ class ReconstructionEnv:
             })
             self._evaluator.to(device)
 
-        # The extra row represents the current mask
-        obs_shape = (2, self.image_height + 1, self.image_width)
-        self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
+        self.observation_space = None  # The observation is a dict unless `obs_to_numpy` is used
+        if self.options.obs_to_numpy:
+            # The extra rows represents the current mask (or the mask embedding)
+            if self.options.obs_type == 'mask_embedding':
+                obs_shape = (2 + reconstructor_checkpoint['options'].mask_embed_dim,
+                             self.image_height, self.image_width)
+            else:
+                obs_shape = (2, self.image_height + 1, self.image_width)
+            self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
 
         factor = 2 if self.conjugate_symmetry else 1
         num_actions = (self.image_width - factor * options.initial_num_lines) // 2
@@ -244,7 +250,7 @@ class ReconstructionEnv:
             for img in image
         ]
 
-    def _compute_observation_and_score(self) -> Tuple[Dict, Dict]:
+    def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
             reconstruction, mask_embedding = self._get_current_reconstruction_and_mask_embedding()
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth,
@@ -253,10 +259,18 @@ class ReconstructionEnv:
             if self.options.obs_type == 'fourier_space':
                 reconstruction = fft_functions['fft'](reconstruction)
 
-            observation = {'reconstruction': reconstruction.cpu(), 'mask': self._current_mask.cpu()}
+            observation = {'reconstruction': reconstruction, 'mask': self._current_mask}
 
             if self.options.obs_type == 'mask_embedding':
-                observation['mask_embedding'] = mask_embedding.cpu()
+                observation['mask_embedding'] = mask_embedding
+
+            if self.options.obs_to_numpy:
+                observation = np.zeros(self.observation_space.shape)
+                observation[:2, :self.image_height, :] = reconstruction[0].cpu().numpy()
+                if self.options.obs_type == 'mask_embedding':
+                    observation[2:, :, :] = mask_embedding[0].cpu().numpy()
+                else:
+                    observation[:, self.image_height, :] = self._current_mask.cpu().numpy()
 
         return observation, score
 
@@ -340,7 +354,7 @@ class ReconstructionEnv:
     def get_evaluator_action(self, obs: Dict[str, torch.Tensor]) -> int:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
-            assert self.options.obs_type == 'mask_embedding'
+            assert self.options.obs_type == 'mask_embedding' and not self.options.obs_to_numpy
             k_space_scores = self._evaluator(obs['reconstruction'].to(device),
                                              obs['mask_embedding'].to(device))
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)

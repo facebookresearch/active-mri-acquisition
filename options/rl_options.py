@@ -15,6 +15,7 @@ class RLOptions(BaseOptions):
             '--obs_type',
             choices=['fourier_space', 'image_space', 'mask_embedding'],
             default='fourier_space')
+        parser.add_argument('--obs_to_numpy', action='store_true')
         parser.add_argument(
             '--policy',
             choices=['dqn', 'random', 'lowfirst', 'evaluator_net', 'evaluator++'],
