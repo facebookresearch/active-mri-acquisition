@@ -18,8 +18,6 @@ ifft = IFFT()
 fft = FFT()
 fft_functions = {'rfft': rfft, 'ifft': ifft, 'fft': fft}
 
-CONJUGATE_SYMMETRIC = True
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # TODO Organize imports and finish adding type info
@@ -37,10 +35,9 @@ def load_checkpoint(checkpoints_dir, name='best_checkpoint.pth'):
 class ReconstructionEnv:
     """ RL environment representing the active acquisition process with reconstruction model. """
 
-    def __init__(self, initial_mask, options):
+    def __init__(self, options):
         """Creates a new environment.
 
-            @param `initial_mask`: The initial mask to use at the start of each episode.
             @param `options`: Should specify the following options:
                 -`reconstructor_dir`: directory where reconstructor is stored.
                 -`evaluator_dir`: directory where evaluator is stored.
@@ -55,12 +52,11 @@ class ReconstructionEnv:
                     all images will be used.
                 -`test_set`: the name of the test set to use (train, val, or test).
         """
-        # TODO remove initial_mask argument (control this generation inside the class)
-
         self.options = options
         self.options.device = device
         self.image_height = 640 if options.dataroot == 'KNEE_RAW' else 128
         self.image_width = 368 if options.dataroot == 'KNEE_RAW' else 128
+        self.conjugate_symmetry = (options.dataroot != 'KNEE_RAW')
         train_loader, valid_loader = create_data_loaders(options, is_test=False)
         test_loader = create_data_loaders(options, is_test=True)
 
@@ -96,7 +92,7 @@ class ReconstructionEnv:
             img_width=self.image_width,
             use_deconv=reconstructor_checkpoint['options'].use_deconv)
         self._reconstructor.load_state_dict({
-            #TODO: this is true only in case of single gpu:
+            # TODO: this is true only in case of single gpu:
             key.replace('module.', ''): val
             for key, val in reconstructor_checkpoint['reconstructor'].items()
         })
@@ -124,16 +120,24 @@ class ReconstructionEnv:
         obs_shape = (2, self.image_height + 1, self.image_width)
         self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
 
-        factor = 2 if CONJUGATE_SYMMETRIC else 1
+        factor = 2 if self.conjugate_symmetry else 1
         num_actions = (self.image_width - factor * options.initial_num_lines) // 2
         self.action_space = gym.spaces.Discrete(num_actions)
 
-        self._initial_mask = initial_mask.to(device)
+        self._initial_mask = self._generate_initial_mask().to(device)
         self._ground_truth = None
         self._k_space = None
         self._current_mask = None
         self._current_score = None
         self._scans_left = None
+
+    def _generate_initial_mask(self):
+        mask = torch.zeros(1, 1, 1, 368 if self.options.dataroot == 'KNEE_RAW' else 128)
+        for i in range(self.options.initial_num_lines):
+            mask[0, 0, 0, i] = 1
+            if self.conjugate_symmetry:
+                mask[0, 0, 0, -(i + 1)] = 1
+        return mask
 
     def _get_current_reconstruction_and_mask_embedding(self) -> Tuple[torch.Tensor, torch.Tensor]:
         if self.options.dataroot != 'KNEE_RAW':
@@ -163,7 +167,9 @@ class ReconstructionEnv:
                        is_raw: bool) -> Dict[str, torch.Tensor]:
         # Compute magnitude (for metrics)
         reconstruction = to_magnitude(reconstruction_, also_clamp_and_scale=not is_raw)
-        ground_truth = to_magnitude(ground_truth_, also_clamp_and_scale=not is_raw)
+        # If DICOM, then ground truth is only real part
+        ground_truth = to_magnitude(ground_truth_, also_clamp_and_scale=not is_raw) if is_raw \
+            else ground_truth_
         data_range = 6  # data range is 6 for DICOMS
         if is_raw:  # crop data
             data_range = 1  # data range is 1 for RAW
@@ -189,7 +195,7 @@ class ReconstructionEnv:
         new_mask = old_mask.clone().squeeze()
         had_already_been_scanned = bool(new_mask[line_to_scan])
         new_mask[line_to_scan] = 1
-        if CONJUGATE_SYMMETRIC:
+        if self.conjugate_symmetry:
             new_mask[self.image_width - line_to_scan - 1] = 1
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
@@ -225,24 +231,20 @@ class ReconstructionEnv:
                 k_space = self._k_space
 
             if self.options.dataroot != 'KNEE_RAW':
-                image, _, _ = preprocess_inputs(
-                    (mask_to_use, ground_truth), fft_functions, self.options, clamp_target=False)
+                image, _, _ = preprocess_inputs((mask_to_use, ground_truth), fft_functions,
+                                                self.options)
             else:
-                image, _, _ = preprocess_inputs(
-                    (mask_to_use, ground_truth, k_space),
-                    fft_functions,
-                    self.options,
-                    clamp_target=False)
-            if use_reconstruction:
-                image, _, _ = self._reconstructor(
-                    image, mask_to_use)  # pass through reconstruction network
+                image, _, _ = preprocess_inputs((mask_to_use, ground_truth, k_space), fft_functions,
+                                                self.options)
+            if use_reconstruction:  # pass through reconstruction network
+                image, _, _ = self._reconstructor(image, mask_to_use)
         return [
             ReconstructionEnv._compute_score(
                 img.unsqueeze(0), ground_truth, self.options.dataroot == 'KNEE_RAW')
             for img in image
         ]
 
-    def _compute_observation_and_score(self) -> Tuple[Dict, float]:
+    def _compute_observation_and_score(self) -> Tuple[Dict, Dict]:
         with torch.no_grad():
             reconstruction, mask_embedding = self._get_current_reconstruction_and_mask_embedding()
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth,
@@ -343,12 +345,3 @@ class ReconstructionEnv:
                                              obs['mask_embedding'].to(device))
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines
-
-
-def generate_initial_mask(num_lines, options):
-    mask = torch.zeros(1, 1, 1, 368 if options.dataroot == 'KNEE_RAW' else 128)
-    for i in range(num_lines):
-        mask[0, 0, 0, i] = 1
-        if CONJUGATE_SYMMETRIC:
-            mask[0, 0, 0, -(i + 1)] = 1
-    return mask

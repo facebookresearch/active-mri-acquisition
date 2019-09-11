@@ -91,7 +91,7 @@ class GreedyMC:
             new_mask = self.env._current_mask
             for index in indices:
                 new_mask = self.env.compute_new_mask(new_mask, self._valid_actions[index])[0]
-            raise("Not implemented!")
+            raise ("Not implemented! Need to fix to account for new observation types")
             score = self.env.compute_score(
                 use_reconstruction=self.use_reconstructions,
                 kind='mse',
@@ -145,7 +145,7 @@ class FullGreedy:
 
         all_scores = []
         for i in range(0, len(all_masks), self.batch_size):
-            raise("Not implemented!")
+            raise ("Not implemented! Need to fix to account for new observation types")
             masks_to_try = torch.cat(all_masks[i:min(i + self.batch_size, len(all_masks))])
             scores = self.env.compute_score(
                 use_reconstruction=self.use_reconstructions,

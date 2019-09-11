@@ -199,8 +199,7 @@ class DQNTrainer:
         self.logger.addHandler(fh)
 
         # Initialize environment
-        self.env = rl_env.ReconstructionEnv(
-            rl_env.generate_initial_mask(self.options.initial_num_lines), self.options)
+        self.env = rl_env.ReconstructionEnv(self.options)
         self.env.set_training()
         self.logger.info(f'Created environment with {self.env.action_space.n} actions')
 

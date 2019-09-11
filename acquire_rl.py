@@ -19,7 +19,6 @@ def update_statistics(value, episode_step, statistics):
     """ Updates a running mean and standard deviation for `episode_step`, given `value`.
         https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
     """
-    # import pdb; pdb.set_trace()
     assert len(value) == len(statistics)
     for k, v in statistics.items():
         if episode_step not in statistics[k]:
@@ -76,17 +75,17 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
             logger.info(f'Episode {episode}. Saving statistics to {options_.checkpoints_dir}.')
             np.save(
                 os.path.join(options_.checkpoints_dir, 'test_stats_mse_{}'.format(episode)),
-                statistics_mse)
+                statistics['mse'])
             np.save(
                 os.path.join(options_.checkpoints_dir, 'test_stats_ssim_{}'.format(episode)),
-                statistics_ssim)
+                statistics['ssim'])
             np.save(
                 os.path.join(options_.checkpoints_dir, 'test_stats_psnr_{}'.format(episode)),
-                statistics_ssim)
+                statistics['psnr'])
             np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
     end = time.time()
     logger.debug('Test run lasted {} seconds.'.format(end - start))
-    test_score = compute_test_score_from_stats(statistics_mse)
+    test_score = compute_test_score_from_stats(statistics['mse'])
     writer.add_scalar('eval/average_reward', test_score, step)
     env.set_training()
 
@@ -136,8 +135,7 @@ def get_policy(env, writer, logger, options_):
 
 def main(options_, logger):
     writer = tensorboardX.SummaryWriter(options_.checkpoints_dir)
-    env = rl_env.ReconstructionEnv(
-        rl_env.generate_initial_mask(options_.initial_num_lines, options_), options_)
+    env = rl_env.ReconstructionEnv(options_)
     env.set_training()
     logger.info(f'Created environment with {env.action_space.n} actions')
     policy = get_policy(env, writer, logger, options_)  # Trains if necessary

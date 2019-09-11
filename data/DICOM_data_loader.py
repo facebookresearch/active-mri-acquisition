@@ -1,13 +1,13 @@
-import pathlib
-import pickle
-
-import h5py
-import numpy as np
-import torch
 import json
 import os
+import pickle
+
+import numpy as np
+import torch
 
 from torch.utils.data import Dataset
+
+import models.fft_utils
 
 
 class Slice(Dataset):
@@ -49,6 +49,7 @@ class Slice(Dataset):
             return len(self.dataset) * self.num_slices
         else:
             return len(self.dataset) * self.num_rand_slices
+
 
 class SliceWithPrecomputedMasks(Dataset):
     """ This refers to a dataset of pre-computed masks where the Slice object had the following
@@ -103,6 +104,7 @@ class SliceWithPrecomputedMasks(Dataset):
     def __len__(self):
         return self.maskfile_end_indices[-1]
 
+
 class DicomDataTransform:
 
     # If `seed` is none and `seed_per_image` is True, masks will be generated with a unique seed
@@ -115,6 +117,7 @@ class DicomDataTransform:
     def __call__(self, image, mean, std):
         image = (image - mean) / (std + 1e-12)
         image = torch.from_numpy(image)
+        image = models.fft_utils.clamp(image)
         shape = np.array(image.shape)
         seed = int(1009 * image.sum().abs()) if self.fixed_seed is None and self.seed_per_image \
             else self.fixed_seed

@@ -1,6 +1,3 @@
-import warnings
-
-import numpy as np
 import torch
 
 # note that for IFFT we do not use irfft
@@ -103,7 +100,7 @@ def gaussian_nll_loss(reconstruction, target, logvar, options):
 
 
 # TODO fix the conditional return
-def preprocess_inputs(batch, fft_functions, options, clamp_target=True):
+def preprocess_inputs(batch, fft_functions, options):
     if options.dataroot == 'KNEE_RAW':
         mask = batch[0].to(options.device)
         target = batch[1].to(options.device)
@@ -113,8 +110,6 @@ def preprocess_inputs(batch, fft_functions, options, clamp_target=True):
         target = target.permute(0, 3, 1, 2)
     else:
         target = batch[1].to(options.device)
-        if clamp_target:
-            target = clamp(target)
         mask = batch[0].to(options.device)
         fft_target = fft_functions['rfft'](target)
         masked_true_k_space = torch.where(mask.byte(), fft_target,

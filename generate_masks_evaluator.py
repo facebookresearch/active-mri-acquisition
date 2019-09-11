@@ -67,7 +67,7 @@ def generate_masks(env: rl_env.ReconstructionEnv,
 
 # noinspection PyProtectedMember
 def main(options: argparse.Namespace):
-    env = rl_env.ReconstructionEnv(rl_env.generate_initial_mask(options.initial_num_lines), options)
+    env = rl_env.ReconstructionEnv(options)
     env._test_order = range(len(env._dataset_test))
     env.set_testing()
     env._image_idx_test = options.initial_index
