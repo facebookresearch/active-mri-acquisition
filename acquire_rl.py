@@ -19,13 +19,16 @@ def update_statistics(value, episode_step, statistics):
     """ Updates a running mean and standard deviation for `episode_step`, given `value`.
         https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
     """
-    if episode_step not in statistics:
-        statistics[episode_step] = {'mean': 0, 'm2': 0, 'count': 0}
-    statistics[episode_step]['count'] += 1
-    delta = value - statistics[episode_step]['mean']
-    statistics[episode_step]['mean'] += delta / statistics[episode_step]['count']
-    delta2 = value - statistics[episode_step]['mean']
-    statistics[episode_step]['m2'] += delta * delta2
+    # import pdb; pdb.set_trace()
+    assert len(value) == len(statistics)
+    for k, v in statistics.items():
+        if episode_step not in statistics[k]:
+            statistics[k][episode_step] = {'mean': 0, 'm2': 0, 'count': 0}
+        statistics[k][episode_step]['count'] += 1
+        delta = value[k] - statistics[k][episode_step]['mean']
+        statistics[k][episode_step]['mean'] += delta / statistics[k][episode_step]['count']
+        delta2 = value[k] - statistics[k][episode_step]['mean']
+        statistics[k][episode_step]['m2'] += delta * delta2
 
 
 def compute_test_score_from_stats(statistics):
@@ -41,9 +44,7 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
     env.set_testing()
     average_total_reward = 0
     episode = 0
-    statistics_mse = {}
-    statistics_ssim = {}
-    statistics_psnr = {}
+    statistics = {'mse': {}, 'ssim': {}, 'psnr': {}}
     import time
     start = time.time()
     all_actions = []
@@ -57,16 +58,8 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
         total_reward = 0
         actions = []
         episode_step = 0
-        # TODO make these 3 be computed on a single call
-        update_statistics(
-            env.compute_score(options_.use_reconstructions, kind='mse')[0], episode_step,
-            statistics_mse)
-        update_statistics(
-            env.compute_score(options_.use_reconstructions, kind='ssim')[0], episode_step,
-            statistics_ssim)
-        update_statistics(
-            env.compute_score(options_.use_reconstructions, kind='psnr')[0], episode_step,
-            statistics_psnr)
+        reconstruction_results = env.compute_score(options_.use_reconstructions)[0]
+        update_statistics(reconstruction_results, episode_step, statistics)
         while not done:
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
@@ -74,15 +67,8 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
             total_reward += reward
             obs = next_obs
             episode_step += 1
-            update_statistics(
-                env.compute_score(options_.use_reconstructions, kind='mse')[0], episode_step,
-                statistics_mse)
-            update_statistics(
-                env.compute_score(options_.use_reconstructions, kind='ssim')[0], episode_step,
-                statistics_ssim)
-            update_statistics(
-                env.compute_score(options_.use_reconstructions, kind='psnr')[0], episode_step,
-                statistics_psnr)
+            reconstruction_results = env.compute_score(options_.use_reconstructions)[0]
+            update_statistics(reconstruction_results, episode_step, statistics)
         average_total_reward += total_reward
         all_actions.append(actions)
         logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))

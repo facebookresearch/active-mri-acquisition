@@ -104,10 +104,8 @@ def gaussian_nll_loss(reconstruction, target, logvar, options):
 
 # TODO fix the conditional return
 def preprocess_inputs(batch, fft_functions, options, clamp_target=True):
-
     if options.dataroot == 'KNEE_RAW':
         mask = batch[0].to(options.device)
-        # mask = torch.from_numpy(np.fft.ifftshift(mask.numpy(), axes=3)).to(options.device)
         target = batch[1].to(options.device)
         kspace = batch[2].permute(0, 3, 1, 2).to(options.device)
         masked_true_k_space = torch.where(mask.byte(), kspace, torch.tensor(0.).to(options.device))
