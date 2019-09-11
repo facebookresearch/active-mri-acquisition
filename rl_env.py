@@ -126,6 +126,7 @@ class ReconstructionEnv:
             img_width=368 if options.dataroot == 'KNEE_RAW' else 128,
             use_deconv=reconstructor_checkpoint['options'].use_deconv)
         self._reconstructor.load_state_dict({
+            #TODO: this is true only in case of single gpu:
             key.replace('module.', ''): val
             for key, val in reconstructor_checkpoint['reconstructor'].items()
         })
@@ -177,8 +178,8 @@ class ReconstructionEnv:
             self._image_idx_train = 0
 
     @staticmethod
-    def _compute_score(self, reconstruction: torch.Tensor, ground_truth: torch.Tensor,
-                       kind: str = 'mse') -> torch.Tensor:
+    def _compute_score(self, reconstruction: torch.Tensor,
+                        ground_truth: torch.Tensor) -> torch.Tensor:
 
 
         # Compute magnitude (for metrics)
@@ -187,21 +188,18 @@ class ReconstructionEnv:
             reconstruction, also_clamp_and_scale=also_clamp_and_scale)
         ground_truth = to_magnitude(
             ground_truth, also_clamp_and_scale=also_clamp_and_scale)
+        data_range = 6 # data range is 6 for DICOMS
         if self.options.dataroot == 'KNEE_RAW':  # crop data
+            data_range = 1 # data range is 1 for RAW
             reconstruction = center_crop(reconstruction,[320, 320])
             ground_truth = center_crop(ground_truth, [320, 320])
 
-        # reconstruction = reconstruction[:, :1, ...]
-        # ground_truth = ground_truth[:, :1, ...]
-        if kind == 'mse':
-            score = F.mse_loss(reconstruction, ground_truth)
-        elif kind == 'ssim':
-            score = util.ssim_metric(reconstruction, ground_truth)
-        elif kind == 'psnr':
-            score = 20 * torch.log10(ground_truth.max() - ground_truth.min()) - \
-                    10 * torch.log10(F.mse_loss(reconstruction, ground_truth))
-        else:
-            raise ValueError
+        mse = F.mse_loss(reconstruction, ground_truth)
+        ssim = util.ssim_metric(reconstruction, ground_truth)
+        psnr = util.psnr_metric(reconstruction, ground_truth, data_range)
+
+        score = {'mse': mse, 'ssim': ssim, 'psnr': psnr}
+
         return score
 
     def compute_new_mask(self, old_mask: torch.Tensor, action: int) -> Tuple[torch.Tensor, bool]:
@@ -221,7 +219,6 @@ class ReconstructionEnv:
 
     def compute_score(self,
                       use_reconstruction: bool = True,
-                      kind: str = 'mse',
                       ground_truth: Optional[torch.Tensor] = None,
                       mask_to_use: Optional[torch.Tensor] = None,
                       kspace: Optional[torch.Tensor] = None,) -> List[torch.Tensor]:
@@ -237,7 +234,6 @@ class ReconstructionEnv:
             respect to, instead of `self._ground_truth` and `self._current_mask`.
 
             @:param `use_reconstruction`: specifies if the reconstruction network will be used.
-            @:param `kind`: specifies what the score function is ('mse', 'ssim', 'psnr')
             @:param `ground_truth`: specifies if the score has to be computed with respect to an
                 alternate "ground truth".
             @:param `mask_to_use`: specifies if the score has to be computed with an alternate mask.
@@ -260,7 +256,7 @@ class ReconstructionEnv:
                 image, _, _ = self._reconstructor(
                     image, mask_to_use)  # pass through reconstruction network
         return [
-            ReconstructionEnv._compute_score(self, img.unsqueeze(0), ground_truth, kind) for img in image
+            ReconstructionEnv._compute_score(self, img.unsqueeze(0), ground_truth) for img in image
         ]
 
     def _compute_observation_and_score(self) -> Tuple[torch.Tensor, float]:
@@ -347,7 +343,8 @@ class ReconstructionEnv:
         self._ground_truth = self._ground_truth.to(device).unsqueeze(0)
         self._current_mask = self._initial_mask
         self._scans_left = min(self.options.budget, self.action_space.n)
-        observation, self._current_score = self._compute_observation_and_score()
+        observation, score = self._compute_observation_and_score()
+        self._current_score = score['mse']
         return observation, info
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, Dict]:
@@ -360,11 +357,11 @@ class ReconstructionEnv:
             self._current_mask, action)
         observation, new_score = self._compute_observation_and_score()
 
-        reward_ = -new_score if self.options.use_score_as_reward \
-            else self._current_score - new_score
+        reward_ = -new_score['mse'] if self.options.use_score_as_reward \
+            else self._current_score - new_score['mse']
         factor = 1 if self.options.use_score_as_reward else 100
         reward = -1.0 if has_already_been_scanned else reward_.item() * factor
-        self._current_score = new_score
+        self._current_score = new_score['mse']
 
         self._scans_left -= 1
         done = (self._scans_left == 0)
