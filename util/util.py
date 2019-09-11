@@ -6,7 +6,7 @@ from PIL import Image
 import os
 from . import pytorch_mssim
 import matplotlib.pyplot as plt
-from skimage.measure import compare_ssim
+from skimage.measure import compare_ssim, compare_psnr
 
 def compute_ssims(xs, ys):
     ssims = []
@@ -15,13 +15,18 @@ def compute_ssims(xs, ys):
         ssims.append(ssim)
     return np.array(ssims).mean()
 
+def compute_psnrs(xs, ys, data_range):
+    psnrs = []
+    for i in range(xs.shape[0]):
+        psnr = compare_psnr(xs[i, 0].cpu().numpy(), ys[i, 0].cpu().numpy(), data_range=data_range)
+        psnrs.append(psnr)
+    return np.array(psnrs).mean()
+
 def ssim_metric(src, tar, full=False, size_average=True):
     return compute_ssims(src, tar)
 
-
-# def ssim_metric(src, tar, full=False, size_average=True):
-#     return pytorch_mssim.ssim(src[:, :1, :, :], tar[:, :1, :, :], full=full, size_average=size_average)
-
+def psnr_metric(src, tar, data_range):
+    return compute_psnrs(src, tar, data_range)
 
 def sum_axes(input, axes=[], keepdim=False):
     # mu2, logvar2 are prior
