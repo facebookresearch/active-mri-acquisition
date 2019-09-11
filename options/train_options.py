@@ -97,12 +97,12 @@ class TrainOptions(BaseOptions):
             '--mask_type',
             type=str,
             choices=[
-                'bask',
+                'basic',
                 'symmetric_basic',
                 'low_to_high',
                 'grid',
                 'symmetric_grid',
-                'bask_rnl',
+                'basic_rnl',
                 'symmetric_basic_rnl',
             ],
             help='The type of mask to use.')

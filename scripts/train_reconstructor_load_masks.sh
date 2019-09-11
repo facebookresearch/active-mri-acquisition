@@ -18,7 +18,7 @@ cd ${SRC_DIR}
 
 python train_submitit.py \
     --dataroot KNEE_PRECOMPUTED_MASKS \
-    --mask_type bask \
+    --mask_type basic \
     --checkpoints_dir ${CHECKPOINTS_DIR} \
     --name round$((ROUND + 1))_${MODEL_TYPE} \
     --use_submitit \

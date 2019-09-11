@@ -7,7 +7,7 @@ from torch.utils.data import RandomSampler
 def get_mask_func(mask_type, which_dataset):
     # Whether the number of lines is random or not
     random_num_lines = (mask_type[-4:] == '_rnl')
-    if 'bask' in mask_type:
+    if 'basic' in mask_type:
         # First two parameters are ignored if `random_num_lines` is True
         logging.info(f'Mask is fixed acceleration mask with random_num_lines={random_num_lines}.')
         return BasicMaskFunc([0.125], [4], which_dataset, random_num_lines=random_num_lines)
