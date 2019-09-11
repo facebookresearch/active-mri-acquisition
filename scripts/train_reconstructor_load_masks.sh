@@ -1,6 +1,6 @@
 #!/bin/bash
 
-MODEL_TYPE=symmetric_choice_rnl
+MODEL_TYPE=symmetric_basic_rnl
 EXTRA_OPTIONS=--no_evaluator
 ROUND=0
 
@@ -18,7 +18,7 @@ cd ${SRC_DIR}
 
 python train_submitit.py \
     --dataroot KNEE_PRECOMPUTED_MASKS \
-    --mask_type fixed_acc \
+    --mask_type bask \
     --checkpoints_dir ${CHECKPOINTS_DIR} \
     --name round$((ROUND + 1))_${MODEL_TYPE} \
     --use_submitit \

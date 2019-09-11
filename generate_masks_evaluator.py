@@ -108,7 +108,7 @@ if __name__ == '__main__':
     options_.nThreads = 1
     # All of the params below are ignored
     # only here because they are expected, but not used by this script
-    options_.mask_type = 'fixed_acc'
+    options_.mask_type = 'bask'
     options_.rl_env_train_no_seed = False
     options_.use_score_as_reward = False
 

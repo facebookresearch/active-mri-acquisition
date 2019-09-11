@@ -1,24 +1,23 @@
-import pathlib
-import pickle
 import logging
-import h5py
 import numpy as np
 import torch
-import json
-import os
 from torch.utils.data import RandomSampler
 
 
 def get_mask_func(mask_type, which_dataset):
     # Whether the number of lines is random or not
     random_num_lines = (mask_type[-4:] == '_rnl')
-    if 'fixed_acc' in mask_type:
+    if 'bask' in mask_type:
         # First two parameters are ignored if `random_num_lines` is True
         logging.info(f'Mask is fixed acceleration mask with random_num_lines={random_num_lines}.')
         return BasicMaskFunc([0.125], [4], which_dataset, random_num_lines=random_num_lines)
-    if 'symmetric_choice' in mask_type:
+    if 'symmetric_basic' in mask_type:
         logging.info(f'Mask is symmetric uniform choice with random_num_lines={random_num_lines}.')
         return SymmetricUniformChoiceMaskFunc(
+            [0.125], [4], which_dataset, random_num_lines=random_num_lines)
+    if 'low_to_high' in mask_type:
+        logging.info(f'Mask is symmetric low to high with random_num_lines={random_num_lines}.')
+        return SymmetricLowToHighMaskFunc(
             [0.125], [4], which_dataset, random_num_lines=random_num_lines)
     if 'symmetric_grid' in mask_type:
         logging.info(f'Mask is symmetric grid.')
@@ -27,6 +26,7 @@ def get_mask_func(mask_type, which_dataset):
         logging.info(f'Mask is grid (not symmetric).')
         return UniformGridMaskFunc([], [], which_dataset, random_num_lines=True)
     raise ValueError(f'Invalid mask type: {mask_type}.')
+
 
 class FixedOrderRandomSampler(RandomSampler):
 
@@ -135,6 +135,21 @@ class UniformGridMaskFunc(MaskFunc):
         hf_cols = np.arange(acceleration, num_cols, acceleration)
         mask[hf_cols] = True
         mask[:num_low_freqs // 2] = mask[-(num_low_freqs // 2):] = True
+        return mask
+
+
+class SymmetricLowToHighMaskFunc(MaskFunc):
+
+    def create_lf_focused_mask(self, num_cols, num_high_freqs, num_low_freqs):
+        mask = np.zeros([num_cols])
+        num_cols //= 2
+        num_low_freqs //= 2
+        num_high_freqs //= 2
+        num_low_freqs += num_high_freqs
+        pad = (num_cols - num_low_freqs)
+        mask[pad:num_cols] = True
+        mask[:-(num_cols + 1):-1] = mask[:num_cols]
+        mask = np.fft.ifftshift(mask, axes=0)
         return mask
 
 

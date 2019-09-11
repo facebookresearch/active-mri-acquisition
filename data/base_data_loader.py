@@ -30,7 +30,7 @@ def get_train_valid_loader(batch_size,
                            num_workers=4,
                            pin_memory=False,
                            which_dataset='KNEE',
-                           mask_type='fixed_acc',
+                           mask_type='bask',
                            masks_dir=None):
 
     if which_dataset == 'KNEE_PRECOMPUTED_MASKS':
@@ -109,7 +109,7 @@ def get_test_loader(batch_size,
                     num_workers=2,
                     pin_memory=False,
                     which_dataset='KNEE',
-                    mask_type='fixed_acc'):
+                    mask_type='bask'):
     if which_dataset in ('KNEE'):
         mask_func = get_mask_func(mask_type, which_dataset)
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')

@@ -17,11 +17,11 @@ from .ft_util_vaes import MaskFunc, DicomDataTransform, Slice, BasicMaskFunc, \
 def get_mask_func(mask_type, which_dataset):
     # Whether the number of lines is random or not
     random_num_lines = (mask_type[-4:] == '_rnl')
-    if 'fixed_acc' in mask_type:
+    if 'bask' in mask_type:
         # First two parameters are ignored if `random_num_lines` is True
         logging.info(f'Mask is fixed acceleration mask with random_num_lines={random_num_lines}.')
         return BasicMaskFunc([0.125], [4], which_dataset, random_num_lines=random_num_lines)
-    if 'symmetric_choice' in mask_type:
+    if 'symmetric_basic' in mask_type:
         logging.info(f'Mask is symmetric uniform choice with random_num_lines={random_num_lines}.')
         return SymmetricUniformChoiceMaskFunc(
             [0.125], [4], which_dataset, random_num_lines=random_num_lines)
@@ -38,7 +38,7 @@ def get_train_valid_loader(batch_size,
                            num_workers=4,
                            pin_memory=False,
                            which_dataset='KNEE',
-                           mask_type='fixed_acc',
+                           mask_type='bask',
                            masks_dir=None):
 
     if which_dataset == 'KNEE_PRECOMPUTED_MASKS':
@@ -134,7 +134,7 @@ def get_test_loader(batch_size,
                     num_workers=2,
                     pin_memory=False,
                     which_dataset='KNEE',
-                    mask_type='fixed_acc'):
+                    mask_type='bask'):
     if which_dataset in ('KNEE'):
         mask_func = get_mask_func(mask_type, which_dataset)
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
