@@ -79,16 +79,17 @@ class EvaluatorPlusPlus(nn.Module):
 class EvaluatorPlusPlusPolicy:
 
     def __init__(self, model_path: str, initial_num_lines: int, device: torch.device):
-        self.evaluator = EvaluatorPlusPlus()
-        checkpoint = torch.load(model_path)
-        model_state_dict = {
-            key.replace('module.', ''): value
-            for (key, value) in checkpoint['model'].items()
-        }
-        self.evaluator.load_state_dict(model_state_dict)
-        self.evaluator.to(device)
-        self.initial_num_lines = initial_num_lines
-        self.device = device
+        raise NotImplementedError('This code becomes stale with the new observation types')
+        # self.evaluator = EvaluatorPlusPlus()
+        # checkpoint = torch.load(model_path)
+        # model_state_dict = {
+        #     key.replace('module.', ''): value
+        #     for (key, value) in checkpoint['model'].items()
+        # }
+        # self.evaluator.load_state_dict(model_state_dict)
+        # self.evaluator.to(device)
+        # self.initial_num_lines = initial_num_lines
+        # self.device = device
 
     def get_action(self, obs: np.ndarray, _, __) -> int:
         reconstruction = torch.Tensor(obs[:1, :-1]).unsqueeze(0).to(self.device)

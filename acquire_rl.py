@@ -19,13 +19,15 @@ def update_statistics(value, episode_step, statistics):
     """ Updates a running mean and standard deviation for `episode_step`, given `value`.
         https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
     """
-    if episode_step not in statistics:
-        statistics[episode_step] = {'mean': 0, 'm2': 0, 'count': 0}
-    statistics[episode_step]['count'] += 1
-    delta = value - statistics[episode_step]['mean']
-    statistics[episode_step]['mean'] += delta / statistics[episode_step]['count']
-    delta2 = value - statistics[episode_step]['mean']
-    statistics[episode_step]['m2'] += delta * delta2
+    assert len(value) == len(statistics)
+    for k, v in statistics.items():
+        if episode_step not in statistics[k]:
+            statistics[k][episode_step] = {'mean': 0, 'm2': 0, 'count': 0}
+        statistics[k][episode_step]['count'] += 1
+        delta = value[k] - statistics[k][episode_step]['mean']
+        statistics[k][episode_step]['mean'] += delta / statistics[k][episode_step]['count']
+        delta2 = value[k] - statistics[k][episode_step]['mean']
+        statistics[k][episode_step]['m2'] += delta * delta2
 
 
 def compute_test_score_from_stats(statistics):
@@ -41,9 +43,7 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
     env.set_testing()
     average_total_reward = 0
     episode = 0
-    statistics_mse = {}
-    statistics_ssim = {}
-    statistics_psnr = {}
+    statistics = {'mse': {}, 'ssim': {}, 'psnr': {}}
     import time
     start = time.time()
     all_actions = []
@@ -57,16 +57,8 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
         total_reward = 0
         actions = []
         episode_step = 0
-        # TODO make these 3 be computed on a single call
-        update_statistics(
-            env.compute_score(options_.use_reconstructions, kind='mse')[0], episode_step,
-            statistics_mse)
-        update_statistics(
-            env.compute_score(options_.use_reconstructions, kind='ssim')[0], episode_step,
-            statistics_ssim)
-        update_statistics(
-            env.compute_score(options_.use_reconstructions, kind='psnr')[0], episode_step,
-            statistics_psnr)
+        reconstruction_results = env.compute_score(options_.use_reconstructions)[0]
+        update_statistics(reconstruction_results, episode_step, statistics)
         while not done:
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
@@ -74,15 +66,8 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
             total_reward += reward
             obs = next_obs
             episode_step += 1
-            update_statistics(
-                env.compute_score(options_.use_reconstructions, kind='mse')[0], episode_step,
-                statistics_mse)
-            update_statistics(
-                env.compute_score(options_.use_reconstructions, kind='ssim')[0], episode_step,
-                statistics_ssim)
-            update_statistics(
-                env.compute_score(options_.use_reconstructions, kind='psnr')[0], episode_step,
-                statistics_psnr)
+            reconstruction_results = env.compute_score(options_.use_reconstructions)[0]
+            update_statistics(reconstruction_results, episode_step, statistics)
         average_total_reward += total_reward
         all_actions.append(actions)
         logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
@@ -90,17 +75,17 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
             logger.info(f'Episode {episode}. Saving statistics to {options_.checkpoints_dir}.')
             np.save(
                 os.path.join(options_.checkpoints_dir, 'test_stats_mse_{}'.format(episode)),
-                statistics_mse)
+                statistics['mse'])
             np.save(
                 os.path.join(options_.checkpoints_dir, 'test_stats_ssim_{}'.format(episode)),
-                statistics_ssim)
+                statistics['ssim'])
             np.save(
                 os.path.join(options_.checkpoints_dir, 'test_stats_psnr_{}'.format(episode)),
-                statistics_ssim)
+                statistics['psnr'])
             np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
     end = time.time()
     logger.debug('Test run lasted {} seconds.'.format(end - start))
-    test_score = compute_test_score_from_stats(statistics_mse)
+    test_score = compute_test_score_from_stats(statistics['mse'])
     writer.add_scalar('eval/average_reward', test_score, step)
     env.set_training()
 
@@ -131,27 +116,11 @@ def get_policy(env, writer, logger, options_):
     elif 'lowfirst' in options_.policy:
         assert rl_env.CONJUGATE_SYMMETRIC
         policy = util.rl.simple_baselines.NextIndexPolicy(range(env.action_space.n))
-    elif 'greedymc' in options_.policy:
-        policy = util.rl.simple_baselines.GreedyMC(
-            env,
-            samples=options_.greedymc_num_samples,
-            horizon=options_.greedymc_horizon,
-            use_reconstructions=options_.use_reconstructions,
-            use_ground_truth='_gt' in options_.policy)
-    elif 'greedyfull1' in options_.policy:
-        assert options_.use_reconstructions
-        policy = util.rl.simple_baselines.FullGreedy(
-            env, num_steps=1, use_ground_truth='_gt' in options_.policy, use_reconstructions=True)
-    elif 'greedyzero' in options_.policy:
-        assert options_.use_reconstructions
-        policy = util.rl.simple_baselines.ZeroStepGreedy(env)
     elif 'evaluator_net' in options_.policy:
-        policy = util.rl.simple_baselines.EvaluatorNetwork(env)
-    elif 'evaluator_net_offp' in options_.policy:
-        assert options_.evaluator_name is not None and options_.evaluator_name != options_.name
+        assert options_.obs_type == 'mask_embedding'
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator++' in options_.policy:
-        assert options_.obs_type == 'concatenate_mask'
+        assert options_.obs_type == 'mask_embedding'
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             options_.options.evaluator_pp_path, options_.initial_num_lines, rl_env.device)
     elif 'dqn' in options_.policy:
@@ -166,8 +135,7 @@ def get_policy(env, writer, logger, options_):
 
 def main(options_, logger):
     writer = tensorboardX.SummaryWriter(options_.checkpoints_dir)
-    env = rl_env.ReconstructionEnv(
-        rl_env.generate_initial_mask(options_.initial_num_lines, options_), options_)
+    env = rl_env.ReconstructionEnv(options_)
     env.set_training()
     logger.info(f'Created environment with {env.action_space.n} actions')
     policy = get_policy(env, writer, logger, options_)  # Trains if necessary

@@ -11,16 +11,11 @@ queue=learnfair
 
 BASELINES_SUFFIX=init.num.lines.8
 
-for NAME in "fixed_acc" "fixed_acc_rnl" "symmetric_choice" "symmetric_choice_rnl" "grid" "symmetric_grid"; do
+for NAME in "basic" "basic_rnl" "symmetric_basic" "symmetric_basic_rnl" "grid" "symmetric_grid"; do
     CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors/${NAME}
     for policy in "random" "lowfirst" "evaluator_net"; do
     #for policy in "evaluator++"; do
-        if [[ ${policy} == "evaluator++" ]]
-        then
-            obs_type=concatenate_mask
-        else
-            obs_type=two_streams
-        fi
+        obs_type=fourier_space
         job_name=active_acq_baselines_${NAME}_${policy}
 
         # This creates a slurm script to call training

@@ -97,12 +97,13 @@ class TrainOptions(BaseOptions):
             '--mask_type',
             type=str,
             choices=[
-                'fixed_acc',
-                'symmetric_choice',
+                'basic',
+                'symmetric_basic',
+                'low_to_high',
                 'grid',
                 'symmetric_grid',
-                'fixed_acc_rnl',
-                'symmetric_choice_rnl',
+                'basic_rnl',
+                'symmetric_basic_rnl',
             ],
             help='The type of mask to use.')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')

@@ -1,7 +1,7 @@
 import functools
 import torch
 import torch.nn as nn
-from .fft_utils import IFFT, FFT
+from .fft_utils import ifft, fft
 from torch.nn import init
 
 
@@ -223,15 +223,11 @@ class ReconstructorNetwork(nn.Module):
         if self.use_mask_embedding:
             self.mask_embedding_layer = nn.Sequential(nn.Conv2d(img_width, mask_embed_dim, 1, 1))
 
-        self.IFFT = IFFT()
-        self.FFT = FFT()
-
         self.apply(init_func)
 
     def data_consistency(self, x, input, mask):
-        ft_x = self.FFT(x)
-        fuse = self.IFFT(torch.where((1 - mask).byte(), ft_x,
-                                     torch.tensor(0.).to(ft_x.device))) + input
+        ft_x = fft(x)
+        fuse = ifft(torch.where((1 - mask).byte(), ft_x, torch.tensor(0.).to(ft_x.device))) + input
         return fuse
 
     def embed_mask(self, mask):

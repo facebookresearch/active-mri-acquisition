@@ -91,6 +91,7 @@ class GreedyMC:
             new_mask = self.env._current_mask
             for index in indices:
                 new_mask = self.env.compute_new_mask(new_mask, self._valid_actions[index])[0]
+            raise ("Not implemented! Need to fix to account for new observation types")
             score = self.env.compute_score(
                 use_reconstruction=self.use_reconstructions,
                 kind='mse',
@@ -144,6 +145,7 @@ class FullGreedy:
 
         all_scores = []
         for i in range(0, len(all_masks), self.batch_size):
+            raise ("Not implemented! Need to fix to account for new observation types")
             masks_to_try = torch.cat(all_masks[i:min(i + self.batch_size, len(all_masks))])
             scores = self.env.compute_score(
                 use_reconstruction=self.use_reconstructions,
@@ -172,22 +174,21 @@ class ZeroStepGreedy:
     def __init__(self, env):
         self.env = env
         self.actions = list(range(env.action_space.n))
+        raise NotImplementedError('Need to adjust for new observation types and loader refactor')
 
     def get_action(self, unused_obs_, _, __):
         zero_filled_reconstruction, _, __ = models.fft_utils.preprocess_inputs(
-            (self.env._current_mask, self.env._ground_truth),
-            rl_env.fft_functions,
-            self.env.options,
-            clamp_target=False)
+            (self.env._current_mask, self.env._ground_truth), self.env.options.dataroot,
+            self.env.options.device)
 
         reconstruction, _, mask_embed = self.env._reconstructor(zero_filled_reconstruction,
                                                                 self.env._current_mask)
 
-        rfft_gt = rl_env.fft_functions['rfft'](self.env._ground_truth)
-        rfft_reconstr = rl_env.fft_functions['fft'](reconstruction)
+        rfft_gt = models.fft_utils.fft(self.env._ground_truth)
+        rfft_reconstr = models.fft_utils.fft(reconstruction)
         diff = torch.nn.functional.mse_loss(
             rfft_gt[0], rfft_reconstr[0], reduction='none').sum([0, 1])
-        return diff[:rl_env.IMAGE_WIDTH // 2].argmax().item() - self.env.options.initial_num_lines
+        return diff[:self.env.image_width // 2].argmax().item() - self.env.options.initial_num_lines
 
     def init_episode(self):
         pass
@@ -200,8 +201,8 @@ class EvaluatorNetwork:
         if evaluator_name is not None:
             self.env.set_evaluator(evaluator_name)
 
-    def get_action(self, *_):
-        return self.env.get_evaluator_action()
+    def get_action(self, obs, _, __):
+        return self.env.get_evaluator_action(obs)
 
     def init_episode(self):
         pass

@@ -9,24 +9,24 @@ import torch
 import torch.nn.functional as F
 
 from data import create_data_loaders
-from models.fft_utils import RFFT, IFFT, preprocess_inputs
+from models.fft_utils import preprocess_inputs
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
 from util import util
 
 
-def inference(batch, reconstructor, fft_functions, options):
+def inference(batch, reconstructor, options):
     reconstructor.eval()
     with torch.no_grad():
-        zero_filled_reconstruction, target, mask = preprocess_inputs(batch, fft_functions, options)
+        zero_filled_reconstruction, target, mask = preprocess_inputs(batch, options.dataroot,
+                                                                     options.device)
 
         # Get reconstructor output
         reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
             zero_filled_reconstruction, mask)
 
-        mse = F.mse_loss(reconstructed_image[:, :1, ...], target[:, :1, ...], reduction='none')
-        ssim = util.ssim_metric(
-            reconstructed_image[:, :1, ...], target[:, :1, ...], size_average=False)
+        mse = F.mse_loss(reconstructed_image, target, reduction='none')
+        ssim = util.ssim_metric(reconstructed_image, target, size_average=False)
 
         mse = mse.mean([1, 2, 3])
         return {
@@ -78,9 +78,8 @@ def main(options: argparse.Namespace):
 
     load_from_checkpoint_if_present(options, reconstructor)
 
-    fft_functions = {'rfft': RFFT().to(options.device), 'ifft': IFFT().to(options.device)}
     test_engine = ignite.engine.Engine(lambda engine, batch: inference(
-        batch, reconstructor, fft_functions, options))
+        batch, reconstructor, options))
 
     progress_bar = ignite.contrib.handlers.ProgressBar()
     progress_bar.attach(test_engine)

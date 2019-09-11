@@ -27,85 +27,30 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
-class SpectralMapsModel(nn.Module):
-    """This model is similar to the evaluator model described in
-        https://arxiv.org/pdf/1902.03051.pdf """
-
-    def __init__(self, num_actions):
-        super(SpectralMapsModel, self).__init__()
-        self.layers = nn.Sequential(
-            nn.Conv2d(134, 256, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(512, 1024, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(1024, 1024, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2, True),
-            nn.AvgPool2d(kernel_size=8),
-            nn.Conv2d(1024, num_actions, kernel_size=1, stride=1))
-
-    def forward(self, x):
-        return self.conv_image(x).view(-1, self.num_actions)
-
-
-class TwoStreamsModel(nn.Module):
-    """ A model inspired by the DQN architecture but with two convolutional streams. One receives
-        the zero-filled reconstructions, the other receives the masked rfft observations. The
-        output of the streams are combined using a few linear layers.
+class BasicValueNetwork(nn.Module):
+    """ The input to this model includes the reconstruction and the current mask. The
+        reconstruction is passed through a convolutional path and the mask through a few MLP layers.
+        Then both outputs are combined to produce the final value.
     """
 
     def __init__(self, num_actions):
-        super(TwoStreamsModel, self).__init__()
-        self.conv_image = nn.Sequential(
-            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
-
-        self.conv_fft = nn.Sequential(
-            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
-
-        self.fc = nn.Sequential(
-            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
-            nn.Linear(256, num_actions))
-
-    def forward(self, x):
-        reconstructions = x[:, :2, :, :]
-        masked_rffts = x[:, 2:, :, :]
-        image_encoding = self.conv_image(reconstructions)
-        rfft_encoding = self.conv_image(masked_rffts)
-        return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
-
-
-class LargeTwoStreamsModel(nn.Module):
-    """ This model receives contains two convolutional streams. One receives the zero-filled
-        reconstructions, the other receives the masked rfft observations. The output of the streams
-        are combined using a few linear layers.
-    """
-
-    def __init__(self, num_actions):
-        super(LargeTwoStreamsModel, self).__init__()
-
-        self.conv_image = nn.Sequential(
-            nn.Conv2d(2, 128, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
-            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
-            Flatten())
-
-        self.conv_fft = nn.Sequential(
-            nn.Conv2d(2, 128, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
-            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True),
-            Flatten())
-
-        self.fc = nn.Sequential(
-            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
-            nn.Linear(256, num_actions))
-
+        super(BasicValueNetwork, self).__init__()
         raise NotImplementedError
 
+        # self.conv_image = nn.Sequential(
+        #     nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+        #     nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+        #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
+        #
+        # self.conv_fft = nn.Sequential(
+        #     nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+        #     nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+        #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
+        #
+        # self.fc = nn.Sequential(
+        #     nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
+        #     nn.Linear(256, num_actions))
+
     def forward(self, x):
         reconstructions = x[:, :2, :, :]
         masked_rffts = x[:, 2:, :, :]
@@ -114,13 +59,9 @@ class LargeTwoStreamsModel(nn.Module):
         return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
 
 
-def get_model(num_actions, model_type='spectral_maps'):
-    if model_type == 'spectral_maps':
-        return SpectralMapsModel(num_actions)
-    if model_type == 'two_streams':
-        return TwoStreamsModel(num_actions)
-    if model_type == 'large_two_streams':
-        return LargeTwoStreamsModel(num_actions)
+def get_model(num_actions, model_type='basic_value_network'):
+    if model_type == 'basic_value_network':
+        return BasicValueNetwork(num_actions)
 
 
 class DDQN(nn.Module):
@@ -258,8 +199,7 @@ class DQNTrainer:
         self.logger.addHandler(fh)
 
         # Initialize environment
-        self.env = rl_env.ReconstructionEnv(
-            rl_env.generate_initial_mask(self.options.initial_num_lines), self.options)
+        self.env = rl_env.ReconstructionEnv(self.options)
         self.env.set_training()
         self.logger.info(f'Created environment with {self.env.action_space.n} actions')
 

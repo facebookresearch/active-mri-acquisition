@@ -18,5 +18,6 @@ if __name__ == '__main__':
     trainer_ = trainer.Trainer(options_)
 
     executor = submitit.SlurmExecutor(folder=options_.submitit_logs_dir, max_num_timeout=3)
-    executor.update_parameters(num_gpus=8, partition='dev', cpus_per_task=16, mem=128000, time=4320)
+    executor.update_parameters(
+        num_gpus=8, partition='learnfair', cpus_per_task=16, mem=128000, time=4320)
     executor.submit(trainer_)

@@ -27,14 +27,14 @@ def get_num_lines(min_lowf_lines: int = 3,
 
 # noinspection PyProtectedMember
 def generate_masks(env: rl_env.ReconstructionEnv,
-                   greedy_policy: util.rl.simple_baselines.EvaluatorNetwork,
+                   evaluator_policy: util.rl.simple_baselines.EvaluatorNetwork,
                    how_many_images: int) -> List[np.ndarray]:
     import time
     start = time.time()
     masks = []
     for episode in range(how_many_images):
         obs, info = env.reset()
-        greedy_policy.init_episode()
+        evaluator_policy.init_episode()
         episode += 1
         initial_num_lines, additional_lines = get_num_lines()
         logging.info(f'Will generate mask with {2 * initial_num_lines} low freq. lines and '
@@ -45,7 +45,7 @@ def generate_masks(env: rl_env.ReconstructionEnv,
             1, 1, 1, rl_env.IMAGE_WIDTH)
         env.options.initial_num_lines = initial_num_lines
         for i in range(additional_lines):
-            action = greedy_policy.get_action(obs, None, None)
+            action = evaluator_policy.get_action(obs, None, None)
             assert mask[initial_num_lines + action] == 0
             assert mask[rl_env.IMAGE_WIDTH - initial_num_lines - action - 1] == 0
             mask[initial_num_lines + action] = 1
@@ -67,7 +67,7 @@ def generate_masks(env: rl_env.ReconstructionEnv,
 
 # noinspection PyProtectedMember
 def main(options: argparse.Namespace):
-    env = rl_env.ReconstructionEnv(rl_env.generate_initial_mask(options.initial_num_lines), options)
+    env = rl_env.ReconstructionEnv(options)
     env._test_order = range(len(env._dataset_test))
     env.set_testing()
     env._image_idx_test = options.initial_index
@@ -100,15 +100,15 @@ if __name__ == '__main__':
 
     # Adding config options expected by `rl_env.ReconstructionEnv`
     options_.sequential_images = True
-    options_.budget = rl_env.IMAGE_WIDTH
-    options_.obs_type = 'two_streams'
+    options_.budget = 368 if options_.dataroot == 'KNEE_RAW' else 128
+    options_.obs_type = 'image_space'
     options_.num_train_images = 2000000
     options_.num_test_images = 2000000
     options_.batchSize = 1
     options_.nThreads = 1
     # All of the params below are ignored
     # only here because they are expected, but not used by this script
-    options_.mask_type = 'fixed_acc'
+    options_.mask_type = 'basic'
     options_.rl_env_train_no_seed = False
     options_.use_score_as_reward = False
 

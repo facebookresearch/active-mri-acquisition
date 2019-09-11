@@ -1,4 +1,4 @@
-from .fft_utils import FFT, IFFT, to_magnitude
+from .fft_utils import fft, ifft
 from .reconstruction import init_func
 
 import functools
@@ -23,17 +23,15 @@ class SpectralMapDecomposition(nn.Module):
     def __init__(self):
         super(SpectralMapDecomposition, self).__init__()
 
-        self.FFT = FFT()
-        self.IFFT = IFFT()
-
     def forward(self, reconstructed_image, mask_embedding):
         """
 
         Args:
             reconstructed_image: image reconstructed by ReconstructorNetwork
                                     shape   :   (batch_size, 2, height, width)
-            mask_embedding: mask embedding created by ReconstructorNetwork (Replicated along height and width)
-                                    shape   :   (batch_size, embedding_dimension, height, width)
+            mask_embedding: mask embedding created by ReconstructorNetwork (Replicated along
+                height and width)
+            shape   :   (batch_size, embedding_dimension, height, width)
 
         Returns:    spectral map concatenated with mask embedding
                         shape   : (batch_size, width + embedding_dimension, height, width)
@@ -44,7 +42,7 @@ class SpectralMapDecomposition(nn.Module):
         width = reconstructed_image.shape[3]
 
         # create spectral maps in kspace
-        kspace = self.FFT(reconstructed_image)
+        kspace = fft(reconstructed_image)
         kspace = kspace.unsqueeze(1).repeat(1, width, 1, 1, 1)
 
         # separate image into spectral maps
@@ -60,8 +58,8 @@ class SpectralMapDecomposition(nn.Module):
 
         # convert spectral maps to image space
         # result is (batch, [real_M0, img_M0, real_M1, img_M1, ...],  height, width]
-        separate_images = self.IFFT(masked_kspace).contiguous().view(batch_size, 2 * width, height,
-                                                                     width)
+        separate_images = ifft(masked_kspace).contiguous().view(batch_size, 2 * width, height,
+                                                                width)
 
         # concatenate mask embedding
         if mask_embedding is not None:
