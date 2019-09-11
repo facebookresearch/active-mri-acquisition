@@ -219,8 +219,7 @@ class ReconstructionEnv:
                 mask_to_use = self._current_mask
             if k_space is None:
                 k_space = self._k_space
-
-            image, ground_truth, _ = models.fft_utils.preprocess_inputs(
+            image, _, _ = models.fft_utils.preprocess_inputs(
                 (mask_to_use, ground_truth, k_space), self.options.dataroot, device)
             if use_reconstruction:  # pass through reconstruction network
                 image, _, _ = self._reconstructor(image, mask_to_use)
