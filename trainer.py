@@ -16,7 +16,7 @@ from typing import Any, Dict, Tuple
 
 from data import create_data_loaders
 from models.evaluator import EvaluatorNetwork
-from models.fft_utils import RFFT, IFFT, FFT, clamp, preprocess_inputs, gaussian_nll_loss, \
+from models.fft_utils import preprocess_inputs, gaussian_nll_loss, \
     GANLossKspace, to_magnitude, center_crop
 from models.reconstruction import ReconstructorNetwork
 from options.train_options import TrainOptions
@@ -34,11 +34,11 @@ def run_validation_and_update_best_checkpoint(
     metrics = val_engine.state.metrics
     if trainer.options.use_evaluator:
         progress_bar.log_message(f"Validation Results - Epoch: {engine.state.epoch}  "
-                                f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f} loss_D: "
-                                f"{metrics['loss_D']:.3f}")
+                                 f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f} loss_D: "
+                                 f"{metrics['loss_D']:.3f}")
     else:
         progress_bar.log_message(f"Validation Results - Epoch: {engine.state.epoch}  "
-                                f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f}")
+                                 f"MSE: {metrics['mse']:.3f} SSIM: {metrics['ssim']:.3f}")
     trainer.completed_epochs += 1
     score = -metrics['loss_D'] if trainer.options.only_evaluator else -metrics['mse']
     if score > trainer.best_validation_score:
@@ -89,12 +89,6 @@ class Trainer:
 
         self.losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}
 
-        self.fft_functions = {
-            'rfft': RFFT().to(options.device),
-            'ifft': IFFT().to(options.device),
-            'fft': FFT().to(options.device)
-        }
-
         if self.options.only_evaluator:
             self.options.checkpoints_dir = os.path.join(self.options.checkpoints_dir, 'evaluator')
         if not os.path.exists(self.options.checkpoints_dir):
@@ -119,8 +113,8 @@ class Trainer:
 
     def inference(self, batch):
         with torch.no_grad():
-            zero_filled_image, ground_truth, mask = preprocess_inputs(batch, self.fft_functions,
-                                                                      self.options)
+            zero_filled_image, ground_truth, mask = preprocess_inputs(batch, self.options.dataroot,
+                                                                      self.options.device)
 
             # Get reconstructor output
             reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
@@ -132,19 +126,14 @@ class Trainer:
                 reconstructor_eval = self.evaluator(reconstructed_image, mask_embedding)
                 ground_truth_eval = self.evaluator(ground_truth, mask_embedding)
 
-
             # Compute magnitude (for val losses and plots)
-            also_clamp_and_scale = self.options.dataroot != 'KNEE_RAW'
-            zero_filled_image_magnitude = to_magnitude(
-                zero_filled_image, also_clamp_and_scale=also_clamp_and_scale)
-            reconstructed_image_magnitude = to_magnitude(
-                reconstructed_image, also_clamp_and_scale=also_clamp_and_scale)
-            ground_truth_magnitude = to_magnitude(
-                ground_truth, also_clamp_and_scale=also_clamp_and_scale)
-
+            zero_filled_image_magnitude = to_magnitude(zero_filled_image)
+            reconstructed_image_magnitude = to_magnitude(reconstructed_image)
+            ground_truth_magnitude = to_magnitude(ground_truth)
 
             if self.options.dataroot == 'KNEE_RAW':  # crop data
-                reconstructed_image_magnitude = center_crop(reconstructed_image_magnitude, [320, 320])
+                reconstructed_image_magnitude = center_crop(reconstructed_image_magnitude,
+                                                            [320, 320])
                 ground_truth_magnitude = center_crop(ground_truth_magnitude, [320, 320])
                 zero_filled_image_magnitude = center_crop(zero_filled_image_magnitude, [320, 320])
                 uncertainty_map = center_crop(uncertainty_map, [320, 320])
@@ -181,9 +170,10 @@ class Trainer:
                 self.updates_performed = checkpoint['updates_performed']
 
     def load_weights_from_given_checkpoint(self):
-        if self.options.weights_checkpoint is None or not os.path.exists(
-                self.options.weights_checkpoint):
+        if self.options.weights_checkpoint is None:
             return
+        elif not os.path.exists(self.options.weights_checkpoint):
+            raise FileNotFoundError('Specified weights checkpoint do not exist!')
         self.logger.info(
             f'Loading weights from checkpoint found at {self.options.weights_checkpoint}.')
         checkpoint = torch.load(
@@ -197,7 +187,8 @@ class Trainer:
 
     # TODO: consider adding learning rate scheduler
     def update(self, batch):
-        zero_filled_image, target, mask = preprocess_inputs(batch, self.fft_functions, self.options)
+        zero_filled_image, target, mask = preprocess_inputs(batch, self.options.dataroot,
+                                                            self.options.device)
 
         # Get reconstructor output
         reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
@@ -230,12 +221,7 @@ class Trainer:
             if not self.options.only_evaluator:
                 output = self.evaluator(fake, mask_embedding)
                 loss_G_GAN = self.losses['GAN'](
-                    output,
-                    True,
-                    mask,
-                    degree=1,
-                    updateG=True,
-                    pred_and_gt=(fake, target))
+                    output, True, mask, degree=1, updateG=True, pred_and_gt=(fake, target))
                 loss_G_GAN *= self.options.lambda_gan
 
         # ------------------------------------------------------------------------
@@ -359,7 +345,6 @@ class Trainer:
                 }))
             validation_loss_d.attach(val_engine, name='loss_D')
 
-
         progress_bar = ProgressBar()
         progress_bar.attach(train_engine)
 
@@ -378,7 +363,7 @@ class Trainer:
                               self.updates_performed)
             if 'loss_D' in engine.state.output:
                 writer.add_scalar("training/discriminator_loss", engine.state.output['loss_D'],
-                                self.updates_performed)
+                                  self.updates_performed)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_loss(_):
@@ -388,7 +373,7 @@ class Trainer:
                               self.completed_epochs)
             if 'loss_D' in val_engine.state.metrics:
                 writer.add_scalar("validation/loss_D", val_engine.state.metrics['loss_D'],
-                                self.completed_epochs)
+                                  self.completed_epochs)
 
         @train_engine.on(Events.EPOCH_COMPLETED)
         def plot_validation_images(_):
@@ -437,6 +422,10 @@ class Trainer:
 
     def checkpoint(self) -> submitit.helpers.DelayedSubmission:  # submitit expects this function
         save_checkpoint_function(self, 'regular_checkpoint')
+        if self.options.only_evaluator and \
+                os.path.basename(self.options.checkpoints_dir) == 'evaluator':
+            # remove the added /evaluator subdir
+            self.options.checkpoints_dir = os.path.dirname(self.options.checkpoints_dir)
         trainer = Trainer(self.options)
         return submitit.helpers.DelayedSubmission(trainer)
 

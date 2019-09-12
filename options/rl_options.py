@@ -13,21 +13,19 @@ class RLOptions(BaseOptions):
             help='Directory where reconstructor is stored.')
         parser.add_argument(
             '--obs_type',
-            choices=['two_streams', 'concatenate_mask', 'spectral_maps'],
-            default='two_streams')
+            choices=['fourier_space', 'image_space', 'mask_embedding'],
+            default='fourier_space')
+        parser.add_argument('--obs_to_numpy', action='store_true')
         parser.add_argument(
             '--policy',
-            choices=[
-                'dqn', 'random', 'lowfirst', 'evaluator_net', 'evaluator_net_offp', 'greedymc',
-                'greedymc_gt', 'greedyfull1_gt', 'greedyfull1', 'greedyzero', 'evaluator++'
-            ],
+            choices=['dqn', 'random', 'lowfirst', 'evaluator_net', 'evaluator++'],
             default='random')
-        parser.add_argument('--initial_num_lines', type=int, default=10)
+        parser.add_argument('--initial_num_lines_per_side', type=int, default=10)
         parser.add_argument('--budget', type=int, default=5)
         parser.add_argument('--num_test_images', type=int, default=200)
         parser.add_argument('--num_train_images', type=int, default=10000000)
         parser.add_argument(
-            '--use_reconstructions', dest='use_reconstructions', action='store_true')
+            '--use_reconstructions', dest='use_reconstructions', action='store_false')
         parser.add_argument(
             '--use_score_as_reward',
             dest='use_score_as_reward',
@@ -65,16 +63,18 @@ class RLOptions(BaseOptions):
             help='Full path to the evaluator++ model to use.')
 
         # Reinforcement learning options
-        parser.add_argument(
-            '--rl_model_type',
-            choices=['two_streams', 'spectral_maps', 'large_two_streams'],
-            default='two_streams')
+        parser.add_argument('--rl_model_type', choices=['cnn_plus_masks'], default='cnn_plus_masks')
         parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
         parser.add_argument(
             '--dqn_only_test',
             dest='dqn_only_test',
             action='store_true',
             help='If true, no training will be done. A policy will be loaded from disk and tested.')
+        parser.add_argument(
+            '--dqn_weights_dir',
+            type=str,
+            default=None,
+            help='Where to load the DQN weights from if dqn_only_test is used.')
         parser.add_argument('--replay_buffer_size', type=int, default=100000)
         parser.add_argument('--epsilon_start', type=float, default=0.99)
         parser.add_argument('--epsilon_end', type=float, default=0.01)

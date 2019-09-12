@@ -1,6 +1,27 @@
 import importlib
+from .base_data_loader import get_train_valid_loader, get_test_loader
 from data.base_dataset import BaseDataset
-from data.ft_data_loader import ft_data_loader
+
+
+def create_data_loaders(options, is_test=False):
+
+    if not is_test:
+        train_loader, valid_loader = get_train_valid_loader(
+            batch_size=options.batchSize,
+            num_workers=options.nThreads,
+            pin_memory=True,
+            which_dataset=options.dataroot,
+            mask_type=options.mask_type,
+            masks_dir=options.masks_dir)
+        return train_loader, valid_loader
+    else:
+        test_loader = get_test_loader(
+            batch_size=options.batchSize,
+            num_workers=0,
+            pin_memory=True,
+            which_dataset=options.dataroot,
+            mask_type=options.mask_type)
+        return test_loader
 
 
 def find_dataset_using_name(dataset_name):
@@ -27,27 +48,6 @@ def find_dataset_using_name(dataset_name):
 
     return dataset
 
-
 def get_option_setter(dataset_name):
     dataset_class = find_dataset_using_name(dataset_name)
     return dataset_class.modify_commandline_options
-
-
-def create_data_loaders(options, is_test=False):
-
-    if not is_test:
-        train_loader, valid_loader = ft_data_loader.get_train_valid_loader(
-            batch_size=options.batchSize,
-            num_workers=options.nThreads,
-            pin_memory=True,
-            which_dataset=options.dataroot,
-            mask_type=options.mask_type)
-        return train_loader, valid_loader
-    else:
-        test_loader = ft_data_loader.get_test_loader(
-            batch_size=options.batchSize,
-            num_workers=0,
-            pin_memory=True,
-            which_dataset=options.dataroot,
-            mask_type=options.mask_type)
-        return test_loader

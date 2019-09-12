@@ -17,11 +17,11 @@ from .ft_util_vaes import MaskFunc, DicomDataTransform, Slice, BasicMaskFunc, \
 def get_mask_func(mask_type, which_dataset):
     # Whether the number of lines is random or not
     random_num_lines = (mask_type[-4:] == '_rnl')
-    if 'fixed_acc' in mask_type:
+    if 'basic' in mask_type:
         # First two parameters are ignored if `random_num_lines` is True
         logging.info(f'Mask is fixed acceleration mask with random_num_lines={random_num_lines}.')
         return BasicMaskFunc([0.125], [4], which_dataset, random_num_lines=random_num_lines)
-    if 'symmetric_choice' in mask_type:
+    if 'symmetric_basic' in mask_type:
         logging.info(f'Mask is symmetric uniform choice with random_num_lines={random_num_lines}.')
         return SymmetricUniformChoiceMaskFunc(
             [0.125], [4], which_dataset, random_num_lines=random_num_lines)
@@ -38,22 +38,17 @@ def get_train_valid_loader(batch_size,
                            num_workers=4,
                            pin_memory=False,
                            which_dataset='KNEE',
-                           mask_type='fixed_acc'):
+                           mask_type='basic',
+                           masks_dir=None):
 
     if which_dataset == 'KNEE_PRECOMPUTED_MASKS':
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
         data_transform_train = DicomDataTransform(None, fixed_seed=None, seed_per_image=True)
-        data_transform_valid = DicomDataTransform(
-            BasicMaskFunc([0.125], [4]), fixed_seed=None, seed_per_image=True)
-        train_data = SliceWithPrecomputedMasks(data_transform_train, dicom_root, which='train')
-        valid_data = Slice(
-            data_transform_valid,
-            dicom_root,
-            which='val',
-            resolution=128,
-            scan_type='all',
-            num_volumes=None,
-            num_rand_slices=None)
+        data_transform_valid = DicomDataTransform(None, fixed_seed=None, seed_per_image=True)
+        train_data = SliceWithPrecomputedMasks(
+            data_transform_train, dicom_root, masks_dir, which='train')
+        valid_data = SliceWithPrecomputedMasks(
+            data_transform_valid, dicom_root, masks_dir, which='val')
 
     elif which_dataset == 'KNEE':
         mask_func = get_mask_func(mask_type, which_dataset)
@@ -81,7 +76,7 @@ def get_train_valid_loader(batch_size,
         raw_root = '/datasets01_101/fastMRI/112718'
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + ' not exists. Change to the right path.')
-        data_transform = RawDataTransform(mask_func)
+        data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         train_data = RawSliceData(
             raw_root + '/singlecoil_train',
             transform=data_transform,
@@ -139,7 +134,7 @@ def get_test_loader(batch_size,
                     num_workers=2,
                     pin_memory=False,
                     which_dataset='KNEE',
-                    mask_type='fixed_acc'):
+                    mask_type='basic'):
     if which_dataset in ('KNEE'):
         mask_func = get_mask_func(mask_type, which_dataset)
         dicom_root = pathlib.Path('/datasets01_101/fastMRI/081419/knee_dicoms')
@@ -166,11 +161,11 @@ def get_test_loader(batch_size,
             pin_memory=pin_memory,
             drop_last=True)
     elif which_dataset == 'KNEE_RAW':
-        mask_func = MaskFunc(center_fractions=[0.125], accelerations=[4])
+        mask_func = get_mask_func(mask_type, which_dataset)
         raw_root = '/datasets01_101/fastMRI/112718'
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + ' not exists. Change to the right path.')
-        data_transform = RawDataTransform(mask_func)
+        data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         test_data = RawSliceData(
             raw_root + '/singlecoil_test', transform=data_transform, num_cols=368)
 

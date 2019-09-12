@@ -26,8 +26,14 @@ class RandomPolicy:
 # frequencies in the center, and if the conjugate symmetry property holds.
 class NextIndexPolicy:
 
-    def __init__(self, actions):
-        self.actions = actions
+    def __init__(self, actions, alternate_sides):
+        if alternate_sides:
+            self.actions = []
+            for i in range(len(actions) // 2):
+                self.actions.append(actions[i])
+                self.actions.append(actions[-(i + 1)])
+        else:
+            self.actions = actions
         self.index = 0
 
     def get_action(self, *_):
@@ -62,6 +68,8 @@ class GreedyMC:
         self.policy = []
         self.actions_used = []
         self.use_reconstructions = use_reconstructions
+        raise NotImplementedError(
+            "Not implemented! Need to fix to account for new observation types")
 
     def get_action(self, obs, _, __):
         if len(self.policy) == 0:
@@ -131,6 +139,8 @@ class FullGreedy:
         self.use_reconstructions = use_reconstructions
         self.batch_size = 64
         self.num_steps = num_steps
+        raise NotImplementedError(
+            "Not implemented! Need to fix to account for new observation types")
 
     def get_action(self, obs, _, __):
         # This expects observation to be a tensor of size [C, H, W], where the first channel
@@ -172,22 +182,22 @@ class ZeroStepGreedy:
     def __init__(self, env):
         self.env = env
         self.actions = list(range(env.action_space.n))
+        raise NotImplementedError('Need to adjust for new observation types and loader refactor')
 
     def get_action(self, unused_obs_, _, __):
         zero_filled_reconstruction, _, __ = models.fft_utils.preprocess_inputs(
-            (self.env._current_mask, self.env._ground_truth),
-            rl_env.fft_functions,
-            self.env.options,
-            clamp_target=False)
+            (self.env._current_mask, self.env._ground_truth), self.env.options.dataroot,
+            self.env.options.device)
 
         reconstruction, _, mask_embed = self.env._reconstructor(zero_filled_reconstruction,
                                                                 self.env._current_mask)
 
-        rfft_gt = rl_env.fft_functions['rfft'](self.env._ground_truth)
-        rfft_reconstr = rl_env.fft_functions['fft'](reconstruction)
+        rfft_gt = models.fft_utils.fft(self.env._ground_truth)
+        rfft_reconstr = models.fft_utils.fft(reconstruction)
         diff = torch.nn.functional.mse_loss(
             rfft_gt[0], rfft_reconstr[0], reduction='none').sum([0, 1])
-        return diff[:rl_env.IMAGE_WIDTH // 2].argmax().item() - self.env.options.initial_num_lines
+        return diff[:self.env.image_width // 2].argmax().item() \
+               - self.env.options.initial_num_lines_per_side
 
     def init_episode(self):
         pass
@@ -200,8 +210,8 @@ class EvaluatorNetwork:
         if evaluator_name is not None:
             self.env.set_evaluator(evaluator_name)
 
-    def get_action(self, *_):
-        return self.env.get_evaluator_action()
+    def get_action(self, obs, _, __):
+        return self.env.get_evaluator_action(obs)
 
     def init_episode(self):
         pass

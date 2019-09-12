@@ -8,69 +8,6 @@ import json
 import os
 
 from torch.utils.data import Dataset, RandomSampler
-"""
-def normal_pdf(length, sensitivity):
-    return np.exp(-sensitivity * (np.arange(length) - length / 2)**2)
-
-
-def cartesian_mask(shape, acc, sample_n=2, centred=False):
-
-    # Code from: https://github.com/js3611/Deep-MRI-Reconstruction
-    # Sampling density estimated from implementation of kt FOCUSS
-    # shape: tuple - of form (..., nx, ny)
-    # acc: float - doesn't have to be integer 4, 8, etc..
-
-    N, Nx, Ny = int(np.prod(shape[:-2])), shape[-2], shape[-1]
-    pdf_x = normal_pdf(Nx, 0.5/(Nx/10.)**2)
-    lmda = Nx/(2.*acc)
-    n_lines = int(Nx / acc)
-
-    # add uniform distribution
-    pdf_x += lmda * 1./Nx
-
-    if sample_n:
-        pdf_x[Nx//2-sample_n//2:Nx//2+sample_n//2] = 0
-        pdf_x /= np.sum(pdf_x)
-        n_lines -= sample_n
-
-    mask = np.zeros((N, Nx))
-    for i in range(N):
-        idx = np.random.choice(Nx, n_lines, False, pdf_x)
-        mask[i, idx] = 1
-
-    if sample_n:
-        mask[:, Nx//2-sample_n//2:Nx//2+sample_n//2] = 1
-
-    size = mask.itemsize
-    mask = as_strided(mask, (N, Nx, Ny), (size * Nx, size, 0))
-
-    mask = mask.reshape(shape)
-
-    if not centred:
-        mask = np.fft.ifftshift(mask, axes=(-1, -2))
-
-    return mask
-
-def ifft2(data):
-    assert data.size(-1) == 2
-    data = ifftshift(data, dim=(-3, -2))
-    data = torch.ifft(data, 2, normalized=True)
-    data = fftshift(data, dim=(-3, -2))
-    return data
-
-def rfft2(data):
-    zeros = torch.zeros_like(data)
-    data = torch.stack([data, zeros], dim=3)
-    return fft2(data)
-
-def fft2(data):
-    assert data.size(-1) == 2
-    data = ifftshift(data, dim=(-3, -2))
-    data = torch.fft(data, 2, normalized=True)
-    data = fftshift(data, dim=(-3, -2))
-    return data
-"""
-
 
 def ifftshift(x, dim=None):
     if dim is None:
@@ -120,6 +57,7 @@ class FixedOrderRandomSampler(RandomSampler):
 
 
 class MaskFunc:
+
     def __init__(self, center_fractions, accelerations, which_dataset, random_num_lines=False):
         if len(center_fractions) != len(accelerations):
             raise ValueError('Number of center fractions should match number of accelerations')
@@ -280,35 +218,33 @@ class SliceWithPrecomputedMasks(Dataset):
         Only a subset of the masks where computed, specified by the list `self.available_masks`.
     """
 
-    def __init__(self, transform, dicom_root, which='train'):
+    def __init__(self, transform, dicom_root, masks_dir, which='train'):
         self.transform = transform
         self.dataset = _DicomDataset(dicom_root / str(128) / which, 'all', num_volumes=None)
         self.num_slices = self.dataset.metadata['num_slices']
         self.rng = np.random.RandomState()
 
-        self.masks_location = '/checkpoint/lep/active_acq/' \
-                              'train_with_evaluator_symmetric/greedy_masks'
-        self.available_masks = [
-            0, 4000, 8000, 12000, 16000, 20000, 74000, 78000, 82000, 86000, 90000, 94000, 148000,
-            152000, 156000, 160000, 164000, 168000, 222000, 226000, 230000, 234000, 238000, 242000,
-            296000, 300000, 304000, 308000, 312000, 316000, 370000, 374000, 378000, 382000, 386000,
-            390000, 444000, 448000, 452000, 456000, 460000, 464000, 518000, 522000, 526000, 530000,
-            534000, 538000, 592000, 596000, 600000, 604000, 608000, 612000, 666000, 670000, 674000,
-            678000, 682000, 686000, 740000, 744000, 748000, 752000, 756000, 760000, 814000, 818000,
-            822000, 826000, 830000, 834000, 888000, 892000, 896000, 900000, 904000, 908000, 962000,
-            966000, 970000, 974000, 978000, 982000, 1036000, 1040000, 1044000, 1048000, 1052000,
-            1056000
-        ]
-        self.masks_per_file = 4000
+        self.masks_location = masks_dir
+        self.masks_location = os.path.join(self.masks_location, which)
+        # File format is masks_{begin_idx}-{end_idx}.p. The lines below obtain all begin_idx
+        self.maskfile_begin_indices = sorted([
+            int(x.split('_')[1].split('-')[0])
+            for x in os.listdir(self.masks_location)
+            if 'masks' in x
+        ])
+        self.maskfile_end_indices = sorted([
+            int(x.split('_')[1].split('-')[1].split('.')[0])
+            for x in os.listdir(self.masks_location)
+            if 'masks' in x
+        ])
+        self.masks_per_file = self.maskfile_begin_indices[1] - self.maskfile_begin_indices[0]
 
     def __getitem__(self, i):
         available_mask_index = i // self.masks_per_file
-        mask_file_index = self.available_masks[available_mask_index]
-        mask_index = i % 4000
+        mask_file_index = self.maskfile_begin_indices[available_mask_index]
+        mask_index = i % self.masks_per_file
 
-        img_index = mask_file_index + mask_index
-
-        volume_i, slice_i = divmod(img_index, self.num_slices)
+        volume_i, slice_i = divmod(i, self.num_slices)
         volume, volume_metadata = self.dataset[volume_i]
         slice = volume[slice_i:slice_i + 1]
         slice = slice.astype(np.float32)
@@ -317,15 +253,15 @@ class SliceWithPrecomputedMasks(Dataset):
         # Now load the pre-computed mask
         filename = os.path.join(
             self.masks_location,
-            f'masks_{mask_file_index}-{mask_file_index + self.masks_per_file - 1}.p')
+            f'masks_{mask_file_index}-{self.maskfile_end_indices[available_mask_index]}.p')
         with open(filename, 'rb') as f:
             data = pickle.load(f)
-            mask = torch.from_numpy(data[img_index]).view(1, 1, 128)
+            mask = torch.from_numpy(data[mask_index]).view(1, 1, 128).float()
 
         return mask, image
 
     def __len__(self):
-        return self.masks_per_file * len(self.available_masks)
+        return self.maskfile_end_indices[-1]
 
 
 class RawSliceData(Dataset):
@@ -389,27 +325,13 @@ class DicomDataTransform:
         mask = self.mask_func(shape, seed) if self.mask_func is not None else None
         return mask, image
 
-    def postprocess(self, data, hps):
-        raise NotImplementedError('Need to fix sign leakage here')
-        # inputs = data[1]
-        # mask = data[0].repeat(1, 1, hps.resolution, 1)
-        # inputs = (inputs.clamp_(-2, 4) + 2) / 6
-        # inputs = torch.cat((inputs, torch.zeros(inputs.shape)), 1)
-        # inputs = inputs.cuda()
-        # mask = mask.cuda()
-        # mask_k_space = mask
-        # mask = mask.unsqueeze(4).repeat(1, 1, 1, 1, 2)
-        # kspace = torch.fft(inputs.permute(0, 2, 3, 1), 2, normalized=False).unsqueeze(1)
-        # masked_kspace = kspace * mask
-        # masked_image = torch.ifft(masked_kspace, 2, normalized=False).squeeze(1).permute(0, 3, 1, 2)
-        # return inputs, masked_image, mask_k_space
-
 
 class RawDataTransform:
 
-    def __init__(self, mask_func, seed=None):
+    def __init__(self, mask_func, fixed_seed=None, seed_per_image=False):
         self.mask_func = mask_func
-        self.seed = seed
+        self.seed = fixed_seed
+        self.seed_per_image = seed_per_image
 
     def __call__(self, kspace, attrs):
         kspace = torch.from_numpy(np.stack([kspace.real, kspace.imag], axis=-1))
@@ -420,21 +342,10 @@ class RawDataTransform:
         image /= norm
         kspace /= norm
         shape = np.array(kspace.shape)
-        mask = self.mask_func(shape, self.seed)
+        seed = int(1009 * image.sum().abs()) if self.fixed_seed is None and self.seed_per_image \
+            else self.fixed_seed
+        mask = self.mask_func(shape, seed)
         return mask, image, kspace
-
-    def postprocess(self, data, hps):
-        mask, inputs, kspace = data
-        mask = data[0].repeat(1, 1, kspace.shape[1], 1)
-        inputs = inputs.cuda().permute(0, 3, 1, 2)
-        kspace = kspace.cuda().unsqueeze(1)
-        mask = mask.cuda()
-        mask_k_space = mask
-        mask = mask.unsqueeze(4).repeat(1, 1, 1, 1, 2)
-        masked_kspace = kspace * mask
-        masked_image = ifftshift(torch.ifft(masked_kspace, 2, normalized=False), dim=(2, 3))
-        masked_image = masked_image.squeeze(1).permute(0, 3, 1, 2)
-        return inputs, masked_image, mask_k_space
 
 
 class _DicomDataset:

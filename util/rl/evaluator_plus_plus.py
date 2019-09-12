@@ -78,17 +78,18 @@ class EvaluatorPlusPlus(nn.Module):
 
 class EvaluatorPlusPlusPolicy:
 
-    def __init__(self, model_path: str, initial_num_lines: int, device: torch.device):
-        self.evaluator = EvaluatorPlusPlus()
-        checkpoint = torch.load(model_path)
-        model_state_dict = {
-            key.replace('module.', ''): value
-            for (key, value) in checkpoint['model'].items()
-        }
-        self.evaluator.load_state_dict(model_state_dict)
-        self.evaluator.to(device)
-        self.initial_num_lines = initial_num_lines
-        self.device = device
+    def __init__(self, model_path: str, initial_num_lines_per_side: int, device: torch.device):
+        raise NotImplementedError('This code becomes stale with the new observation types')
+        # self.evaluator = EvaluatorPlusPlus()
+        # checkpoint = torch.load(model_path)
+        # model_state_dict = {
+        #     key.replace('module.', ''): value
+        #     for (key, value) in checkpoint['model'].items()
+        # }
+        # self.evaluator.load_state_dict(model_state_dict)
+        # self.evaluator.to(device)
+        # self.initial_num_lines_per_side = initial_num_lines_per_side
+        # self.device = device
 
     def get_action(self, obs: np.ndarray, _, __) -> int:
         reconstruction = torch.Tensor(obs[:1, :-1]).unsqueeze(0).to(self.device)
@@ -96,7 +97,8 @@ class EvaluatorPlusPlusPolicy:
         scores = self.evaluator(reconstruction, mask)
         max_action = reconstruction.shape[
             3] // 2 if rl_env.CONJUGATE_SYMMETRIC else reconstruction.shape[3]
-        scores.masked_fill_(mask.byte().squeeze()[self.initial_num_lines:max_action], -100000)
+        scores.masked_fill_(mask.byte().squeeze()[self.initial_num_lines_per_side:max_action],
+                            -100000)
         return scores.argmax(dim=1).item()
 
     def init_episode(self):
