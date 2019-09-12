@@ -26,8 +26,14 @@ class RandomPolicy:
 # frequencies in the center, and if the conjugate symmetry property holds.
 class NextIndexPolicy:
 
-    def __init__(self, actions):
-        self.actions = actions
+    def __init__(self, actions, alternate_sides):
+        if alternate_sides:
+            self.actions = []
+            for i in range(len(actions) // 2):
+                self.actions.append(actions[i])
+                self.actions.append(actions[-(i + 1)])
+        else:
+            self.actions = actions
         self.index = 0
 
     def get_action(self, *_):
@@ -62,6 +68,8 @@ class GreedyMC:
         self.policy = []
         self.actions_used = []
         self.use_reconstructions = use_reconstructions
+        raise NotImplementedError(
+            "Not implemented! Need to fix to account for new observation types")
 
     def get_action(self, obs, _, __):
         if len(self.policy) == 0:
@@ -91,7 +99,6 @@ class GreedyMC:
             new_mask = self.env._current_mask
             for index in indices:
                 new_mask = self.env.compute_new_mask(new_mask, self._valid_actions[index])[0]
-            raise ("Not implemented! Need to fix to account for new observation types")
             score = self.env.compute_score(
                 use_reconstruction=self.use_reconstructions,
                 kind='mse',
@@ -132,6 +139,8 @@ class FullGreedy:
         self.use_reconstructions = use_reconstructions
         self.batch_size = 64
         self.num_steps = num_steps
+        raise NotImplementedError(
+            "Not implemented! Need to fix to account for new observation types")
 
     def get_action(self, obs, _, __):
         # This expects observation to be a tensor of size [C, H, W], where the first channel
@@ -145,7 +154,6 @@ class FullGreedy:
 
         all_scores = []
         for i in range(0, len(all_masks), self.batch_size):
-            raise ("Not implemented! Need to fix to account for new observation types")
             masks_to_try = torch.cat(all_masks[i:min(i + self.batch_size, len(all_masks))])
             scores = self.env.compute_score(
                 use_reconstruction=self.use_reconstructions,
@@ -188,7 +196,8 @@ class ZeroStepGreedy:
         rfft_reconstr = models.fft_utils.fft(reconstruction)
         diff = torch.nn.functional.mse_loss(
             rfft_gt[0], rfft_reconstr[0], reduction='none').sum([0, 1])
-        return diff[:self.env.image_width // 2].argmax().item() - self.env.options.initial_num_lines
+        return diff[:self.env.image_width // 2].argmax().item() \
+               - self.env.options.initial_num_lines_per_side
 
     def init_episode(self):
         pass

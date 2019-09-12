@@ -20,7 +20,7 @@ class RLOptions(BaseOptions):
             '--policy',
             choices=['dqn', 'random', 'lowfirst', 'evaluator_net', 'evaluator++'],
             default='random')
-        parser.add_argument('--initial_num_lines', type=int, default=10)
+        parser.add_argument('--initial_num_lines_per_side', type=int, default=10)
         parser.add_argument('--budget', type=int, default=5)
         parser.add_argument('--num_test_images', type=int, default=200)
         parser.add_argument('--num_train_images', type=int, default=10000000)
