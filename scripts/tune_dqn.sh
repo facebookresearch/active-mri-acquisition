@@ -21,7 +21,7 @@ python tune_dqn.py --dataroot KNEE \
     --freq_save_test_stats 100000 \
     --dqn_test_episode_freq 20 \
     --sequential_images \
-    --initial_num_lines 5 \
+    --initial_num_lines_per_side 5 \
     --obs_type fourier_space \
     --dqn_resume \
     --rl_env_train_no_seed \

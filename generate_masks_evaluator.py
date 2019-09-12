@@ -36,20 +36,21 @@ def generate_masks(env: rl_env.ReconstructionEnv,
         obs, info = env.reset()
         evaluator_policy.init_episode()
         episode += 1
-        initial_num_lines, additional_lines = get_num_lines()
-        logging.info(f'Will generate mask with {2 * initial_num_lines} low freq. lines and '
-                     f'{2 * additional_lines} high freq. lines.')
+        initial_num_lines_per_side, additional_lines = get_num_lines()
+        logging.info(
+            f'Will generate mask with {2 * initial_num_lines_per_side} low freq. lines and '
+            f'{2 * additional_lines} high freq. lines.')
         mask = np.zeros(rl_env.IMAGE_WIDTH)
-        mask[:initial_num_lines] = mask[-initial_num_lines:] = 1
+        mask[:initial_num_lines_per_side] = mask[-initial_num_lines_per_side:] = 1
         env._current_mask = torch.from_numpy(mask).float().to(rl_env.device).view(
             1, 1, 1, rl_env.IMAGE_WIDTH)
-        env.options.initial_num_lines = initial_num_lines
+        env.options.initial_num_lines_per_side = initial_num_lines_per_side
         for i in range(additional_lines):
             action = evaluator_policy.get_action(obs, None, None)
-            assert mask[initial_num_lines + action] == 0
-            assert mask[rl_env.IMAGE_WIDTH - initial_num_lines - action - 1] == 0
-            mask[initial_num_lines + action] = 1
-            mask[rl_env.IMAGE_WIDTH - initial_num_lines - action - 1] = 1
+            assert mask[initial_num_lines_per_side + action] == 0
+            assert mask[rl_env.IMAGE_WIDTH - initial_num_lines_per_side - action - 1] == 0
+            mask[initial_num_lines_per_side + action] = 1
+            mask[rl_env.IMAGE_WIDTH - initial_num_lines_per_side - action - 1] = 1
             next_obs, _, done, _ = env.step(action)
             obs = next_obs
             if done:
@@ -58,7 +59,7 @@ def generate_masks(env: rl_env.ReconstructionEnv,
             logging.info(f"Processed image {info['image_idx']}")
         if info['image_idx'] == len(env._dataset_test) - 1:
             break  # Don't go over the last image, because env loops back to index 0
-        assert np.sum(mask) == (initial_num_lines + additional_lines) * 2
+        assert np.sum(mask) == (initial_num_lines_per_side + additional_lines) * 2
         masks.append(mask)
     end = time.time()
     logging.debug(f'Generated {len(masks)} masks. Total time was {end - start} seconds.')
@@ -86,7 +87,7 @@ if __name__ == '__main__':
     parser.add_argument('--reconstructor_dir', type=str, required=True)
     parser.add_argument('--evaluator_dir', type=str, required=True)
     parser.add_argument('--dataset_dir', type=str, required=True)
-    parser.add_argument('--initial_num_lines', type=int, default=5)
+    parser.add_argument('--initial_num_lines_per_side', type=int, default=5)
     parser.add_argument('--dataroot', type=str, default='KNEE')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--initial_index', type=int, default=0)

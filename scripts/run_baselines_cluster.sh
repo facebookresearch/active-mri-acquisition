@@ -45,7 +45,7 @@ for NAME in "basic" "basic_rnl" "symmetric_basic" "symmetric_basic_rnl" "grid" "
         --obs_type ${obs_type} \
         --greedymc_num_samples 60 --greedymc_horizon 1 \
         --sequential_images \
-        --initial_num_lines 8 \
+        --initial_num_lines_per_side 8 \
         --budget 1000 \
         --num_test_images 1000 \
         --freq_save_test_stats 50 \

@@ -39,7 +39,7 @@ class ReconstructionEnv:
                     otherwise a random image is presented.
                 -`budget`: how many actions to choose (the horizon of the episode).
                 -`obs_type`: one of {'fourier_space', 'image_space'}
-                -`initial_num_lines`: how many k-space lines to start with.
+                -`initial_num_lines_per_side`: how many k-space lines to start with.
                 -'num_train_images`: the number of images to use for training. If it's None,
                     then all images will be used.
                 -`num_test_images`: the number of images to use for test. If it's None, then
@@ -121,7 +121,7 @@ class ReconstructionEnv:
             self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
 
         factor = 2 if self.conjugate_symmetry else 1
-        num_actions = (self.image_width - 2 * options.initial_num_lines) // factor
+        num_actions = (self.image_width - 2 * options.initial_num_lines_per_side) // factor
         self.action_space = gym.spaces.Discrete(num_actions)
 
         self._initial_mask = self._generate_initial_mask().to(device)
@@ -133,7 +133,7 @@ class ReconstructionEnv:
 
     def _generate_initial_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
-        for i in range(self.options.initial_num_lines):
+        for i in range(self.options.initial_num_lines_per_side):
             mask[0, 0, 0, i] = 1
             mask[0, 0, 0, -(i + 1)] = 1
         return mask
@@ -181,13 +181,12 @@ class ReconstructionEnv:
             That is, action = 0 represents the lowest index of k-space lines that are not part of
             the initial mask.
         """
-        line_to_scan = self.options.initial_num_lines + action
+        line_to_scan = self.options.initial_num_lines_per_side + action
         new_mask = old_mask.clone().squeeze()
         had_already_been_scanned = bool(new_mask[line_to_scan])
         new_mask[line_to_scan] = 1
         if self.conjugate_symmetry:
-            new_mask[self.image_width - line_to_scan - 1] = 1
-            # new_mask[-(line_to_scan + 1)] = 1
+            new_mask[-(line_to_scan + 1)] = 1
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
     def compute_score(
@@ -220,8 +219,8 @@ class ReconstructionEnv:
                 mask_to_use = self._current_mask
             if k_space is None:
                 k_space = self._k_space
-            image, _, _ = models.fft_utils.preprocess_inputs(
-                (mask_to_use, ground_truth, k_space), self.options.dataroot, device)
+            image, _, _ = models.fft_utils.preprocess_inputs((mask_to_use, ground_truth, k_space),
+                                                             self.options.dataroot, device)
             if use_reconstruction:  # pass through reconstruction network
                 image, _, _ = self._reconstructor(image, mask_to_use)
         return [
@@ -338,4 +337,4 @@ class ReconstructionEnv:
             k_space_scores = self._evaluator(obs['reconstruction'].to(device),
                                              obs['mask_embedding'].to(device))
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
-            return torch.argmin(k_space_scores).item() - self.options.initial_num_lines
+            return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
