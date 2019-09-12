@@ -56,7 +56,7 @@ def get_train_valid_loader(batch_size,
             num_rand_slices=None)
 
     elif which_dataset == 'KNEE':
-        mask_func = FixedAccelerationMaskFunc([0.125], [4])
+        mask_func = get_mask_func(mask_type, which_dataset)
         dicom_root = pathlib.Path('/datasets01_101/fastMRI/081419/knee_dicoms')
         data_transform = DicomDataTransform(mask_func, None)
         train_data = Slice(
@@ -142,7 +142,7 @@ def get_test_loader(batch_size,
                     mask_type='fixed_acc'):
     if which_dataset in ('KNEE'):
         mask_func = get_mask_func(mask_type, which_dataset)
-        dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
+        dicom_root = pathlib.Path('/datasets01_101/fastMRI/081419/knee_dicoms')
         data_transform = DicomDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         test_data = Slice(
             data_transform,

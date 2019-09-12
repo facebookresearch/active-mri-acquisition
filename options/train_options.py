@@ -144,7 +144,7 @@ class TrainOptions(BaseOptions):
 
         # Options for Evaluator Model
         parser.add_argument('--no_evaluator', dest='use_evaluator', action='store_false')
-        parser.add_argument('--number_of_evaluator_filters', type=int, default=256)
+        parser.add_argument('--number_of_evaluator_filters', type=int, default=128)
         parser.add_argument('--number_of_evaluator_convolution_layers', type=int, default=4)
 
         # Options for both Reconstructor and Evaluator Model
@@ -161,6 +161,8 @@ class TrainOptions(BaseOptions):
             help='GAN criterion computes adversarial loss signal at provided k-space lines')
         parser.add_argument(
             '--lambda_gan', type=float, default=0.01, help='weight for reconstruction loss')
+
+        parser.add_argument('--only_evaluator', dest='only_evaluator', action='store_true')
 
         # ########################
         # PPO options
@@ -220,5 +222,7 @@ class TrainOptions(BaseOptions):
             '--num_env_steps',
             type=int,
             default=1000000)
+
+        self.isTrain = True
 
         return parser
