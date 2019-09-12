@@ -121,7 +121,7 @@ class ReconstructionEnv:
             self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
 
         factor = 2 if self.conjugate_symmetry else 1
-        num_actions = (self.image_width - factor * options.initial_num_lines) // 2
+        num_actions = (self.image_width - 2 * options.initial_num_lines) // factor
         self.action_space = gym.spaces.Discrete(num_actions)
 
         self._initial_mask = self._generate_initial_mask().to(device)
@@ -187,6 +187,7 @@ class ReconstructionEnv:
         new_mask[line_to_scan] = 1
         if self.conjugate_symmetry:
             new_mask[self.image_width - line_to_scan - 1] = 1
+            # new_mask[-(line_to_scan + 1)] = 1
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
     def compute_score(

@@ -114,8 +114,7 @@ def get_policy(env, writer, logger, options_):
     if 'random' in options_.policy:
         policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
     elif 'lowfirst' in options_.policy:
-        assert rl_env.CONJUGATE_SYMMETRIC
-        policy = util.rl.simple_baselines.NextIndexPolicy(range(env.action_space.n))
+        policy = util.rl.simple_baselines.NextIndexPolicy(range(env.action_space.n), not env.conjugate_symmetry)
     elif 'evaluator_net' in options_.policy:
         assert options_.obs_type == 'mask_embedding'
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)

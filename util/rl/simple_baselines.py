@@ -26,8 +26,14 @@ class RandomPolicy:
 # frequencies in the center, and if the conjugate symmetry property holds.
 class NextIndexPolicy:
 
-    def __init__(self, actions):
-        self.actions = actions
+    def __init__(self, actions, alternate_sides):
+        if alternate_sides:
+            self.actions = []
+            for i in range(actions//2):
+                self.acctions.append(actions[i])
+                self.acctions.append(actions[-(i + 1)])
+        else:
+            self.actions = actions
         self.index = 0
 
     def get_action(self, *_):
