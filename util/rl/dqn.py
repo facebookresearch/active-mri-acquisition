@@ -11,9 +11,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-import util.rl.replay_buffer
 import acquire_rl
+import models.evaluator
 import rl_env
+import util.rl.replay_buffer
 
 
 def get_epsilon(steps_done, opts):
@@ -25,6 +26,24 @@ class Flatten(nn.Module):
 
     def forward(self, x):
         return x.view(x.size(0), -1)
+
+
+class EvaluatorBasedValueNetwork(nn.Module):
+
+    def __init__(self, num_actions, mask_embed_dim):
+        super(EvaluatorBasedValueNetwork, self).__init__()
+        self.evaluator = models.evaluator.EvaluatorNetwork(
+            number_of_filters=256,
+            number_of_conv_layers=4,
+            use_sigmoid=False,
+            width=num_actions,
+            mask_embed_dim=mask_embed_dim)
+        self.mask_embed_dim = mask_embed_dim
+
+    def forward(self, x):
+        reconstruction = x[:, :-1, :]
+        mask_embedding = x[0, -1, :self.mask_embed_dim]
+        mask_embedding.repeat(1, 1, reconstruction.shape[1], reconstruction.shape[2])
 
 
 class BasicValueNetwork(nn.Module):
