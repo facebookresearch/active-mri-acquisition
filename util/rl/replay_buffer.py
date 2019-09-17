@@ -12,7 +12,7 @@ def infinite_iterator(iterator):
 
 class ReplayMemory:
 
-    def __init__(self, capacity, obs_shape, batch_size, burn_in):
+    def __init__(self, capacity, obs_shape, batch_size, burn_in, use_normalization=False):
         assert burn_in >= batch_size
         self.batch_size = batch_size
         self.burn_in = burn_in
@@ -27,6 +27,10 @@ class ReplayMemory:
         self.std_obs = torch.ones(obs_shape, dtype=torch.float32)
         self._m2_obs = torch.ones(obs_shape, dtype=torch.float32)
         self.count_seen = 1
+
+        if not use_normalization:
+            self.normalize = lambda x: x
+            self.denormalize = lambda x: x
 
     def normalize(self, observation):
         if observation is None:

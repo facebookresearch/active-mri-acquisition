@@ -30,20 +30,29 @@ class Flatten(nn.Module):
 
 class EvaluatorBasedValueNetwork(nn.Module):
 
-    def __init__(self, num_actions, mask_embed_dim):
+    def __init__(self, image_width, initial_num_lines_per_side, mask_embed_dim):
         super(EvaluatorBasedValueNetwork, self).__init__()
+        num_actions = image_width - 2 * initial_num_lines_per_side
         self.evaluator = models.evaluator.EvaluatorNetwork(
             number_of_filters=256,
             number_of_conv_layers=4,
             use_sigmoid=False,
-            width=num_actions,
-            mask_embed_dim=mask_embed_dim)
+            width=image_width,
+            mask_embed_dim=mask_embed_dim,
+            num_output_channels=num_actions)
         self.mask_embed_dim = mask_embed_dim
+        self.initial_num_lines_per_side = initial_num_lines_per_side
 
     def forward(self, x):
-        reconstruction = x[:, :-1, :]
-        mask_embedding = x[0, -1, :self.mask_embed_dim]
-        mask_embedding.repeat(1, 1, reconstruction.shape[1], reconstruction.shape[2])
+        reconstruction = x[..., :-2, :]
+        mask = x[:, 0, -2, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
+        mask_embedding = x[0, 0, -1, :self.mask_embed_dim].view(1, -1, 1, 1)
+        mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1, reconstruction.shape[2],
+                                               reconstruction.shape[3])
+        value = self.evaluator(reconstruction, mask_embedding)
+        # This makes the DQN max inside target consider only non repeated actions
+        value = value - 1e10 * mask
+        return value
 
 
 class BasicValueNetwork(nn.Module):
@@ -70,10 +79,6 @@ class BasicValueNetwork(nn.Module):
             nn.Linear(256, num_actions))
 
     def forward(self, x):
-        # TODO Don't store the full embedding as returned by reconstructor (it's tiled)
-        #  store only the D-dim and re-tile it here before passing to evaluator.
-        #  Also make another class to try the evaluator network architecture
-        #  (instead of BasicValueNetwork)
         reconstructions = x[:, :2, :, :]
         masked_rffts = x[:, 2:, :, :]
         image_encoding = self.conv_image(reconstructions)
@@ -81,9 +86,12 @@ class BasicValueNetwork(nn.Module):
         return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
 
 
-def get_model(num_actions, model_type='basic_value_network'):
-    if model_type == 'basic_value_network':
+def get_model(num_actions, options):
+    if options.dqn_model_type == 'basic':
         return BasicValueNetwork(num_actions)
+    if options.dqn_model_type == 'evaluator':
+        return EvaluatorBasedValueNetwork(options.image_width, options.initial_num_lines_per_side,
+                                          options.mask_embedding_dim)
     raise ValueError('Unknown model specified for DQN.')
 
 
@@ -91,7 +99,7 @@ class DDQN(nn.Module):
 
     def __init__(self, num_actions, device, memory, opts):
         super(DDQN, self).__init__()
-        self.model = get_model(num_actions, opts.rl_model_type)
+        self.model = get_model(num_actions, opts)
         self.memory = memory
         self.optimizer = optim.Adam(self.parameters(), lr=opts.dqn_learning_rate)
         self.num_actions = num_actions
@@ -195,8 +203,11 @@ class DQNTrainer:
             mem_capacity = 0 if self.load_replay_mem or options_.dqn_only_test \
                 else self._max_replay_buffer_size()
             self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-                mem_capacity, self.env.observation_space.shape, options_.rl_batch_size,
-                options_.rl_burn_in)
+                mem_capacity,
+                self.env.observation_space.shape,
+                options_.rl_batch_size,
+                options_.dqn_burn_in,
+                use_normalization=options_.dqn_normalize)
 
             self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
                                options_).to(rl_env.device)
@@ -230,8 +241,11 @@ class DQNTrainer:
         mem_capacity = 0 if self.load_replay_mem or self.options.dqn_only_test \
             else self._max_replay_buffer_size()
         self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-            mem_capacity, self.env.observation_space.shape, self.options.rl_batch_size,
-            self.options.rl_burn_in)
+            mem_capacity,
+            self.env.observation_space.shape,
+            self.options.rl_batch_size,
+            self.options.dqn_burn_in,
+            use_normalization=self.options.dqn_normalize)
 
         # Initialize policy
         self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
@@ -272,8 +286,11 @@ class DQNTrainer:
                                         f'capacity {mem_capacity}.')
 
                     self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-                        mem_capacity, self.env.observation_space.shape, self.options.rl_batch_size,
-                        self.options.rl_burn_in)
+                        mem_capacity,
+                        self.env.observation_space.shape,
+                        self.options.rl_batch_size,
+                        self.options.dqn_burn_in,
+                        use_normalization=self.options.dqn_normalize)
                     self.logger.info('Finished allocating replay buffer.')
                     self.policy.memory = self.replay_memory
 

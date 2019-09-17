@@ -112,8 +112,8 @@ class ReconstructionEnv:
 
         self.observation_space = None  # The observation is a dict unless `obs_to_numpy` is used
         if self.options.obs_to_numpy:
-            # The extra row represents the current mask (or the mask embedding)
-            obs_shape = (2, self.image_height + 1, self.image_width)
+            # The extra rows represents the current mask and the mask embedding
+            obs_shape = (2, self.image_height + 2, self.image_width)
             self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
 
         self.metadata = {'mask_embed_dim': reconstructor_checkpoint['options'].mask_embed_dim}
@@ -236,21 +236,20 @@ class ReconstructionEnv:
             if self.options.obs_type == 'fourier_space':
                 reconstruction = models.fft_utils.fft(reconstruction)
 
-            observation = {'reconstruction': reconstruction, 'mask': self._current_mask}
-
-            if self.options.obs_type == 'mask_embedding':
-                observation['mask_embedding'] = mask_embedding
+            observation = {
+                'reconstruction': reconstruction,
+                'mask': self._current_mask,
+                'mask_embedding': mask_embedding[0, :, ...]
+            }
 
             if self.options.obs_to_numpy:
-                observation = np.zeros(self.observation_space.shape)
+                observation = np.zeros(self.observation_space.shape).astype(np.float32)
                 observation[:2, :self.image_height, :] = reconstruction[0].cpu().numpy()
-                if self.options.obs_type == 'mask_embedding':
-                    observation[2:, :, :] = mask_embedding[0].cpu().numpy()
-                    # TODO change the format of this. Will use an extra row for the
-                    #  mask embedding padded with 0s
-                    raise NotImplementedError
-                else:
-                    observation[:, self.image_height, :] = self._current_mask.cpu().numpy()
+                # The second to last row is the mask
+                observation[:, self.image_height, :] = self._current_mask.cpu().numpy()
+                # The last row is the mask embedding (padded with 0s if necessary)
+                observation[:, self.image_height + 1, :self.metadata['mask_embed_dim']] = \
+                    mask_embedding[0, :, 0, 0].cpu().numpy()
 
         return observation, score
 

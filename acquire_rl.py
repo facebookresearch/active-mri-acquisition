@@ -137,6 +137,8 @@ def get_policy(env, writer, logger, options_):
 def main(options_, logger):
     writer = tensorboardX.SummaryWriter(options_.checkpoints_dir)
     env = rl_env.ReconstructionEnv(options_)
+    options_.mask_embedding_dim = env.metadata['mask_embed_dim']
+    options_.image_width = env.image_width
     env.set_training()
     logger.info(f'Created environment with {env.action_space.n} actions')
     policy = get_policy(env, writer, logger, options_)  # Trains if necessary

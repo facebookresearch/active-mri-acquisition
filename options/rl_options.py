@@ -63,9 +63,9 @@ class RLOptions(BaseOptions):
             help='Full path to the evaluator++ model to use.')
 
         # Reinforcement learning options
-        parser.add_argument(
-            '--rl_model_type', choices=['basic_value_network'], default='basic_value_network')
+        parser.add_argument('--dqn_model_type', choices=['basic', 'evaluator'], default='evaluator')
         parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
+        parser.add_argument('--dqn_normalize', dest='dqn_normalize', action='store_true')
         parser.add_argument(
             '--dqn_only_test',
             dest='dqn_only_test',
@@ -85,7 +85,7 @@ class RLOptions(BaseOptions):
         parser.add_argument('--rl_batch_size', type=int, default=16)
         parser.add_argument('--test_set', choices=['train', 'val', 'test'], default='test')
         parser.add_argument(
-            '--rl_burn_in',
+            '--dqn_burn_in',
             type=int,
             default=200,
             help='Before this many steps nothing will be sampled from the replay buffer.')
