@@ -94,7 +94,9 @@ class ReconstructionEnv:
         logging.info('Loaded reconstructor from checkpoint.')
 
         self._evaluator = None
-        evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
+        evaluator_checkpoint = None
+        if options.evaluator_dir is not None:
+            evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
         if evaluator_checkpoint is not None and evaluator_checkpoint['evaluator'] is not None:
             self._evaluator = models.evaluator.EvaluatorNetwork(
                 number_of_filters=evaluator_checkpoint['options'].number_of_evaluator_filters,
