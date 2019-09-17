@@ -93,7 +93,7 @@ class RLOptions(BaseOptions):
         parser.add_argument('--target_net_update_freq', type=int, default=500)
         parser.add_argument('--gamma', type=float, default=0.999)
         parser.add_argument(
-            '--no_replacement_policy', dest='no_replacement_policy', action='store_true')
+            '--no_replacement_policy', dest='no_replacement_policy', action='store_false')
 
         self.isTrain = False
         return parser
