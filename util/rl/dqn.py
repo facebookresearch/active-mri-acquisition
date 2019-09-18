@@ -111,6 +111,8 @@ class DDQN(nn.Module):
 
     def _get_action_no_replacement(self, observation, eps_threshold):
         sample = random.random()
+        # See comment in DQNTrainer._train_dqn_policy for observation format,
+        # Index -2 recovers the mask associated to this observation
         previous_actions = np.nonzero(observation[0, -2, self.opts.initial_num_lines_per_side:
                                                   -self.opts.initial_num_lines_per_side])[0]
         if sample < eps_threshold:
@@ -311,6 +313,9 @@ class DQNTrainer:
             while not done:
                 epsilon = get_epsilon(self.steps, self.options)
                 action = self.policy.get_action(obs, epsilon, None)
+                # Format of observation is [bs, img_height + 2, img_width], where first
+                # img_height rows are reconstruction, next line is the mask, and final line is
+                # the mask embedding
                 is_repeated_action = bool(
                     obs[0, -2, action + self.options.initial_num_lines_per_side])
 
