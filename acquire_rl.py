@@ -86,7 +86,7 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
     end = time.time()
     logger.debug('Test run lasted {} seconds.'.format(end - start))
     test_score = compute_test_score_from_stats(statistics['mse'])
-    writer.add_scalar('eval/average_reward', test_score, step)
+    writer.add_scalar('eval/test_score (mean AUC MSE)', test_score, step)
     env.set_training()
 
     return test_score
