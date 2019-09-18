@@ -109,13 +109,14 @@ class DDQN(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-    def _get_action_no_replacement(self, observation, eps_threshold, episode_actions):
+    def _get_action_no_replacement(self, observation, eps_threshold):
         sample = random.random()
+        previous_actions = np.nonzero(observation[0, -2, self.opts.initial_num_lines_per_side:
+                                                  -self.opts.initial_num_lines_per_side])[0]
         if sample < eps_threshold:
-            return random.choice([x for x in range(self.num_actions) if x not in episode_actions])
+            return random.choice([x for x in range(self.num_actions) if x not in previous_actions])
         with torch.no_grad():
             q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
-            q_values[:, episode_actions] = -np.inf
         return torch.argmax(q_values, dim=1).item()
 
     def _get_action_standard_e_greedy(self, observation, eps_threshold):
@@ -126,9 +127,9 @@ class DDQN(nn.Module):
             q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
         return torch.argmax(q_values, dim=1).item()
 
-    def get_action(self, observation, eps_threshold, episode_actions):
+    def get_action(self, observation, eps_threshold, _):
         if self.opts.no_replacement_policy:
-            return self._get_action_no_replacement(observation, eps_threshold, episode_actions)
+            return self._get_action_no_replacement(observation, eps_threshold)
         else:
             return self._get_action_standard_e_greedy(observation, eps_threshold)
 
@@ -148,17 +149,19 @@ class DDQN(nn.Module):
         not_done_mask = (1 - dones).squeeze()
 
         # Compute Q-values and get best action according to online network
-        all_q_values = self.forward(observations)
-        q_values = all_q_values.gather(1, actions.unsqueeze(1))
+        all_q_values_cur = self.forward(observations)
+        q_values = all_q_values_cur.gather(1, actions.unsqueeze(1))
 
         # Compute target values using the best action found
-        target_values = torch.zeros(observations.shape[0], device=self.device)
-        if not_done_mask.any().item() != 0:
-            best_actions = all_q_values.detach().max(1)[1]
-            target_values[not_done_mask] = target_net(next_observations)\
-                .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
+        with torch.no_grad():
+            all_q_values_next = self.forward(next_observations)
+            target_values = torch.zeros(observations.shape[0], device=self.device)
+            if not_done_mask.any().item() != 0:
+                best_actions = all_q_values_next.detach().max(1)[1]
+                target_values[not_done_mask] = target_net(next_observations)\
+                    .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
 
-        target_values = self.opts.gamma * target_values + rewards
+            target_values = self.opts.gamma * target_values + rewards
 
         # loss = F.mse_loss(q_values, target_values.unsqueeze(1))
         loss = F.smooth_l1_loss(q_values, target_values.unsqueeze(1))
@@ -176,8 +179,9 @@ class DDQN(nn.Module):
 
         self.optimizer.step()
 
-        return loss, grad_norm, all_q_values.detach().mean().cpu().numpy(), all_q_values.detach(
-        ).std().cpu().numpy()
+        return loss, grad_norm, \
+               all_q_values_cur.detach().mean().cpu().numpy(), \
+               all_q_values_cur.detach().std().cpu().numpy()
 
     def init_episode(self):
         pass
@@ -303,17 +307,18 @@ class DQNTrainer:
             obs, _ = self.env.reset()
             done = False
             total_reward = 0
-            episode_actions = []
             cnt_repeated_actions = 0
             while not done:
                 epsilon = get_epsilon(self.steps, self.options)
-                action = self.policy.get_action(obs, epsilon, episode_actions)
+                action = self.policy.get_action(obs, epsilon, None)
+                is_repeated_action = bool(
+                    obs[0, -2, action + self.options.initial_num_lines_per_side])
+
+                assert not (self.options.no_replacement_policy and is_repeated_action)
+
                 next_obs, reward, done, _ = self.env.step(action)
                 self.steps += 1
-                is_zero_target = (
-                    done or
-                    action in episode_actions) if self.options.no_replacement_policy else done
-                self.policy.add_experience(obs, action, next_obs, reward, is_zero_target)
+                self.policy.add_experience(obs, action, next_obs, reward, done)
                 loss, grad_norm, mean_q_values, std_q_values = self.policy.update_parameters(
                     self.target_net)
 
@@ -332,8 +337,8 @@ class DQNTrainer:
 
                 total_reward += reward
                 obs = next_obs
-                cnt_repeated_actions += int(action in episode_actions)
-                episode_actions.append(action)
+
+                cnt_repeated_actions += int(is_repeated_action)
 
             # Adding per-episode tensorboard logs
             self.writer.add_scalar('episode_reward', total_reward, self.episode)

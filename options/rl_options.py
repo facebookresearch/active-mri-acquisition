@@ -76,12 +76,12 @@ class RLOptions(BaseOptions):
             type=str,
             default=None,
             help='Where to load the DQN weights from if dqn_only_test is used.')
-        parser.add_argument('--replay_buffer_size', type=int, default=100000)
+        parser.add_argument('--replay_buffer_size', type=int, default=1000000)
         parser.add_argument('--epsilon_start', type=float, default=0.99)
-        parser.add_argument('--epsilon_end', type=float, default=0.01)
-        parser.add_argument('--epsilon_decay', type=float, default=10000)
+        parser.add_argument('--epsilon_end', type=float, default=0.001)
+        parser.add_argument('--epsilon_decay', type=float, default=500000)
         parser.add_argument('--dqn_learning_rate', type=float, default=6.25e-5)
-        parser.add_argument('--num_train_steps', type=int, default=1000000)
+        parser.add_argument('--num_train_steps', type=int, default=5000000)
         parser.add_argument('--rl_batch_size', type=int, default=16)
         parser.add_argument('--test_set', choices=['train', 'val', 'test'], default='test')
         parser.add_argument(
@@ -90,8 +90,8 @@ class RLOptions(BaseOptions):
             default=200,
             help='Before this many steps nothing will be sampled from the replay buffer.')
         parser.add_argument('--dqn_test_episode_freq', type=int, default=20)
-        parser.add_argument('--target_net_update_freq', type=int, default=500)
-        parser.add_argument('--gamma', type=float, default=0.999)
+        parser.add_argument('--target_net_update_freq', type=int, default=5000)
+        parser.add_argument('--gamma', type=float, default=0.5)
         parser.add_argument(
             '--no_replacement_policy', dest='no_replacement_policy', action='store_false')
 
