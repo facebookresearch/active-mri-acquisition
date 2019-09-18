@@ -77,7 +77,8 @@ class EvaluatorNetwork(nn.Module):
                  number_of_conv_layers=4,
                  use_sigmoid=False,
                  width=128,
-                 mask_embed_dim=6):
+                 mask_embed_dim=6,
+                 num_output_channels=None):
         print(f'[EvaluatorNetwork] -> n_layers = {number_of_conv_layers}')
         super(EvaluatorNetwork, self).__init__()
 
@@ -118,7 +119,12 @@ class EvaluatorNetwork(nn.Module):
 
         kernel_size = width // 2**number_of_conv_layers
         sequence += [nn.AvgPool2d(kernel_size=kernel_size)]
-        sequence += [nn.Conv2d(in_channels, width, kernel_size=1, stride=1, padding=0)]
+
+        if num_output_channels is None:
+            num_output_channels = width
+        sequence += [
+            nn.Conv2d(in_channels, num_output_channels, kernel_size=1, stride=1, padding=0)
+        ]
 
         if use_sigmoid:
             sequence += [nn.Sigmoid()]

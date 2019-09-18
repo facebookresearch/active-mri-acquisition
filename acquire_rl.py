@@ -86,7 +86,7 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
     end = time.time()
     logger.debug('Test run lasted {} seconds.'.format(end - start))
     test_score = compute_test_score_from_stats(statistics['mse'])
-    writer.add_scalar('eval/average_reward', test_score, step)
+    writer.add_scalar('eval/test_score__mean_auc_mse', test_score, step)
     env.set_training()
 
     return test_score
@@ -124,6 +124,7 @@ def get_policy(env, writer, logger, options_):
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             options_.options.evaluator_pp_path, options_.initial_num_lines_per_side, rl_env.device)
     elif 'dqn' in options_.policy:
+        assert options_.obs_to_numpy
         dqn_trainer = util.rl.dqn.DQNTrainer(options_, env, writer, logger)
         dqn_trainer()
         policy = dqn_trainer.policy
@@ -136,6 +137,8 @@ def get_policy(env, writer, logger, options_):
 def main(options_, logger):
     writer = tensorboardX.SummaryWriter(options_.checkpoints_dir)
     env = rl_env.ReconstructionEnv(options_)
+    options_.mask_embedding_dim = env.metadata['mask_embed_dim']
+    options_.image_width = env.image_width
     env.set_training()
     logger.info(f'Created environment with {env.action_space.n} actions')
     policy = get_policy(env, writer, logger, options_)  # Trains if necessary

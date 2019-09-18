@@ -94,7 +94,9 @@ class ReconstructionEnv:
         logging.info('Loaded reconstructor from checkpoint.')
 
         self._evaluator = None
-        evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
+        evaluator_checkpoint = None
+        if options.evaluator_dir is not None:
+            evaluator_checkpoint = load_checkpoint(options.evaluator_dir, 'best_checkpoint.pth')
         if evaluator_checkpoint is not None and evaluator_checkpoint['evaluator'] is not None:
             self._evaluator = models.evaluator.EvaluatorNetwork(
                 number_of_filters=evaluator_checkpoint['options'].number_of_evaluator_filters,
@@ -112,13 +114,11 @@ class ReconstructionEnv:
 
         self.observation_space = None  # The observation is a dict unless `obs_to_numpy` is used
         if self.options.obs_to_numpy:
-            # The extra rows represents the current mask (or the mask embedding)
-            if self.options.obs_type == 'mask_embedding':
-                obs_shape = (2 + reconstructor_checkpoint['options'].mask_embed_dim,
-                             self.image_height, self.image_width)
-            else:
-                obs_shape = (2, self.image_height + 1, self.image_width)
+            # The extra rows represents the current mask and the mask embedding
+            obs_shape = (2, self.image_height + 2, self.image_width)
             self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
+
+        self.metadata = {'mask_embed_dim': reconstructor_checkpoint['options'].mask_embed_dim}
 
         factor = 2 if self.conjugate_symmetry else 1
         num_actions = (self.image_width - 2 * options.initial_num_lines_per_side) // factor
@@ -238,18 +238,20 @@ class ReconstructionEnv:
             if self.options.obs_type == 'fourier_space':
                 reconstruction = models.fft_utils.fft(reconstruction)
 
-            observation = {'reconstruction': reconstruction, 'mask': self._current_mask}
-
-            if self.options.obs_type == 'mask_embedding':
-                observation['mask_embedding'] = mask_embedding
+            observation = {
+                'reconstruction': reconstruction,
+                'mask': self._current_mask,
+                'mask_embedding': mask_embedding[0, :, ...]
+            }
 
             if self.options.obs_to_numpy:
-                observation = np.zeros(self.observation_space.shape)
+                observation = np.zeros(self.observation_space.shape).astype(np.float32)
                 observation[:2, :self.image_height, :] = reconstruction[0].cpu().numpy()
-                if self.options.obs_type == 'mask_embedding':
-                    observation[2:, :, :] = mask_embedding[0].cpu().numpy()
-                else:
-                    observation[:, self.image_height, :] = self._current_mask.cpu().numpy()
+                # The second to last row is the mask
+                observation[:, self.image_height, :] = self._current_mask.cpu().numpy()
+                # The last row is the mask embedding (padded with 0s if necessary)
+                observation[:, self.image_height + 1, :self.metadata['mask_embed_dim']] = \
+                    mask_embedding[0, :, 0, 0].cpu().numpy()
 
         return observation, score
 

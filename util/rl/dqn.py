@@ -11,9 +11,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-import util.rl.replay_buffer
 import acquire_rl
+import models.evaluator
 import rl_env
+import util.rl.replay_buffer
 
 
 def get_epsilon(steps_done, opts):
@@ -27,6 +28,33 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
+class EvaluatorBasedValueNetwork(nn.Module):
+
+    def __init__(self, image_width, initial_num_lines_per_side, mask_embed_dim):
+        super(EvaluatorBasedValueNetwork, self).__init__()
+        num_actions = image_width - 2 * initial_num_lines_per_side
+        self.evaluator = models.evaluator.EvaluatorNetwork(
+            number_of_filters=256,
+            number_of_conv_layers=4,
+            use_sigmoid=False,
+            width=image_width,
+            mask_embed_dim=mask_embed_dim,
+            num_output_channels=num_actions)
+        self.mask_embed_dim = mask_embed_dim
+        self.initial_num_lines_per_side = initial_num_lines_per_side
+
+    def forward(self, x):
+        reconstruction = x[..., :-2, :]
+        mask = x[:, 0, -2, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
+        mask_embedding = x[0, 0, -1, :self.mask_embed_dim].view(1, -1, 1, 1)
+        mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1, reconstruction.shape[2],
+                                               reconstruction.shape[3])
+        value = self.evaluator(reconstruction, mask_embedding)
+        # This makes the DQN max over the target values consider only non repeated actions
+        value = value - 1e10 * mask
+        return value
+
+
 class BasicValueNetwork(nn.Module):
     """ The input to this model includes the reconstruction and the current mask. The
         reconstruction is passed through a convolutional path and the mask through a few MLP layers.
@@ -35,21 +63,20 @@ class BasicValueNetwork(nn.Module):
 
     def __init__(self, num_actions):
         super(BasicValueNetwork, self).__init__()
-        raise NotImplementedError
 
-        # self.conv_image = nn.Sequential(
-        #     nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-        #     nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-        #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
-        #
-        # self.conv_fft = nn.Sequential(
-        #     nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-        #     nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-        #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
-        #
-        # self.fc = nn.Sequential(
-        #     nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
-        #     nn.Linear(256, num_actions))
+        self.conv_image = nn.Sequential(
+            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
+
+        self.conv_fft = nn.Sequential(
+            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
+
+        self.fc = nn.Sequential(
+            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
+            nn.Linear(256, num_actions))
 
     def forward(self, x):
         reconstructions = x[:, :2, :, :]
@@ -59,16 +86,20 @@ class BasicValueNetwork(nn.Module):
         return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
 
 
-def get_model(num_actions, model_type='basic_value_network'):
-    if model_type == 'basic_value_network':
+def get_model(num_actions, options):
+    if options.dqn_model_type == 'basic':
         return BasicValueNetwork(num_actions)
+    if options.dqn_model_type == 'evaluator':
+        return EvaluatorBasedValueNetwork(options.image_width, options.initial_num_lines_per_side,
+                                          options.mask_embedding_dim)
+    raise ValueError('Unknown model specified for DQN.')
 
 
 class DDQN(nn.Module):
 
     def __init__(self, num_actions, device, memory, opts):
         super(DDQN, self).__init__()
-        self.model = get_model(num_actions, opts.rl_model_type)
+        self.model = get_model(num_actions, opts)
         self.memory = memory
         self.optimizer = optim.Adam(self.parameters(), lr=opts.dqn_learning_rate)
         self.num_actions = num_actions
@@ -78,13 +109,16 @@ class DDQN(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-    def _get_action_no_replacement(self, observation, eps_threshold, episode_actions):
+    def _get_action_no_replacement(self, observation, eps_threshold):
         sample = random.random()
+        # See comment in DQNTrainer._train_dqn_policy for observation format,
+        # Index -2 recovers the mask associated to this observation
+        previous_actions = np.nonzero(observation[0, -2, self.opts.initial_num_lines_per_side:
+                                                  -self.opts.initial_num_lines_per_side])[0]
         if sample < eps_threshold:
-            return random.choice([x for x in range(self.num_actions) if x not in episode_actions])
+            return random.choice([x for x in range(self.num_actions) if x not in previous_actions])
         with torch.no_grad():
             q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
-            q_values[:, episode_actions] = -np.inf
         return torch.argmax(q_values, dim=1).item()
 
     def _get_action_standard_e_greedy(self, observation, eps_threshold):
@@ -95,9 +129,9 @@ class DDQN(nn.Module):
             q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
         return torch.argmax(q_values, dim=1).item()
 
-    def get_action(self, observation, eps_threshold, episode_actions):
+    def get_action(self, observation, eps_threshold, _):
         if self.opts.no_replacement_policy:
-            return self._get_action_no_replacement(observation, eps_threshold, episode_actions)
+            return self._get_action_no_replacement(observation, eps_threshold)
         else:
             return self._get_action_standard_e_greedy(observation, eps_threshold)
 
@@ -117,17 +151,19 @@ class DDQN(nn.Module):
         not_done_mask = (1 - dones).squeeze()
 
         # Compute Q-values and get best action according to online network
-        all_q_values = self.forward(observations)
-        q_values = all_q_values.gather(1, actions.unsqueeze(1))
+        all_q_values_cur = self.forward(observations)
+        q_values = all_q_values_cur.gather(1, actions.unsqueeze(1))
 
         # Compute target values using the best action found
-        target_values = torch.zeros(observations.shape[0], device=self.device)
-        if not_done_mask.any().item() != 0:
-            best_actions = all_q_values.detach().max(1)[1]
-            target_values[not_done_mask] = target_net(next_observations)\
-                .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
+        with torch.no_grad():
+            all_q_values_next = self.forward(next_observations)
+            target_values = torch.zeros(observations.shape[0], device=self.device)
+            if not_done_mask.any().item() != 0:
+                best_actions = all_q_values_next.detach().max(1)[1]
+                target_values[not_done_mask] = target_net(next_observations)\
+                    .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
 
-        target_values = self.opts.gamma * target_values + rewards
+            target_values = self.opts.gamma * target_values + rewards
 
         # loss = F.mse_loss(q_values, target_values.unsqueeze(1))
         loss = F.smooth_l1_loss(q_values, target_values.unsqueeze(1))
@@ -145,8 +181,9 @@ class DDQN(nn.Module):
 
         self.optimizer.step()
 
-        return loss, grad_norm, all_q_values.detach().mean().cpu().numpy(), all_q_values.detach(
-        ).std().cpu().numpy()
+        return loss, grad_norm, \
+               q_values.detach().mean().cpu().numpy(), \
+               q_values.detach().std().cpu().numpy()
 
     def init_episode(self):
         pass
@@ -169,11 +206,14 @@ class DQNTrainer:
             self.logger = logger
 
             # If replay will be loaded set capacity to zero (defer allocation to `__call__()`)
-            mem_capacity = 0 if load_replay_mem or options_.dqn_only_test \
+            mem_capacity = 0 if self.load_replay_mem or options_.dqn_only_test \
                 else self._max_replay_buffer_size()
             self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-                mem_capacity, self.env.observation_space.shape, options_.rl_batch_size,
-                options_.rl_burn_in)
+                mem_capacity,
+                self.env.observation_space.shape,
+                options_.rl_batch_size,
+                options_.dqn_burn_in,
+                use_normalization=options_.dqn_normalize)
 
             self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
                                options_).to(rl_env.device)
@@ -207,8 +247,11 @@ class DQNTrainer:
         mem_capacity = 0 if self.load_replay_mem or self.options.dqn_only_test \
             else self._max_replay_buffer_size()
         self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-            mem_capacity, self.env.observation_space.shape, self.options.rl_batch_size,
-            self.options.rl_burn_in)
+            mem_capacity,
+            self.env.observation_space.shape,
+            self.options.rl_batch_size,
+            self.options.dqn_burn_in,
+            use_normalization=self.options.dqn_normalize)
 
         # Initialize policy
         self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
@@ -249,8 +292,11 @@ class DQNTrainer:
                                         f'capacity {mem_capacity}.')
 
                     self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-                        mem_capacity, self.env.observation_space.shape, self.options.rl_batch_size,
-                        self.options.rl_burn_in)
+                        mem_capacity,
+                        self.env.observation_space.shape,
+                        self.options.rl_batch_size,
+                        self.options.dqn_burn_in,
+                        use_normalization=self.options.dqn_normalize)
                     self.logger.info('Finished allocating replay buffer.')
                     self.policy.memory = self.replay_memory
 
@@ -263,17 +309,21 @@ class DQNTrainer:
             obs, _ = self.env.reset()
             done = False
             total_reward = 0
-            episode_actions = []
             cnt_repeated_actions = 0
             while not done:
                 epsilon = get_epsilon(self.steps, self.options)
-                action = self.policy.get_action(obs, epsilon, episode_actions)
+                action = self.policy.get_action(obs, epsilon, None)
+                # Format of observation is [bs, img_height + 2, img_width], where first
+                # img_height rows are reconstruction, next line is the mask, and final line is
+                # the mask embedding
+                is_repeated_action = bool(
+                    obs[0, -2, action + self.options.initial_num_lines_per_side])
+
+                assert not (self.options.no_replacement_policy and is_repeated_action)
+
                 next_obs, reward, done, _ = self.env.step(action)
                 self.steps += 1
-                is_zero_target = (
-                    done or
-                    action in episode_actions) if self.options.no_replacement_policy else done
-                self.policy.add_experience(obs, action, next_obs, reward, is_zero_target)
+                self.policy.add_experience(obs, action, next_obs, reward, done)
                 loss, grad_norm, mean_q_values, std_q_values = self.policy.update_parameters(
                     self.target_net)
 
@@ -292,8 +342,8 @@ class DQNTrainer:
 
                 total_reward += reward
                 obs = next_obs
-                cnt_repeated_actions += int(action in episode_actions)
-                episode_actions.append(action)
+
+                cnt_repeated_actions += int(is_repeated_action)
 
             # Adding per-episode tensorboard logs
             self.writer.add_scalar('episode_reward', total_reward, self.episode)
