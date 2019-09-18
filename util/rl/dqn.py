@@ -180,8 +180,8 @@ class DDQN(nn.Module):
         self.optimizer.step()
 
         return loss, grad_norm, \
-               all_q_values_cur.detach().mean().cpu().numpy(), \
-               all_q_values_cur.detach().std().cpu().numpy()
+               q_values.detach().mean().cpu().numpy(), \
+               q_values.detach().std().cpu().numpy()
 
     def init_episode(self):
         pass
