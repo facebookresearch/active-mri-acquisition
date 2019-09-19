@@ -241,7 +241,7 @@ class ReconstructionEnv:
             observation = {
                 'reconstruction': reconstruction,
                 'mask': self._current_mask,
-                'mask_embedding': mask_embedding[0, :, ...]
+                'mask_embedding': mask_embedding
             }
 
             if self.options.obs_to_numpy:
@@ -335,7 +335,7 @@ class ReconstructionEnv:
     def get_evaluator_action(self, obs: Dict[str, torch.Tensor]) -> int:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
-            assert self.options.obs_type == 'mask_embedding' and not self.options.obs_to_numpy
+            assert not self.options.obs_type == 'fourier_space' and not self.options.obs_to_numpy
             k_space_scores = self._evaluator(obs['reconstruction'].to(device),
                                              obs['mask_embedding'].to(device))
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)

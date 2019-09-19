@@ -12,9 +12,7 @@ class RLOptions(BaseOptions):
             default=None,
             help='Directory where reconstructor is stored.')
         parser.add_argument(
-            '--obs_type',
-            choices=['fourier_space', 'image_space', 'mask_embedding'],
-            default='fourier_space')
+            '--obs_type', choices=['fourier_space', 'image_space'], default='fourier_space')
         parser.add_argument('--obs_to_numpy', action='store_true')
         parser.add_argument(
             '--policy',
