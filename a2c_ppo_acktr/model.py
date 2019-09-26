@@ -52,26 +52,26 @@ class CNNBase(nn.Module):
 
         self.output_size = hidden_size
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+        init_conv = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0), nn.init.calculate_gain('relu'))
 
         self.actor_critic_shared = nn.Sequential(
-            init_(nn.Conv2d(input_channels, number_of_filters, kernel_size=4, stride=2, padding=1)),
+            init_conv(nn.Conv2d(input_channels, number_of_filters, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2, True),
-            init_(nn.Conv2d(number_of_filters, number_of_filters * 2, kernel_size=4, stride=2, padding=1)),
+            init_conv(nn.Conv2d(number_of_filters, number_of_filters * 2, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2, True),
-            init_(nn.Conv2d(number_of_filters * 2, number_of_filters * 2 * 2, kernel_size=4, stride=2, padding=1)),
+            init_conv(nn.Conv2d(number_of_filters * 2, number_of_filters * 2 * 2, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2, True),
-            init_(nn.Conv2d(number_of_filters * 2 * 2, hidden_size, kernel_size=4, stride=2, padding=1)),
+            init_conv(nn.Conv2d(number_of_filters * 2 * 2, hidden_size, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2, True),
             nn.AvgPool2d(kernel_size=8),
             Flatten(),
-            init_(nn.Linear(hidden_size, hidden_size)), nn.ReLU())
+            init_conv(nn.Linear(hidden_size, hidden_size)), nn.ReLU())
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+        init_linear = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0))
 
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+        self.critic_linear = init_linear(nn.Linear(hidden_size, 1))
 
         self.train()
 
