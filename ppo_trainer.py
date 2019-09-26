@@ -7,15 +7,20 @@ from rl_env import ReconstructionEnv, generate_initial_mask
 from tensorboardX import SummaryWriter
 
 import gym
-import numpy as np
 import os
-import time
 import torch
-from collections import deque
 from gym.envs.registration import register
 
 
 def make_env(opts):
+    """
+    Registers environment in openAI gym
+    Args:
+        opts: options required to instantiate the environment
+
+    Returns: Wrapped environment
+
+    """
     env_id = 'ReconstructionEnv-v0'
     register(id=env_id, entry_point='rl_env:ReconstructionEnv',
              kwargs={'initial_mask': generate_initial_mask(num_lines=opts.initial_num_lines),
@@ -25,6 +30,17 @@ def make_env(opts):
 
 
 def populate_experience_replay(rl_opts, env, actor_critic, rollouts):
+    """
+    Populates the experience replay buffer
+    Args:
+        rl_opts: RL Environment and PPO specific options
+        env: gym environment
+        actor_critic: object of the Policy class
+        rollouts: object of the experience replay buffer (storage class)
+
+    Returns: cumulative reward till budget reaches
+
+    """
     episode_reward = 0
     for step in range(rl_opts.budget):
         with torch.no_grad():
@@ -46,6 +62,14 @@ def populate_experience_replay(rl_opts, env, actor_critic, rollouts):
 
 
 def train(rl_opts):
+    """
+    PPO trainer class
+    Args:
+        rl_opts: RL environment and PPO specific options
+
+    Returns:
+
+    """
     env = make_env(rl_opts)
     writer = SummaryWriter(rl_opts.checkpoints_dir)
 
