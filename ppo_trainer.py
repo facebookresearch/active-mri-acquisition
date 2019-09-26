@@ -3,8 +3,8 @@ import options.rl_options
 from a2c_ppo_acktr.model import Policy
 from a2c_ppo_acktr.storage import RolloutStorage
 from a2c_ppo_acktr import algo, utils
-from options.train_options import TrainOptions
 from rl_env import ReconstructionEnv, generate_initial_mask
+from tensorboardX import SummaryWriter
 
 import gym
 import numpy as np
@@ -24,11 +24,30 @@ def make_env(opts):
     return env
 
 
-def main(rl_opts):
-    env = make_env(rl_opts)
-    print(env.observation_space)
+def populate_experience_replay(rl_opts, env, actor_critic, rollouts):
+    episode_reward = 0
+    for step in range(rl_opts.budget):
+        with torch.no_grad():
+            value, action, action_log_prob = actor_critic.act(
+                rollouts.obs[step])
 
-    # envs = env
+        # Observe reward and next obs
+        obs, reward, done, _ = env.step(action)
+
+        # If done then clean the history of observations.
+        masks = torch.FloatTensor([0.0] if done else [1.0])
+
+        rollouts.insert(obs, action,
+                        action_log_prob, value, reward, masks)
+
+        episode_reward += reward
+
+    return episode_reward
+
+
+def train(rl_opts):
+    env = make_env(rl_opts)
+    writer = SummaryWriter(rl_opts.checkpoints_dir)
 
     actor_critic = Policy(
         env.observation_space.shape,
@@ -53,37 +72,20 @@ def main(rl_opts):
     rollouts.obs[0].copy_(torch.from_numpy(obs))
     rollouts.to(rl_opts.device)
 
-    episode_rewards = deque(maxlen=10)
+    total_reward = 0
 
-    start = time.time()
-    num_updates = int(
-        rl_opts.num_env_steps) // rl_opts.num_steps // rl_opts.num_processes
-    for j in range(num_updates):
-
+    #     rl_opts.num_env_steps) // rl_opts.num_steps // rl_opts.num_processes
+    num_updates = rl_opts.num_steps
+    for update_step in range(num_updates):
+        obs, _ = env.reset()
         if rl_opts.use_linear_lr_decay:
             # decrease learning rate linearly
             utils.update_linear_schedule(
-                agent.optimizer, j, num_updates,
+                agent.optimizer, update_step, num_updates,
                 rl_opts.lr_ppo_actor_critic)
 
-        for step in range(rl_opts.budget):
-            # Sample actions
-            with torch.no_grad():
-                value, action, action_log_prob = actor_critic.act(
-                    rollouts.obs[step])
-
-            # Observe reward and next obs
-            obs, reward, done, infos = env.step(action)
-
-            for info in infos:
-                if 'episode' in info.keys():
-                    episode_rewards.append(info['episode']['r'])
-
-            # If done then clean the history of observations.
-            masks = torch.FloatTensor([0.0] if done else [1.0])
-
-            rollouts.insert(obs, action,
-                            action_log_prob, value, reward, masks)
+        episode_reward = populate_experience_replay(rl_opts, env, actor_critic, rollouts)
+        total_reward += episode_reward
 
         with torch.no_grad():
             next_value = actor_critic.get_value(rollouts.obs[-1]).detach()
@@ -95,24 +97,25 @@ def main(rl_opts):
 
         rollouts.after_update()
 
+        # Tensorboard Plots
+        # print(value_loss, update_step)
+        writer.add_scalar('cumulative_reward', total_reward, update_step)
+        writer.add_scalar('value_loss', value_loss, update_step)
+        writer.add_scalar('action_loss', action_loss, update_step)
+
         # save for every interval-th episode or for the last epoch
-        if (j % rl_opts.save_interval == 0
-            or j == num_updates - 1) and rl_opts.checkpoints_dir != "":
+        if (update_step % rl_opts.save_interval == 0
+            or update_step == num_updates - 1) and rl_opts.checkpoints_dir != "":
 
             torch.save([
                 actor_critic
             ], os.path.join(rl_opts.checkpoints_dir + "ppo.pt"))
 
-        if j % rl_opts.log_interval == 0 and len(episode_rewards) > 1:
-            total_num_steps = (j + 1) * rl_opts.num_processes * rl_opts.num_steps
-            end = time.time()
+        if update_step % rl_opts.log_interval == 0:
             print(
-                "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
-                    .format(j, total_num_steps,
-                            int(total_num_steps / (end - start)),
-                            len(episode_rewards), np.mean(episode_rewards),
-                            np.median(episode_rewards), np.min(episode_rewards),
-                            np.max(episode_rewards), dist_entropy, value_loss,
+                "Update step: {}/{}, total reward; {}, distribution entropy: {} \n Value Loss: {:.1f} Action Loss: {:.1f}\n"
+                    .format(update_step, num_updates,
+                            total_reward, dist_entropy, value_loss,
                             action_loss))
 
 
@@ -121,9 +124,9 @@ if __name__ == '__main__':
     opts = options.rl_options.RLOptions().parse()
 
     opts.batchSize = 1
-    opts.mask_type = 'grid'  # This is ignored, only here for compatibility with loader
+    opts.mask_type = 'grid'
 
-    opts.checkpoints_dir = '/checkpoint/sumanab/active_acq'
+    opts.checkpoints_dir = '/checkpoint/sumanab/ppo'
     opts.reconstructor_dir = '/checkpoint/sumanab/active_acq'
     opts.evaluator_dir = '/checkpoint/sumanab/active_acq/evaluator'
 
@@ -133,16 +136,4 @@ if __name__ == '__main__':
     if not os.path.isdir(opts.checkpoints_dir):
         os.makedirs(opts.checkpoints_dir)
 
-    main(opts)
-
-
-
-    # rl_opts = options.rl_options.RLOptions().parse()
-    # # if rl_opts.results_dir is None:
-    # #     rl_opts.results_dir = rl_opts.checkpoints_dir
-    #
-    # train_opts = TrainOptions().parse()
-    # train_opts.device = torch.device('cuda:{}'.format(
-    #     train_opts.gpu_ids[0])) if train_opts.gpu_ids else torch.device('cpu')
-    #
-    # main(rl_opts, train_opts)
+    train(opts)

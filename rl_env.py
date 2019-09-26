@@ -126,13 +126,13 @@ class ReconstructionEnv(gym.Env):
             number_of_filters=reconstructor_checkpoint['options'].number_of_reconstructor_filters,
             number_of_layers_residual_bottleneck=reconstructor_checkpoint['options']
             .number_of_layers_residual_bottleneck,
-            mask_embed_dim=checkpoint['options'].mask_embed_dim,
-            dropout_probability=checkpoint['options'].dropout_probability,
-            img_width=checkpoint['options'].image_width,  # TODO : CHANGE!
-            use_deconv=checkpoint['options'].use_deconv)
+            mask_embed_dim=reconstructor_checkpoint['options'].mask_embed_dim,
+            dropout_probability=reconstructor_checkpoint['options'].dropout_probability,
+            img_width=reconstructor_checkpoint['options'].image_width,
+            use_deconv=reconstructor_checkpoint['options'].use_deconv)
         self._reconstructor.load_state_dict(
             {key.replace('module.', ''): val
-             for key, val in checkpoint['reconstructor'].items()})
+             for key, val in reconstructor_checkpoint['reconstructor'].items()})
         self._reconstructor.to(device)
         logging.info('Loaded reconstructor from checkpoint.')
 
