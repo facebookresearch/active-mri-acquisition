@@ -96,20 +96,18 @@ def train(rl_opts):
     rollouts.obs[0].copy_(torch.from_numpy(obs))
     rollouts.to(rl_opts.device)
 
-    total_reward = 0
+    # total_reward = 0
 
-    #     rl_opts.num_env_steps) // rl_opts.num_steps // rl_opts.num_processes
-    num_updates = rl_opts.num_steps
-    for update_step in range(num_updates):
+    for update_step in range(rl_opts.num_updates):
         obs, _ = env.reset()
         if rl_opts.use_linear_lr_decay:
             # decrease learning rate linearly
             utils.update_linear_schedule(
-                agent.optimizer, update_step, num_updates,
+                agent.optimizer, update_step, rl_opts.num_updates,
                 rl_opts.lr_ppo_actor_critic)
 
         episode_reward = populate_experience_replay(rl_opts, env, actor_critic, rollouts)
-        total_reward += episode_reward
+        # total_reward += episode_reward
 
         with torch.no_grad():
             next_value = actor_critic.get_value(rollouts.obs[-1]).detach()
@@ -123,13 +121,13 @@ def train(rl_opts):
 
         # Tensorboard Plots
         # print(value_loss, update_step)
-        writer.add_scalar('cumulative_reward', total_reward, update_step)
+        writer.add_scalar('cumulative_reward', episode_reward, update_step)
         writer.add_scalar('value_loss', value_loss, update_step)
         writer.add_scalar('action_loss', action_loss, update_step)
 
         # save for every interval-th episode or for the last epoch
         if (update_step % rl_opts.save_interval == 0
-            or update_step == num_updates - 1) and rl_opts.checkpoints_dir != "":
+            or update_step == rl_opts.num_updates - 1) and rl_opts.checkpoints_dir != "":
 
             torch.save([
                 actor_critic
@@ -139,8 +137,8 @@ def train(rl_opts):
             print(
                 "Update step: {}/{}, total reward; {}, distribution entropy: {} \n"
                 "Value Loss: {:.1f} Action Loss: {:.1f}\n"
-                    .format(update_step, num_updates,
-                            total_reward, dist_entropy, value_loss,
+                    .format(update_step, rl_opts.num_updates,
+                            episode_reward, dist_entropy, value_loss,
                             action_loss))
 
 
@@ -150,6 +148,7 @@ if __name__ == '__main__':
 
     opts.batchSize = 1
     opts.budget = 50
+    opts.num_updates = 100000
     opts.mask_type = 'grid'
 
     opts.checkpoints_dir = '/checkpoint/sumanab/ppo'
