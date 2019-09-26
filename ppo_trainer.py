@@ -149,7 +149,6 @@ if __name__ == '__main__':
     opts = options.rl_options.RLOptions().parse()
 
     opts.batchSize = 1
-    opts.dataroot = 'KNEE'
     opts.budget = 50
     opts.mask_type = 'grid'
 
