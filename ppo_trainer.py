@@ -137,7 +137,8 @@ def train(rl_opts):
 
         if update_step % rl_opts.log_interval == 0:
             print(
-                "Update step: {}/{}, total reward; {}, distribution entropy: {} \n Value Loss: {:.1f} Action Loss: {:.1f}\n"
+                "Update step: {}/{}, total reward; {}, distribution entropy: {} \n"
+                "Value Loss: {:.1f} Action Loss: {:.1f}\n"
                     .format(update_step, num_updates,
                             total_reward, dist_entropy, value_loss,
                             action_loss))
@@ -148,6 +149,8 @@ if __name__ == '__main__':
     opts = options.rl_options.RLOptions().parse()
 
     opts.batchSize = 1
+    opts.dataroot = 'KNEE'
+    opts.budget = 50
     opts.mask_type = 'grid'
 
     opts.checkpoints_dir = '/checkpoint/sumanab/ppo'
