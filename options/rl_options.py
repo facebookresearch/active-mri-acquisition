@@ -63,8 +63,9 @@ class RLOptions(BaseOptions):
             help='Full path to the evaluator++ model to use.')
 
         # Reinforcement learning options
-        parser.add_argument('--rl_model_type', choices=['cnn_plus_masks'], default='cnn_plus_masks')
+        parser.add_argument('--dqn_model_type', choices=['basic', 'evaluator'], default='evaluator')
         parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
+        parser.add_argument('--dqn_normalize', dest='dqn_normalize', action='store_true')
         parser.add_argument(
             '--dqn_only_test',
             dest='dqn_only_test',
@@ -75,24 +76,24 @@ class RLOptions(BaseOptions):
             type=str,
             default=None,
             help='Where to load the DQN weights from if dqn_only_test is used.')
-        parser.add_argument('--replay_buffer_size', type=int, default=100000)
+        parser.add_argument('--replay_buffer_size', type=int, default=1000000)
         parser.add_argument('--epsilon_start', type=float, default=0.99)
-        parser.add_argument('--epsilon_end', type=float, default=0.01)
-        parser.add_argument('--epsilon_decay', type=float, default=10000)
+        parser.add_argument('--epsilon_end', type=float, default=0.001)
+        parser.add_argument('--epsilon_decay', type=float, default=500000)
         parser.add_argument('--dqn_learning_rate', type=float, default=6.25e-5)
-        parser.add_argument('--num_train_steps', type=int, default=1000000)
+        parser.add_argument('--num_train_steps', type=int, default=5000000)
         parser.add_argument('--rl_batch_size', type=int, default=16)
         parser.add_argument('--test_set', choices=['train', 'val', 'test'], default='test')
         parser.add_argument(
-            '--rl_burn_in',
+            '--dqn_burn_in',
             type=int,
             default=200,
             help='Before this many steps nothing will be sampled from the replay buffer.')
         parser.add_argument('--dqn_test_episode_freq', type=int, default=20)
-        parser.add_argument('--target_net_update_freq', type=int, default=500)
-        parser.add_argument('--gamma', type=float, default=0.999)
+        parser.add_argument('--target_net_update_freq', type=int, default=5000)
+        parser.add_argument('--gamma', type=float, default=0.5)
         parser.add_argument(
-            '--no_replacement_policy', dest='no_replacement_policy', action='store_true')
+            '--no_replacement_policy', dest='no_replacement_policy', action='store_false')
 
         self.isTrain = False
         return parser
