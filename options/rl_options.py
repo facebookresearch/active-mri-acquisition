@@ -12,7 +12,7 @@ class RLOptions(BaseOptions):
             default=None,
             help='Directory where reconstructor is stored.')
         parser.add_argument(
-            '--obs_type', choices=['fourier_space', 'image_space'], default='fourier_space')
+            '--obs_type', choices=['fourier_space', 'image_space'], default='image_space')
         parser.add_argument('--obs_to_numpy', action='store_true')
         parser.add_argument(
             '--policy',
@@ -23,7 +23,7 @@ class RLOptions(BaseOptions):
         parser.add_argument('--num_test_images', type=int, default=200)
         parser.add_argument('--num_train_images', type=int, default=10000000)
         parser.add_argument(
-            '--use_reconstructions', dest='use_reconstructions', action='store_false')
+            '--no_use_reconstructions', dest='use_reconstructions', action='store_false')
         parser.add_argument(
             '--use_score_as_reward',
             dest='use_score_as_reward',
@@ -87,11 +87,11 @@ class RLOptions(BaseOptions):
             type=int,
             default=200,
             help='Before this many steps nothing will be sampled from the replay buffer.')
-        parser.add_argument('--dqn_test_episode_freq', type=int, default=20)
+        parser.add_argument('--dqn_test_episode_freq', type=int, default=500)
         parser.add_argument('--target_net_update_freq', type=int, default=5000)
         parser.add_argument('--gamma', type=float, default=0.5)
         parser.add_argument(
-            '--no_replacement_policy', dest='no_replacement_policy', action='store_false')
+            '--allow_replace_actions', dest='no_replacement_policy', action='store_false')
 
         self.isTrain = False
         return parser

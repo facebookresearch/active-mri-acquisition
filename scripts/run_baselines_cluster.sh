@@ -9,13 +9,12 @@ mkdir -p ${LOGS_DIR}/stderr
 
 queue=dev
 
-INIT_LINES=5
+INIT_LINES=10
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
 for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high"; do
     CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors_refactor_rl_env/${NAME}
-#    for policy in "random" "lowfirst" "evaluator_net"; do
-    for policy in "evaluator_net"; do
+    for policy in "random" "lowfirst" "evaluator_net"; do
         obs_type=image_space
         job_name=active_acq_baselines_${NAME}_${policy}
 
@@ -39,7 +38,7 @@ for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high"; do
         echo srun python acquire_rl.py --dataroot KNEE \
         --reconstructor_dir ${CHECKPOINT_DIR} \
         --evaluator_dir ${CHECKPOINT_DIR}/evaluator \
-        --checkpoints_dir ${CHECKPOINT_DIR}/all_baselines_${BASELINES_SUFFIX} \
+        --checkpoints_dir ${CHECKPOINT_DIR}/all_baselines.${BASELINES_SUFFIX} \
         --seed 0 --batchSize 96 --gpu_ids 0 --policy ${policy} \
         --num_train_steps 0 --num_train_images 0 \
         --obs_type ${obs_type} \
@@ -48,8 +47,7 @@ for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high"; do
         --initial_num_lines_per_side ${INIT_LINES} \
         --budget 1000 \
         --num_test_images 1000 \
-        --freq_save_test_stats 50 \
-        --use_reconstructions >> ${SLURM}
+        --freq_save_test_stats 50 >> ${SLURM}
 
          sbatch ${SLURM}
     done
