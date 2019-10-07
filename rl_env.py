@@ -90,6 +90,7 @@ class ReconstructionEnv:
             key.replace('module.', ''): val
             for key, val in reconstructor_checkpoint['reconstructor'].items()
         })
+        self._reconstructor.eval()
         self._reconstructor.to(device)
         logging.info('Loaded reconstructor from checkpoint.')
 
@@ -110,6 +111,7 @@ class ReconstructionEnv:
                 key.replace('module.', ''): val
                 for key, val in evaluator_checkpoint['evaluator'].items()
             })
+            self._evaluator.eval()
             self._evaluator.to(device)
 
         self.observation_space = None  # The observation is a dict unless `obs_to_numpy` is used
