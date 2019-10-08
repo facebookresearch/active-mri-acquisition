@@ -117,10 +117,9 @@ def get_policy(env, writer, logger, options_):
         policy = util.rl.simple_baselines.NextIndexPolicy(
             range(env.action_space.n), not env.conjugate_symmetry)
     elif 'evaluator_net' in options_.policy:
-        assert options_.obs_type == 'mask_embedding'
+        assert options_.obs_type == 'image_space'
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator++' in options_.policy:
-        assert options_.obs_type == 'mask_embedding'
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             options_.options.evaluator_pp_path, options_.initial_num_lines_per_side, rl_env.device)
     elif 'dqn' in options_.policy:

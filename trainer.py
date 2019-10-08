@@ -112,6 +112,9 @@ class Trainer:
         return train_data_loader, val_data_loader
 
     def inference(self, batch):
+        self.reconstructor.eval()
+        self.evaluator.eval()
+
         with torch.no_grad():
             zero_filled_image, ground_truth, mask = preprocess_inputs(batch, self.options.dataroot,
                                                                       self.options.device)
@@ -187,6 +190,9 @@ class Trainer:
 
     # TODO: consider adding learning rate scheduler
     def update(self, batch):
+        self.reconstructor.train()
+        self.evaluator.train()
+
         zero_filled_image, target, mask = preprocess_inputs(batch, self.options.dataroot,
                                                             self.options.device)
 

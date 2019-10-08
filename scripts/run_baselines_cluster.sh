@@ -7,15 +7,15 @@ mkdir -p ${JOBSCRIPTS_DIR}
 mkdir -p ${LOGS_DIR}/stdout
 mkdir -p ${LOGS_DIR}/stderr
 
-queue=learnfair
+queue=dev
 
-BASELINES_SUFFIX=init.num.lines.8
+INIT_LINES=10
+BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
-for NAME in "basic" "basic_rnl" "symmetric_basic" "symmetric_basic_rnl" "grid" "symmetric_grid"; do
-    CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors/${NAME}
+for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high"; do
+    CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors_refactor_rl_env/${NAME}
     for policy in "random" "lowfirst" "evaluator_net"; do
-    #for policy in "evaluator++"; do
-        obs_type=fourier_space
+        obs_type=image_space
         job_name=active_acq_baselines_${NAME}_${policy}
 
         # This creates a slurm script to call training
@@ -38,18 +38,16 @@ for NAME in "basic" "basic_rnl" "symmetric_basic" "symmetric_basic_rnl" "grid" "
         echo srun python acquire_rl.py --dataroot KNEE \
         --reconstructor_dir ${CHECKPOINT_DIR} \
         --evaluator_dir ${CHECKPOINT_DIR}/evaluator \
-        --checkpoints_dir ${CHECKPOINT_DIR}/all_baselines_${BASELINES_SUFFIX} \
+        --checkpoints_dir ${CHECKPOINT_DIR}/all_baselines.${BASELINES_SUFFIX} \
         --seed 0 --batchSize 96 --gpu_ids 0 --policy ${policy} \
         --num_train_steps 0 --num_train_images 0 \
-        --evaluator_pp_path ${CHECKPOINT_DIR}/evaluator_pp_15k/bs_256_lr_0.0003_beta1_0.5_beta2_0.999/best_checkpoint.pth \
         --obs_type ${obs_type} \
         --greedymc_num_samples 60 --greedymc_horizon 1 \
         --sequential_images \
-        --initial_num_lines_per_side 8 \
+        --initial_num_lines_per_side ${INIT_LINES} \
         --budget 1000 \
         --num_test_images 1000 \
-        --freq_save_test_stats 50 \
-        --use_reconstructions >> ${SLURM}
+        --freq_save_test_stats 50 >> ${SLURM}
 
          sbatch ${SLURM}
     done

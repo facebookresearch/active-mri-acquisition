@@ -25,5 +25,4 @@ python tune_dqn.py --dataroot KNEE \
     --obs_type fourier_space \
     --dqn_resume \
     --rl_env_train_no_seed \
-    --budget 11 \
-    --no_replacement_policy
+    --budget 11
