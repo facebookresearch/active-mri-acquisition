@@ -82,11 +82,12 @@ def preprocess_inputs(batch, dataroot, device):
 
 class GANLossKspace(nn.Module):
 
-    def __init__(self, use_lsgan=True, use_mse_as_energy=False, grad_ctx=False, gamma=100):
+    def __init__(self, use_lsgan=True, use_mse_as_energy=False, grad_ctx=False, gamma=100, options=None):
         super(GANLossKspace, self).__init__()
         # self.register_buffer('real_label', torch.ones(imSize, imSize))
         # self.register_buffer('fake_label', torch.zeros(imSize, imSize))
         self.grad_ctx = grad_ctx
+        self.options = options
         if use_lsgan:
             self.loss = nn.MSELoss(size_average=False)
         else:
@@ -109,6 +110,10 @@ class GANLossKspace(nn.Module):
                     target_tensor[:] = degree
             else:
                 pred, gt = pred_and_gt
+                if self.options.dataroot == 'KNEE_RAW':
+                    #TODO: double check if this does not change action assignments
+                    gt = center_crop(gt, [368, 320])
+                    pred = center_crop(pred, [368, 320])
                 w = gt.shape[2]
                 ks_gt = fft(gt, normalized=True)
                 ks_input = fft(pred, normalized=True)
@@ -117,10 +122,6 @@ class GANLossKspace(nn.Module):
                         1, keepdim=True).sum(
                             2, keepdim=True).squeeze() / (2 * w)
                 energy = torch.exp(-ks_row_mse * self.gamma)
-
-                # do some bin process
-                # import pdb; pdb.set_trace()
-                # energy = torch.floor(energy * 10 / self.bin) * self.bin / 10
 
                 target_tensor[:] = energy
             # force observed part to always
