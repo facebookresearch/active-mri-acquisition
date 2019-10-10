@@ -113,7 +113,6 @@ class Trainer:
 
     def inference(self, batch):
         self.reconstructor.eval()
-        self.evaluator.eval()
 
         with torch.no_grad():
             zero_filled_image, ground_truth, mask = preprocess_inputs(batch, self.options.dataroot,
@@ -126,6 +125,7 @@ class Trainer:
             reconstructor_eval = None
             ground_truth_eval = None
             if self.evaluator is not None:
+                self.evaluator.eval()
                 reconstructor_eval = self.evaluator(reconstructed_image, mask_embedding)
                 ground_truth_eval = self.evaluator(ground_truth, mask_embedding)
 
@@ -191,7 +191,6 @@ class Trainer:
     # TODO: consider adding learning rate scheduler
     def update(self, batch):
         self.reconstructor.train()
-        self.evaluator.train()
 
         zero_filled_image, target, mask = preprocess_inputs(batch, self.options.dataroot,
                                                             self.options.device)
@@ -206,6 +205,7 @@ class Trainer:
         loss_G_GAN = 0
         loss_D = torch.tensor(0.)
         if self.evaluator is not None:
+            self.evaluator.train()
             self.optimizers['D'].zero_grad()
             fake = reconstructed_image
             detached_fake = fake.detach()
