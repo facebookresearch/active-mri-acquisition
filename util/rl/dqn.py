@@ -130,6 +130,7 @@ class DDQN(nn.Module):
         return torch.argmax(q_values, dim=1).item()
 
     def get_action(self, observation, eps_threshold, _):
+        self.model.eval()
         if self.opts.no_replacement_policy:
             return self._get_action_no_replacement(observation, eps_threshold)
         else:
@@ -139,6 +140,7 @@ class DDQN(nn.Module):
         self.memory.push(observation, action, next_observation, reward, done)
 
     def update_parameters(self, target_net):
+        self.model.train()
         batch = self.memory.sample()
         if batch is None:
             return None, None, None, None
@@ -160,7 +162,7 @@ class DDQN(nn.Module):
             target_values = torch.zeros(observations.shape[0], device=self.device)
             if not_done_mask.any().item() != 0:
                 best_actions = all_q_values_next.detach().max(1)[1]
-                target_values[not_done_mask] = target_net(next_observations)\
+                target_values[not_done_mask] = target_net.forward(next_observations)\
                     .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
 
             target_values = self.opts.gamma * target_values + rewards
@@ -219,6 +221,7 @@ class DQNTrainer:
                                options_).to(rl_env.device)
             self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, options_).to(
                 rl_env.device)
+            self.target_net.eval()
 
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
