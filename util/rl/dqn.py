@@ -207,21 +207,26 @@ class DQNTrainer:
             self.writer = writer
             self.logger = logger
 
+            self.logger.info('Creating DDQN model.')
+
             # If replay will be loaded set capacity to zero (defer allocation to `__call__()`)
             mem_capacity = 0 if self.load_replay_mem or options_.dqn_only_test \
                 else self._max_replay_buffer_size()
+            self.logger.info(f'Creating replay buffer with capacity {mem_capacity}.')
             self.replay_memory = util.rl.replay_buffer.ReplayMemory(
                 mem_capacity,
                 self.env.observation_space.shape,
                 options_.rl_batch_size,
                 options_.dqn_burn_in,
                 use_normalization=options_.dqn_normalize)
+            self.logger.info('Created replay buffer.')
 
             self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
                                options_).to(rl_env.device)
             self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, options_).to(
                 rl_env.device)
             self.target_net.eval()
+            self.logger.info(f'Created neural networks with {self.env.action_space.n} outputs.')
 
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
@@ -307,6 +312,7 @@ class DQNTrainer:
         """ Trains the DQN policy. """
         self.logger.info(f'Starting training at step {self.steps}/{self.options.num_train_steps}. '
                          f'Best score so far is {self.best_test_score}.')
+        reward_last_1000_images = np.zeros(1000)
         while self.steps < self.options.num_train_steps:
             self.logger.info('Episode {}'.format(self.episode + 1))
             obs, _ = self.env.reset()
@@ -349,8 +355,12 @@ class DQNTrainer:
                 cnt_repeated_actions += int(is_repeated_action)
 
             # Adding per-episode tensorboard logs
+            reward_last_1000_images[self.episode % 1000] = total_reward
             self.writer.add_scalar('episode_reward', total_reward, self.episode)
-            self.writer.add_scalar('cnt_repeated_actions', cnt_repeated_actions, self.episode)
+            self.writer.add_scalar('average_reward_last_1000_episodes',
+                                   np.sum(reward_last_1000_images) / min(self.episode + 1, 1000),
+                                   self.episode)
+            # self.writer.add_scalar('cnt_repeated_actions', cnt_repeated_actions, self.episode)
 
             # Evaluate the current policy
             if (self.episode + 1) % self.options.dqn_test_episode_freq == 0:
@@ -362,6 +372,19 @@ class DQNTrainer:
                     self.best_test_score = test_score
                     self.logger.info(
                         f'Saved DQN model with score {self.best_test_score} to {policy_path}.')
+
+            # Evaluate the current policy on trainig set
+            if (self.episode + 1) % self.options.dqn_eval_train_set_episode_freq == 0 \
+                    and self.options.num_train_images <= 1000:
+                acquire_rl.test_policy(
+                    self.env,
+                    self.policy,
+                    self.writer,
+                    self.logger,
+                    None,
+                    self.episode,
+                    self.options,
+                    test_on_train=True)
 
             self.episode += 1
 
