@@ -27,6 +27,7 @@ SLURM=${JOBSCRIPTS_DIR}/run.${job_name}.slrm
 echo "${SLURM}"
 
 REWARD_METRIC=ssim
+NUM_TRAIN_IMG=100
 
 echo "#!/bin/bash" > ${SLURM}
 echo "#SBATCH --job-name=$job_name" >> ${SLURM}
@@ -45,9 +46,9 @@ echo "cd ${SRC_DIR}" >> ${SLURM}
 
 echo srun python acquire_rl.py --dataroot KNEE \
     --reconstructor_dir ${MODELS_DIR}/${MODEL_TYPE} \
-    --checkpoints_dir ${MODELS_DIR}/${MODEL_TYPE}/ddqn_tr1000_val100/${REWARD_METRIC}/ \
+    --checkpoints_dir ${MODELS_DIR}/${MODEL_TYPE}/ddqn_tr${NUM_TRAIN_IMG}_val100/${REWARD_METRIC}/ \
     --test_set val \
-    --num_train_images 1000 \
+    --num_train_images ${NUM_TRAIN_IMG} \
     --num_test_images 100 \
     --sequential_images \
     --budget 35 \

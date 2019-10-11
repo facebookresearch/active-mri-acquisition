@@ -312,7 +312,8 @@ class DQNTrainer:
         """ Trains the DQN policy. """
         self.logger.info(f'Starting training at step {self.steps}/{self.options.num_train_steps}. '
                          f'Best score so far is {self.best_test_score}.')
-        reward_last_1000_images = np.zeros(1000)
+        window_size = min(self.options.num_train_images, 1000)
+        reward_images_in_window = np.zeros(window_size)
         while self.steps < self.options.num_train_steps:
             self.logger.info('Episode {}'.format(self.episode + 1))
             obs, _ = self.env.reset()
@@ -355,11 +356,11 @@ class DQNTrainer:
                 cnt_repeated_actions += int(is_repeated_action)
 
             # Adding per-episode tensorboard logs
-            reward_last_1000_images[self.episode % 1000] = total_reward
+            reward_images_in_window[self.episode % window_size] = total_reward
             self.writer.add_scalar('episode_reward', total_reward, self.episode)
-            self.writer.add_scalar('average_reward_last_1000_episodes',
-                                   np.sum(reward_last_1000_images) / min(self.episode + 1, 1000),
-                                   self.episode)
+            self.writer.add_scalar(
+                'average_reward_images_in_window',
+                np.sum(reward_images_in_window) / min(self.episode + 1, window_size), self.episode)
             # self.writer.add_scalar('cnt_repeated_actions', cnt_repeated_actions, self.episode)
 
             # Evaluate the current policy
