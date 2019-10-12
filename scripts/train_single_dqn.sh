@@ -28,6 +28,7 @@ echo "${SLURM}"
 
 REWARD_METRIC=ssim
 NUM_TRAIN_IMG=1000
+USE_SCORE_AS_REWARD='--use_score_as_reward'    # Use empty string for false
 
 echo "#!/bin/bash" > ${SLURM}
 echo "#SBATCH --job-name=$job_name" >> ${SLURM}
@@ -39,7 +40,7 @@ echo "#SBATCH --cpus-per-task=2" >> ${SLURM}
 echo "#SBATCH --ntasks-per-node=1" >> ${SLURM}
 echo "#SBATCH --mem=256000" >> ${SLURM}
 echo "#SBATCH --time=4320" >> ${SLURM}
-#echo "#SBATCH --comment=\"Long job that requires cumbersome preemption\"" >> ${SLURM}
+echo "#SBATCH --comment=\"Long job that requires cumbersome preemption. CVPR 11/15\"" >> ${SLURM}
 echo "#SBATCH --nodes=1" >> ${SLURM}
 
 echo "cd ${SRC_DIR}" >> ${SLURM}
@@ -67,6 +68,7 @@ echo srun python acquire_rl.py --dataroot KNEE \
     --dqn_burn_in 1000 \
     --rl_batch_size 16 \
     --reward_metric ${REWARD_METRIC} \
+    ${USE_SCORE_AS_REWARD} \
     --replay_buffer_size 200000 >> ${SLURM}
 
 sbatch ${SLURM}

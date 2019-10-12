@@ -101,7 +101,7 @@ def get_experiment_str(options_):
             f'edecay{options_.epsilon_decay}.gamma{options_.gamma}.' \
             f'lr{options_.dqn_learning_rate}.repbuf{options_.replay_buffer_size}' \
             f'norepl{int(options_.no_replacement_policy)}.nimgtr{options_.num_train_images}.' \
-            f'metric{options_.reward_metric}.'
+            f'metric{options_.reward_metric}.usescoasrew{int(options_.use_score_as_reward)}'
     else:
         policy_str = options_.policy
         if 'greedymc' in options_.policy:
