@@ -86,9 +86,9 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_, test_
             np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
     end = time.time()
     logger.debug('Test run lasted {} seconds.'.format(end - start))
-    test_score = compute_test_score_from_stats(statistics['mse'])
+    test_score = compute_test_score_from_stats(statistics[options_.reward_metric])
     split = 'train' if test_on_train else 'test'
-    writer.add_scalar(f'eval/{split}_score__mean_auc_mse', test_score, step)
+    writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc_mse', test_score, step)
     env.set_training()
 
     return test_score
