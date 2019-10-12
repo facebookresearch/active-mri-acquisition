@@ -204,13 +204,12 @@ class ReconstructionEnv:
             new_mask[-(line_to_scan + 1)] = 1
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
-    def compute_score(
-            self,
-            use_reconstruction: bool = True,
-            ground_truth: Optional[torch.Tensor] = None,
-            mask_to_use: Optional[torch.Tensor] = None,
-            k_space: Optional[torch.Tensor] = None,
-    ) -> List[Dict[str, torch.Tensor]]:
+    def compute_score(self,
+                      use_reconstruction: bool = True,
+                      ground_truth: Optional[torch.Tensor] = None,
+                      mask_to_use: Optional[torch.Tensor] = None,
+                      k_space: Optional[torch.Tensor] = None,
+                      use_current_score: bool = False) -> List[Dict[str, torch.Tensor]]:
         """ Computes the score (MSE or SSIM) of current state with respect to current ground truth.
 
             This method takes the current ground truth, masks it with the current mask and creates
@@ -226,7 +225,11 @@ class ReconstructionEnv:
             @:param `ground_truth`: specifies if the score has to be computed with respect to an
                 alternate "ground truth".
             @:param `mask_to_use`: specifies if the score has to be computed with an alternate mask.
+            @:param `k_space`: specifies if the score has to be computed with an alternate k-space.
+            @:param `use_current_score`: If true, the method returns the saved current score.
         """
+        if use_current_score:
+            return [self._current_score]
         with torch.no_grad():
             if ground_truth is None:
                 ground_truth = self._ground_truth
@@ -326,7 +329,7 @@ class ReconstructionEnv:
         self._current_mask = self._initial_mask
         self._scans_left = min(self.options.budget, self.action_space.n)
         observation, score = self._compute_observation_and_score()
-        self._current_score = score[self.options.reward_metric]
+        self._current_score = score
         return observation, info
 
     def step(self, action: int) -> Tuple[Dict[str, torch.Tensor], float, bool, Dict]:
@@ -339,13 +342,14 @@ class ReconstructionEnv:
             self._current_mask, action)
         observation, new_score = self._compute_observation_and_score()
 
-        reward_ = new_score[self.options.reward_metric] if self.options.use_score_as_reward \
-            else new_score[self.options.reward_metric] - self._current_score
+        metric = self.options.reward_metric
+        reward_ = new_score[metric] if self.options.use_score_as_reward \
+            else new_score[metric] - self._current_score[metric]
         factor = 1 if self.options.use_score_as_reward else 100
         if self.options.reward_metric == 'mse':
             factor *= -1  # We try to minimize MSE, but DQN maximizes
         reward = -1.0 if has_already_been_scanned else reward_.item() * factor
-        self._current_score = new_score[self.options.reward_metric]
+        self._current_score = new_score
 
         self._scans_left -= 1
         done = (self._scans_left == 0)

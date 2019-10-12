@@ -27,7 +27,7 @@ SLURM=${JOBSCRIPTS_DIR}/run.${job_name}.slrm
 echo "${SLURM}"
 
 REWARD_METRIC=ssim
-NUM_TRAIN_IMG=100
+NUM_TRAIN_IMG=1000
 
 echo "#!/bin/bash" > ${SLURM}
 echo "#SBATCH --job-name=$job_name" >> ${SLURM}
