@@ -228,6 +228,9 @@ class DQNTrainer:
             self.target_net.eval()
             self.logger.info(f'Created neural networks with {self.env.action_space.n} outputs.')
 
+            self.window_size = min(self.options.num_train_images, 1000)
+            self.reward_images_in_window = np.zeros(self.window_size)
+
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
 
@@ -236,8 +239,7 @@ class DQNTrainer:
         print(f'Checkpoint dir for this job is {self.options.checkpoints_dir}', flush=True)
 
         # Initialize writer and logger
-        self.writer = tensorboardX.SummaryWriter(
-            os.path.join(self.options.checkpoints_dir, 'tb_logs'))
+        self.writer = tensorboardX.SummaryWriter(os.path.join(self.options.checkpoints_dir))
         self.logger = logging.getLogger()
         self.logger.setLevel(logging.DEBUG)
         fh = logging.FileHandler(os.path.join(self.options.checkpoints_dir, 'train.log'))
@@ -248,6 +250,8 @@ class DQNTrainer:
 
         # Initialize environment
         self.env = rl_env.ReconstructionEnv(self.options)
+        self.options.mask_embedding_dim = self.env.metadata['mask_embed_dim']
+        self.options.image_width = self.env.image_width
         self.env.set_training()
         self.logger.info(f'Created environment with {self.env.action_space.n} actions')
 
@@ -267,6 +271,9 @@ class DQNTrainer:
         self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, self.options).to(
             rl_env.device)
 
+        self.window_size = min(self.options.num_train_images, 1000)
+        self.reward_images_in_window = np.zeros(self.window_size)
+
     def load_checkpoint_if_needed(self):
         if self.options.dqn_only_test:
             policy_path = os.path.join(self.options.dqn_weights_dir, 'policy_best.pt')
@@ -283,6 +290,7 @@ class DQNTrainer:
                 self.load(policy_path)
                 self.logger.info(f'Loaded DQN policy found at {policy_path}. Steps was set to '
                                  f'{self.steps}. Episodes set to {self.episode}.')
+                self.env._image_idx_train = self.episode + 1
             else:
                 self.logger.info(f'No policy found at {policy_path}, continue without checkpoint.')
             if self.load_replay_mem:
@@ -312,8 +320,6 @@ class DQNTrainer:
         """ Trains the DQN policy. """
         self.logger.info(f'Starting training at step {self.steps}/{self.options.num_train_steps}. '
                          f'Best score so far is {self.best_test_score}.')
-        window_size = min(self.options.num_train_images, 1000)
-        reward_images_in_window = np.zeros(window_size)
         while self.steps < self.options.num_train_steps:
             self.logger.info('Episode {}'.format(self.episode + 1))
             obs, _ = self.env.reset()
@@ -356,11 +362,12 @@ class DQNTrainer:
                 cnt_repeated_actions += int(is_repeated_action)
 
             # Adding per-episode tensorboard logs
-            reward_images_in_window[self.episode % window_size] = total_reward
+            self.reward_images_in_window[self.episode % self.window_size] = total_reward
             self.writer.add_scalar('episode_reward', total_reward, self.episode)
             self.writer.add_scalar(
                 'average_reward_images_in_window',
-                np.sum(reward_images_in_window) / min(self.episode + 1, window_size), self.episode)
+                np.sum(self.reward_images_in_window) / min(self.episode + 1, self.window_size),
+                self.episode)
             # self.writer.add_scalar('cnt_repeated_actions', cnt_repeated_actions, self.episode)
 
             # Evaluate the current policy
@@ -420,6 +427,7 @@ class DQNTrainer:
             'episode': self.episode,
             'steps': self.steps,
             'best_test_score': self.best_test_score,
+            'reward_images_in_window': self.reward_images_in_window
         }, path)
 
     def load(self, path):
@@ -427,5 +435,6 @@ class DQNTrainer:
         self.policy.load_state_dict(checkpoint['dqn_weights'])
         self.target_net.load_state_dict(checkpoint['target_weights'])
         self.steps = checkpoint['steps']
-        self.episode = checkpoint['episode']
+        self.episode = checkpoint['episode'] + 1
         self.best_test_score = checkpoint['best_test_score']
+        self.reward_images_in_window = checkpoint['reward_images_in_window']
