@@ -28,5 +28,11 @@ if __name__ == '__main__':
     print(f'Submitit logs dir will be stored at: {submitit_logs_dir}')
 
     executor = submitit.SlurmExecutor(submitit_logs_dir, max_num_timeout=3)
-    executor.update_parameters(num_gpus=1, partition='dev', cpus_per_task=2, mem=64000, time=4320)
+    executor.update_parameters(
+        num_gpus=1,
+        partition='learnfair',
+        cpus_per_task=2,
+        mem=256000,
+        time=4320,
+        job_name='train_dqn_ssim')
     executor.submit(trainer_)
