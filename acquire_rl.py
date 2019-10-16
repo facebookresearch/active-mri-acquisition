@@ -38,9 +38,9 @@ def compute_test_score_from_stats(statistics):
     return score
 
 
-def test_policy(env, policy, writer, logger, num_episodes, step, options_):
+def test_policy(env, policy, writer, logger, num_episodes, step, options_, test_on_train=False):
     """ Evaluates a given policy for the environment on the test set. """
-    env.set_testing()
+    env.set_testing(use_training_set=test_on_train)
     average_total_reward = 0
     episode = 0
     statistics = {'mse': {}, 'ssim': {}, 'psnr': {}}
@@ -66,12 +66,13 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
             total_reward += reward
             obs = next_obs
             episode_step += 1
-            reconstruction_results = env.compute_score(options_.use_reconstructions)[0]
+            reconstruction_results = env.compute_score(use_current_score=True)[0]
             update_statistics(reconstruction_results, episode_step, statistics)
         average_total_reward += total_reward
         all_actions.append(actions)
         logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
-        if episode % options_.freq_save_test_stats == 0 or episode == num_episodes:
+        if not test_on_train and \
+                ((episode % options_.freq_save_test_stats == 0) or (episode == num_episodes)):
             logger.info(f'Episode {episode}. Saving statistics to {options_.checkpoints_dir}.')
             np.save(
                 os.path.join(options_.checkpoints_dir, 'test_stats_mse_{}'.format(episode)),
@@ -85,8 +86,9 @@ def test_policy(env, policy, writer, logger, num_episodes, step, options_):
             np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
     end = time.time()
     logger.debug('Test run lasted {} seconds.'.format(end - start))
-    test_score = compute_test_score_from_stats(statistics['mse'])
-    writer.add_scalar('eval/test_score__mean_auc_mse', test_score, step)
+    test_score = compute_test_score_from_stats(statistics[options_.reward_metric])
+    split = 'train' if test_on_train else 'test'
+    writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc_mse', test_score, step)
     env.set_training()
 
     return test_score
@@ -97,7 +99,9 @@ def get_experiment_str(options_):
         policy_str = f'{options_.obs_type}.tupd{options_.target_net_update_freq}.' \
             f'bs{options_.rl_batch_size}.' \
             f'edecay{options_.epsilon_decay}.gamma{options_.gamma}.' \
-            f'norepl{int(options_.no_replacement_policy)}.nimgtr{options_.num_train_images}.'
+            f'lr{options_.dqn_learning_rate}.repbuf{options_.replay_buffer_size}' \
+            f'norepl{int(options_.no_replacement_policy)}.nimgtr{options_.num_train_images}.' \
+            f'metric{options_.reward_metric}.usescoasrew{int(options_.use_score_as_reward)}'
     else:
         policy_str = options_.policy
         if 'greedymc' in options_.policy:

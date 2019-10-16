@@ -1,12 +1,12 @@
 import argparse
 import logging
 import os
+from enum import Enum
 
 import gym.spaces
 import numpy as np
 import torch
 import torch.nn.functional as F
-# from gym.envs.registration import register
 from typing import Dict, List, Optional, Tuple, Union
 
 import data
@@ -14,15 +14,6 @@ import models.evaluator
 import models.fft_utils
 import models.reconstruction
 import util.util
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-=======
-import data
-import models.evaluator
-import models.fft_utils
-import models.reconstruction
-import util.util
->>>>>>> 8d7b72a3ccbf19b3a214c14b7525ed93e2a287ea
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -38,6 +29,11 @@ def load_checkpoint(checkpoints_dir: str, name: str = 'best_checkpoint.pth') -> 
 
 class ReconstructionEnv:
     """ RL environment representing the active acquisition process with reconstruction model. """
+
+    class DataMode(Enum):
+        TRAIN = 1
+        TEST = 2
+        TEST_ON_TRAIN = 3
 
     def __init__(self, options: argparse.Namespace):
         """Creates a new environment.
@@ -65,6 +61,11 @@ class ReconstructionEnv:
         test_loader = data.create_data_loaders(options, is_test=True)
 
         self._dataset_train = train_loader.dataset
+        self.split_names = {
+            ReconstructionEnv.DataMode.TRAIN: 'train',
+            ReconstructionEnv.DataMode.TEST: 'test',
+            ReconstructionEnv.DataMode.TEST_ON_TRAIN: 'test_on_train'
+        }
         if options.test_set == 'train':
             self._dataset_test = train_loader.dataset
         elif options.test_set == 'valid':
@@ -74,6 +75,7 @@ class ReconstructionEnv:
 
         self.num_train_images = min(self.options.num_train_images, len(self._dataset_train))
         self.num_test_images = min(self.options.num_test_images, len(self._dataset_test))
+        self.latest_train_images = []
 
         # For the training data the
         rng = np.random.RandomState(options.seed)
@@ -82,7 +84,7 @@ class ReconstructionEnv:
         self._test_order = rng.permutation(len(self._dataset_test))
         self._image_idx_test = 0
         self._image_idx_train = 0
-        self.is_testing = False
+        self.data_model = ReconstructionEnv.DataMode.TRAIN
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
@@ -158,13 +160,14 @@ class ReconstructionEnv:
 
         return reconstruction, mask_embed
 
-    def set_testing(self, reset_index=True):
-        self.is_testing = True
+    def set_testing(self, use_training_set=False, reset_index=True):
+        self.data_model = ReconstructionEnv.DataMode.TEST_ON_TRAIN if use_training_set \
+            else ReconstructionEnv.DataMode.TEST
         if reset_index:
             self._image_idx_test = 0
 
     def set_training(self, reset_index=False):
-        self.is_testing = False
+        self.data_model = ReconstructionEnv.DataMode.TRAIN
         if reset_index:
             self._image_idx_train = 0
 
@@ -201,13 +204,12 @@ class ReconstructionEnv:
             new_mask[-(line_to_scan + 1)] = 1
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
-    def compute_score(
-            self,
-            use_reconstruction: bool = True,
-            ground_truth: Optional[torch.Tensor] = None,
-            mask_to_use: Optional[torch.Tensor] = None,
-            k_space: Optional[torch.Tensor] = None,
-    ) -> List[Dict[str, torch.Tensor]]:
+    def compute_score(self,
+                      use_reconstruction: bool = True,
+                      ground_truth: Optional[torch.Tensor] = None,
+                      mask_to_use: Optional[torch.Tensor] = None,
+                      k_space: Optional[torch.Tensor] = None,
+                      use_current_score: bool = False) -> List[Dict[str, torch.Tensor]]:
         """ Computes the score (MSE or SSIM) of current state with respect to current ground truth.
 
             This method takes the current ground truth, masks it with the current mask and creates
@@ -223,7 +225,11 @@ class ReconstructionEnv:
             @:param `ground_truth`: specifies if the score has to be computed with respect to an
                 alternate "ground truth".
             @:param `mask_to_use`: specifies if the score has to be computed with an alternate mask.
+            @:param `k_space`: specifies if the score has to be computed with an alternate k-space.
+            @:param `use_current_score`: If true, the method returns the saved current score.
         """
+        if use_current_score:
+            return [self._current_score]
         with torch.no_grad():
             if ground_truth is None:
                 ground_truth = self._ground_truth
@@ -277,36 +283,39 @@ class ReconstructionEnv:
         """
         info = {}
         if self.options.sequential_images:
-            if self.is_testing:
+            if self.data_model == ReconstructionEnv.DataMode.TEST:
                 if self._image_idx_test == min(self.num_test_images, len(self._dataset_test)):
                     return None, info  # Returns None to signal that testing is done
-                info['split'] = 'test'
-                info['image_idx'] = self._test_order[self._image_idx_test]
-                tmp = self._dataset_test.__getitem__(info['image_idx'])
-                self._ground_truth = tmp[1]
-                if self.options.dataroot == 'KNEE_RAW':
-                    # store k-space data too
-                    self._k_space = tmp[2].unsqueeze(0)
-                    self._ground_truth = self._ground_truth.permute(2, 0, 1)
-                logging.debug(
-                    f'Testing episode started with image {self._test_order[self._image_idx_test]}')
+                set_order = self._test_order
+                dataset = self._dataset_test
+                set_idx = self._image_idx_test
                 self._image_idx_test += 1
             else:
-                info['split'] = 'train'
-                info['image_idx'] = self._train_order[self._image_idx_train]
-                tmp = self._dataset_train.__getitem__(info['image_idx'])
-                self._ground_truth = tmp[1]
-                if self.options.dataroot == 'KNEE_RAW':
-                    # store k-space data too
-                    self._k_space = tmp[2].unsqueeze(0)
-                    self._ground_truth = self._ground_truth.permute(2, 0, 1)
-                logging.debug(
-                    f'Train episode started with image {self._train_order[self._image_idx_train]}')
-                self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
+                set_order = self._train_order
+                dataset = self._dataset_train
+                if self.data_model == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
+                    if self._image_idx_test == min(self.num_train_images, len(self._dataset_train)):
+                        return None, info  # Returns None to signal that testing is done
+                    set_idx = self._image_idx_test
+                    self._image_idx_test += 1
+                else:
+                    set_idx = self._image_idx_train
+                    self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
+
+            info['split'] = self.split_names[self.data_model]
+            info['image_idx'] = set_order[set_idx]
+            tmp = dataset.__getitem__(info['image_idx'])
+            self._ground_truth = tmp[1]
+            if self.options.dataroot == 'KNEE_RAW':  # store k-space data too
+                self._k_space = tmp[2].unsqueeze(0)
+                self._ground_truth = self._ground_truth.permute(2, 0, 1)
+            logging.debug(f"{info['split'].capitalize()} episode started "
+                          f"with image {set_order[set_idx]}")
         else:
-            dataset_to_check = self._dataset_test if self.is_testing else self._dataset_train
-            info['split'] = 'test' if self.is_testing else 'train'
-            if self.is_testing:
+            using_test_set = self.data_model == ReconstructionEnv.DataMode.TEST
+            dataset_to_check = self._dataset_test if using_test_set else self._dataset_train
+            info['split'] = 'test' if using_test_set else 'train'
+            if using_test_set:
                 max_num_images = self.num_test_images
             else:
                 max_num_images = self.num_train_images
@@ -314,13 +323,13 @@ class ReconstructionEnv:
             index_chosen_image = np.random.choice(dataset_len)
             info['image_idx'] = index_chosen_image
             logging.debug('{} episode started with randomly chosen image {}/{}'.format(
-                'Testing' if self.is_testing else 'Training', index_chosen_image, dataset_len))
+                'Testing' if using_test_set else 'Training', index_chosen_image, dataset_len))
             _, self._ground_truth = self._dataset_train.__getitem__(index_chosen_image)
         self._ground_truth = self._ground_truth.to(device).unsqueeze(0)
         self._current_mask = self._initial_mask
         self._scans_left = min(self.options.budget, self.action_space.n)
         observation, score = self._compute_observation_and_score()
-        self._current_score = score['mse']
+        self._current_score = score
         return observation, info
 
     def step(self, action: int) -> Tuple[Dict[str, torch.Tensor], float, bool, Dict]:
@@ -333,11 +342,14 @@ class ReconstructionEnv:
             self._current_mask, action)
         observation, new_score = self._compute_observation_and_score()
 
-        reward_ = -new_score['mse'] if self.options.use_score_as_reward \
-            else self._current_score - new_score['mse']
+        metric = self.options.reward_metric
+        reward_ = new_score[metric] if self.options.use_score_as_reward \
+            else new_score[metric] - self._current_score[metric]
         factor = 1 if self.options.use_score_as_reward else 100
+        if self.options.reward_metric == 'mse':
+            factor *= -1  # We try to minimize MSE, but DQN maximizes
         reward = -1.0 if has_already_been_scanned else reward_.item() * factor
-        self._current_score = new_score['mse']
+        self._current_score = new_score
 
         self._scans_left -= 1
         done = (self._scans_left == 0)
