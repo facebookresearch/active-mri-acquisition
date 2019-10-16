@@ -104,6 +104,7 @@ class TrainOptions(BaseOptions):
                 'symmetric_grid',
                 'basic_rnl',
                 'symmetric_basic_rnl',
+                'low_to_high_rnl',
             ],
             help='The type of mask to use.')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
