@@ -83,9 +83,9 @@ class Trainer:
         self.completed_epochs = 0
         self.updates_performed = 0
 
-        criterion_gan = GANLossKspace(
-            use_mse_as_energy=options.use_mse_as_disc_energy, grad_ctx=options.grad_ctx).to(
-                options.device)
+        criterion_gan = GANLossKspace(use_mse_as_energy=options.use_mse_as_disc_energy,
+                                      grad_ctx=options.grad_ctx,
+                                      options=self.options).to(options.device)
 
         self.losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}
 
