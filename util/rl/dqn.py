@@ -371,7 +371,7 @@ class DQNTrainer:
             # self.writer.add_scalar('cnt_repeated_actions', cnt_repeated_actions, self.episode)
 
             # Evaluate the current policy
-            if (self.episode + 1) % self.options.dqn_test_episode_freq == 0:
+            if self.episode % self.options.dqn_test_episode_freq == 0:
                 test_score = acquire_rl.test_policy(self.env, self.policy, self.writer, self.logger,
                                                     None, self.episode, self.options)
                 if test_score < self.best_test_score:
@@ -382,7 +382,7 @@ class DQNTrainer:
                         f'Saved DQN model with score {self.best_test_score} to {policy_path}.')
 
             # Evaluate the current policy on trainig set
-            if (self.episode + 1) % self.options.dqn_eval_train_set_episode_freq == 0 \
+            if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
                     and self.options.num_train_images <= 1000:
                 acquire_rl.test_policy(
                     self.env,
