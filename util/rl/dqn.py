@@ -228,7 +228,7 @@ class DQNTrainer:
             self.target_net.eval()
             self.logger.info(f'Created neural networks with {self.env.action_space.n} outputs.')
 
-            self.window_size = min(self.options.num_train_images, 1000)
+            self.window_size = min(self.options.num_train_images, 5000)
             self.reward_images_in_window = np.zeros(self.window_size)
             self.current_score_auc_window = np.zeros(self.window_size)
 
@@ -272,7 +272,7 @@ class DQNTrainer:
         self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, self.options).to(
             rl_env.device)
 
-        self.window_size = min(self.options.num_train_images, 1000)
+        self.window_size = min(self.options.num_train_images, 5000)
         self.reward_images_in_window = np.zeros(self.window_size)
         self.current_score_auc_window = np.zeros(self.window_size)
 
@@ -345,7 +345,7 @@ class DQNTrainer:
 
             # Evaluate the current policy on training set
             if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
-                    and self.options.num_train_images <= 1000:
+                    and self.options.num_train_images <= 5000:
                 acquire_rl.test_policy(
                     self.env,
                     self.policy,

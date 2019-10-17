@@ -100,7 +100,7 @@ def test_policy(env,
     logger.debug('Test run lasted {} seconds.'.format(end - start))
     test_score = compute_test_score_from_stats(statistics[options_.reward_metric])
     split = 'train' if test_on_train else 'test'
-    writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc_mse', test_score, step)
+    writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc', test_score, step)
     env.set_training()
     if test_with_full_budget:
         env.options.budget = old_budget
