@@ -228,8 +228,9 @@ class DQNTrainer:
             self.target_net.eval()
             self.logger.info(f'Created neural networks with {self.env.action_space.n} outputs.')
 
-            self.window_size = min(self.options.num_train_images, 1000)
+            self.window_size = min(self.options.num_train_images, 5000)
             self.reward_images_in_window = np.zeros(self.window_size)
+            self.current_score_auc_window = np.zeros(self.window_size)
 
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
@@ -271,8 +272,9 @@ class DQNTrainer:
         self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, self.options).to(
             rl_env.device)
 
-        self.window_size = min(self.options.num_train_images, 1000)
+        self.window_size = min(self.options.num_train_images, 5000)
         self.reward_images_in_window = np.zeros(self.window_size)
+        self.current_score_auc_window = np.zeros(self.window_size)
 
     def load_checkpoint_if_needed(self):
         if self.options.dqn_only_test:
@@ -322,10 +324,46 @@ class DQNTrainer:
                          f'Best score so far is {self.best_test_score}.')
         while self.steps < self.options.num_train_steps:
             self.logger.info('Episode {}'.format(self.episode + 1))
+
+            # Evaluate the current policy
+            if self.episode % self.options.dqn_test_episode_freq == 0:
+                test_score = acquire_rl.test_policy(
+                    self.env,
+                    self.policy,
+                    self.writer,
+                    self.logger,
+                    None,
+                    self.episode,
+                    self.options,
+                    test_with_full_budget=True)
+                if test_score < self.best_test_score:
+                    policy_path = os.path.join(self.options.checkpoints_dir, 'policy_best.pt')
+                    self.save(policy_path)
+                    self.best_test_score = test_score
+                    self.logger.info(
+                        f'Saved DQN model with score {self.best_test_score} to {policy_path}.')
+
+            # Evaluate the current policy on training set
+            if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
+                    and self.options.num_train_images <= 5000:
+                acquire_rl.test_policy(
+                    self.env,
+                    self.policy,
+                    self.writer,
+                    self.logger,
+                    None,
+                    self.episode,
+                    self.options,
+                    test_on_train=True,
+                    test_with_full_budget=True)
+
+            # Run an episode and update model
             obs, _ = self.env.reset()
             done = False
             total_reward = 0
             cnt_repeated_actions = 0
+            auc_score = self.env.compute_score(
+                True, use_current_score=True)[0][self.options.reward_metric]
             while not done:
                 epsilon = get_epsilon(self.steps, self.options)
                 action = self.policy.get_action(obs, epsilon, None)
@@ -357,42 +395,25 @@ class DQNTrainer:
                         self.writer.add_scalar('std_q_values', std_q_values, self.steps)
 
                 total_reward += reward
+                auc_score += self.env.compute_score(
+                    True, use_current_score=True)[0][self.options.reward_metric]
                 obs = next_obs
 
                 cnt_repeated_actions += int(is_repeated_action)
 
             # Adding per-episode tensorboard logs
             self.reward_images_in_window[self.episode % self.window_size] = total_reward
+            self.current_score_auc_window[self.episode % self.window_size] = auc_score
             self.writer.add_scalar('episode_reward', total_reward, self.episode)
             self.writer.add_scalar(
                 'average_reward_images_in_window',
                 np.sum(self.reward_images_in_window) / min(self.episode + 1, self.window_size),
                 self.episode)
+            self.writer.add_scalar(
+                'average_auc_score_in_window',
+                np.sum(self.current_score_auc_window) / min(self.episode + 1, self.window_size),
+                self.episode)
             # self.writer.add_scalar('cnt_repeated_actions', cnt_repeated_actions, self.episode)
-
-            # Evaluate the current policy
-            if self.episode % self.options.dqn_test_episode_freq == 0:
-                test_score = acquire_rl.test_policy(self.env, self.policy, self.writer, self.logger,
-                                                    None, self.episode, self.options)
-                if test_score < self.best_test_score:
-                    policy_path = os.path.join(self.options.checkpoints_dir, 'policy_best.pt')
-                    self.save(policy_path)
-                    self.best_test_score = test_score
-                    self.logger.info(
-                        f'Saved DQN model with score {self.best_test_score} to {policy_path}.')
-
-            # Evaluate the current policy on trainig set
-            if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
-                    and self.options.num_train_images <= 1000:
-                acquire_rl.test_policy(
-                    self.env,
-                    self.policy,
-                    self.writer,
-                    self.logger,
-                    None,
-                    self.episode,
-                    self.options,
-                    test_on_train=True)
 
             self.episode += 1
 

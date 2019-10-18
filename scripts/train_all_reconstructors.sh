@@ -2,18 +2,18 @@
 
 EXTRA_OPTIONS=--no_evaluator
 
-CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_refactor_rl_env
+CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_post_eval_tag
 
 SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/train_reconstructors_$(date +%Y%m%d_%H.%M.%S)
 
-echo $SRC_DIR
+echo ${SRC_DIR}
 
 mkdir -p ${SRC_DIR}
 cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
 
 cd ${SRC_DIR}
 
-for mask in basic_rnl symmetric_basic_rnl low_to_high; do
+for mask in basic_rnl symmetric_basic_rnl low_to_high_rnl; do
     python train_submitit.py --dataroot KNEE \
     --mask_type ${mask} \
     --name ${mask} \
