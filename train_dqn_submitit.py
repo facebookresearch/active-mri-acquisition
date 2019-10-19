@@ -30,9 +30,10 @@ if __name__ == '__main__':
     executor = submitit.SlurmExecutor(submitit_logs_dir, max_num_timeout=3)
     executor.update_parameters(
         num_gpus=1,
-        partition='learnfair',
+        partition='priority',
         cpus_per_task=2,
         mem=256000,
         time=4320,
-        job_name='train_dqn_ssim')
+        job_name='train_dqn_ssim',
+        comment='CVPR 2020 15/11 and hard to handle preemption in this job. ')
     executor.submit(trainer_)

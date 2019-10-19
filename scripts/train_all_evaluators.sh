@@ -2,7 +2,7 @@
 
 EXTRA_OPTIONS=--only_evaluator
 
-CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_refactor_rl_env
+CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_post_eval_tag
 
 SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/train_evaluators_$(date +%Y%m%d_%H.%M.%S)
 

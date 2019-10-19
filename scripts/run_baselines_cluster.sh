@@ -13,7 +13,7 @@ INIT_LINES=10
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
 for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high"; do
-    CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors_refactor_rl_env/${NAME}
+    CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors_post_eval_tag/${NAME}
     for policy in "random" "lowfirst" "evaluator_net"; do
         obs_type=image_space
         job_name=active_acq_baselines_${NAME}_${policy}

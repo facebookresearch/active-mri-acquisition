@@ -198,7 +198,7 @@ class DQNTrainer:
         self.env = env
         self.steps = 0
         self.episode = 0
-        self.best_test_score = np.inf
+        self.best_test_score = -np.inf
 
         self.load_replay_mem = options_.dqn_resume and load_replay_mem
 
@@ -336,7 +336,7 @@ class DQNTrainer:
                     self.episode,
                     self.options,
                     test_with_full_budget=True)
-                if test_score < self.best_test_score:
+                if test_score > self.best_test_score:
                     policy_path = os.path.join(self.options.checkpoints_dir, 'policy_best.pt')
                     self.save(policy_path)
                     self.best_test_score = test_score
@@ -426,9 +426,8 @@ class DQNTrainer:
         self.load_checkpoint_if_needed()
         if self.options.dqn_only_test:
             return None
-        # Hyperparameter tuner tries to maximize, but `train_dqn_policy`
-        # returns MSE over validation set (which we want to minimize)
-        return -self._train_dqn_policy()
+
+        return self._train_dqn_policy()
 
     def checkpoint(self, submit_job=True):
         self.logger.info('Received preemption signal.')

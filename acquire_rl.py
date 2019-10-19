@@ -105,6 +105,9 @@ def test_policy(env,
     if test_with_full_budget:
         env.options.budget = old_budget
 
+    if options_.reward_metric == 'mse':  # DQN maximizes but we want to minimize MSE
+        test_score = -test_score
+
     return test_score
 
 

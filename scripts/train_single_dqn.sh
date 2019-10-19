@@ -10,7 +10,7 @@ mkdir -p ${LOGS_DIR}/stdout
 mkdir -p ${LOGS_DIR}/stderr
 
 CHECKPOINTS_BASE=/checkpoint/lep/active_acq
-MODELS_DIR=${CHECKPOINTS_BASE}/all_reconstructors_refactor_rl_env
+MODELS_DIR=${CHECKPOINTS_BASE}/all_reconstructors_post_eval_tag
 MODEL_TYPE=symmetric_basic_rnl
 
 SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/train_dqn_$(date +%Y%m%d_%H.%M.%S)
