@@ -7,18 +7,23 @@ mkdir -p ${JOBSCRIPTS_DIR}
 mkdir -p ${LOGS_DIR}/stdout
 mkdir -p ${LOGS_DIR}/stderr
 
+SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/run_baselines_$(date +%Y%m%d_%H.%M.%S)
+mkdir -p ${SRC_DIR}
+cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
+echo ${SRC_DIR}
+
 queue=dev
 
-INIT_LINES=10
+INIT_LINES=5
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
 for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high"; do
     CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors_post_eval_tag/${NAME}
-    for policy in "random" "lowfirst" "evaluator_net"; do
+    for policy in "random" "lowfirst"; do
+#    for policy in "evaluator_net"; do
         obs_type=image_space
         job_name=active_acq_baselines_${NAME}_${policy}
 
-        # This creates a slurm script to call training
         SLURM=${JOBSCRIPTS_DIR}/run.${job_name}.slrm
         echo "#!/bin/bash" > ${SLURM}
         echo "#SBATCH --job-name=$job_name" >> ${SLURM}
@@ -33,16 +38,15 @@ for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high"; do
         # echo "#SBATCH --comment=\"NeurIPS deadline 05/23\"" >> ${SLURM}
         echo "#SBATCH --nodes=1" >> ${SLURM}
 
-        echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
+        echo "cd ${SRC_DIR}" >> ${SLURM}
 
         echo srun python acquire_rl.py --dataroot KNEE \
         --reconstructor_dir ${CHECKPOINT_DIR} \
         --evaluator_dir ${CHECKPOINT_DIR}/evaluator \
         --checkpoints_dir ${CHECKPOINT_DIR}/all_baselines.${BASELINES_SUFFIX} \
-        --seed 0 --batchSize 96 --gpu_ids 0 --policy ${policy} \
+        --seed 0 --gpu_ids 0 --policy ${policy} \
         --num_train_steps 0 --num_train_images 0 \
         --obs_type ${obs_type} \
-        --greedymc_num_samples 60 --greedymc_horizon 1 \
         --sequential_images \
         --initial_num_lines_per_side ${INIT_LINES} \
         --budget 1000 \

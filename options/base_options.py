@@ -85,7 +85,8 @@ class BaseOptions():
     def gather_options(self):
         # initialize parser with basic options
         if not self.initialized:
-            parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+            parser = argparse.ArgumentParser(
+                formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
             parser = self.initialize(parser)
 
         # get the basic options
