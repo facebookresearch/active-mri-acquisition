@@ -12,6 +12,9 @@ MODELS_DIR=${CHECKPOINTS_BASE}/all_reconstructors_post_eval_tag
 MODEL_TYPE=symmetric_basic_rnl
 
 SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/test_dqn_$(date +%Y%m%d_%H.%M.%S)
+mkdir -p ${SRC_DIR}
+cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
+echo ${SRC_DIR}
 
 queue=dev
 
@@ -24,6 +27,8 @@ job_name=evaluate_dqn_activeacq
 
 # This creates a slurm script to call training
 SLURM=${JOBSCRIPTS_DIR}/run.${job_name}.slrm
+echo ${SLURM}
+
 echo "#!/bin/bash" > ${SLURM}
 echo "#SBATCH --job-name=$job_name" >> ${SLURM}
 echo "#SBATCH --output=${LOGS_DIR}/stdout/${job_name}.%j" >> ${SLURM}
@@ -37,7 +42,7 @@ echo "#SBATCH --time=4320" >> ${SLURM}
 # echo "#SBATCH --comment=\"NeurIPS deadline 05/23\"" >> ${SLURM}
 echo "#SBATCH --nodes=1" >> ${SLURM}
 
-echo "cd ${SRC_DIR}$" >> ${SLURM}
+echo "cd ${SRC_DIR}" >> ${SLURM}
 
 echo srun python acquire_rl.py --dataroot KNEE \
     --reconstructor_dir ${MODELS_DIR}/${MODEL_TYPE}\
