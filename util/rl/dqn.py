@@ -332,7 +332,6 @@ class DQNTrainer:
                     self.policy,
                     self.writer,
                     self.logger,
-                    None,
                     self.episode,
                     self.options,
                     test_with_full_budget=True)
@@ -351,7 +350,6 @@ class DQNTrainer:
                     self.policy,
                     self.writer,
                     self.logger,
-                    None,
                     self.episode,
                     self.options,
                     test_on_train=True,

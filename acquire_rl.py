@@ -38,11 +38,24 @@ def compute_test_score_from_stats(statistics):
     return score
 
 
+def save_statistics_and_actions(statistics, all_actions, episode, logger, options_):
+    logger.info(f'Episode {episode}. Saving statistics to {options_.checkpoints_dir}.')
+    np.save(
+        os.path.join(options_.checkpoints_dir, 'test_stats_mse_{}'.format(episode)),
+        statistics['mse'])
+    np.save(
+        os.path.join(options_.checkpoints_dir, 'test_stats_ssim_{}'.format(episode)),
+        statistics['ssim'])
+    np.save(
+        os.path.join(options_.checkpoints_dir, 'test_stats_psnr_{}'.format(episode)),
+        statistics['psnr'])
+    np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
+
+
 def test_policy(env,
                 policy,
                 writer,
                 logger,
-                num_episodes,
                 step,
                 options_,
                 test_on_train=False,
@@ -61,7 +74,8 @@ def test_policy(env,
     while True:
         obs, _ = env.reset()
         policy.init_episode()
-        if episode == num_episodes or obs is None:
+        if obs is None:
+            save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
             break
         episode += 1
         done = False
@@ -83,19 +97,8 @@ def test_policy(env,
         average_total_reward += total_reward
         all_actions.append(actions)
         logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
-        if not test_on_train and \
-                ((episode % options_.freq_save_test_stats == 0) or (episode == num_episodes)):
-            logger.info(f'Episode {episode}. Saving statistics to {options_.checkpoints_dir}.')
-            np.save(
-                os.path.join(options_.checkpoints_dir, 'test_stats_mse_{}'.format(episode)),
-                statistics['mse'])
-            np.save(
-                os.path.join(options_.checkpoints_dir, 'test_stats_ssim_{}'.format(episode)),
-                statistics['ssim'])
-            np.save(
-                os.path.join(options_.checkpoints_dir, 'test_stats_psnr_{}'.format(episode)),
-                statistics['psnr'])
-            np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
+        if not test_on_train and (episode % options_.freq_save_test_stats == 0):
+            save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
     end = time.time()
     logger.debug('Test run lasted {} seconds.'.format(end - start))
     test_score = compute_test_score_from_stats(statistics[options_.reward_metric])
@@ -163,7 +166,7 @@ def main(options_, logger):
     logger.info(f'Created environment with {env.action_space.n} actions')
     policy = get_policy(env, writer, logger, options_)  # Trains if necessary
     env.set_testing()
-    test_policy(env, policy, writer, logger, None, 0, options_)
+    test_policy(env, policy, writer, logger, 0, options_)
 
 
 if __name__ == '__main__':
