@@ -18,7 +18,7 @@ queue=dev
 INIT_LINES=5
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
-WEIGHTS_DIR=ddqn_tr1000_val100/ssim/image_space.tupd5000.bs16.edecay500000.gamma0.5.lr6.25e-05.repbuf200000norepl1.nimgtr1000.metricssim._bu35_seed0_neptest100
+WEIGHTS_DIR=ddqn_ssim/image_space.tupd5000.bs16.edecay500000.gamma0.5.lr0.0001.repbuf200000norepl1.nimgtr5000.metricssim.usescoasrew0_bu30_seed0_neptest100
 
 job_name=evaluate_dqn_activeacq
 
@@ -37,13 +37,12 @@ echo "#SBATCH --time=4320" >> ${SLURM}
 # echo "#SBATCH --comment=\"NeurIPS deadline 05/23\"" >> ${SLURM}
 echo "#SBATCH --nodes=1" >> ${SLURM}
 
-echo "cd /private/home/lep/code/Active_Acquisition" >> ${SLURM}
-
+echo "cd ${SRC_DIR}$" >> ${SLURM}
 
 echo srun python acquire_rl.py --dataroot KNEE \
     --reconstructor_dir ${MODELS_DIR}/${MODEL_TYPE}\
     --evaluator_dir ${MODELS_DIR}/${MODEL_TYPE}/evaluator \
-    --checkpoints_dir ${MODELS_DIR}/${MODEL_TYPE}/dqn/ddqn_tr1000_val100/ssim \
+    --checkpoints_dir ${MODELS_DIR}/${MODEL_TYPE}/dqn/ssim \
     --dqn_weights_dir ${MODELS_DIR}/${MODEL_TYPE}/${WEIGHTS_DIR} \
     --test_set test \
     --num_test_images 1000 \
