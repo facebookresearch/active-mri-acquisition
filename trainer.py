@@ -190,7 +190,8 @@ class Trainer:
 
     # TODO: consider adding learning rate scheduler
     def update(self, batch):
-        self.reconstructor.train()
+        if not self.options.only_evaluator():
+            self.reconstructor.train()
 
         zero_filled_image, target, mask = preprocess_inputs(batch, self.options.dataroot,
                                                             self.options.device)
