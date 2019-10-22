@@ -12,6 +12,7 @@ if __name__ == '__main__':
     options_.batchSize = 1
     options_.mask_type = 'grid'  # These two are ignored, only here for compatibility with loader
     options_.masks_dir = None
+    options_.dqn_resume = True
 
     options_.device = torch.device('cuda:{}'.format(
         options_.gpu_ids[0])) if options_.gpu_ids else torch.device('cpu')
@@ -32,7 +33,7 @@ if __name__ == '__main__':
         num_gpus=1,
         partition='priority',
         cpus_per_task=2,
-        mem=256000,
+        mem=100000,
         time=4320,
         job_name='train_dqn_ssim',
         comment='CVPR 2020 15/11 and hard to handle preemption in this job. ')
