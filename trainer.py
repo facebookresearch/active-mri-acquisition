@@ -83,9 +83,10 @@ class Trainer:
         self.completed_epochs = 0
         self.updates_performed = 0
 
-        criterion_gan = GANLossKspace(use_mse_as_energy=options.use_mse_as_disc_energy,
-                                      grad_ctx=options.grad_ctx,
-                                      options=self.options).to(options.device)
+        criterion_gan = GANLossKspace(
+            use_mse_as_energy=options.use_mse_as_disc_energy,
+            grad_ctx=options.grad_ctx,
+            options=self.options).to(options.device)
 
         self.losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}
 
@@ -179,8 +180,7 @@ class Trainer:
             raise FileNotFoundError('Specified weights checkpoint do not exist!')
         self.logger.info(
             f'Loading weights from checkpoint found at {self.options.weights_checkpoint}.')
-        checkpoint = torch.load(
-            os.path.join(self.options.checkpoints_dir, self.options.weights_checkpoint))
+        checkpoint = torch.load(self.options.weights_checkpoint)
         self.reconstructor.load_state_dict(checkpoint['reconstructor'])
         if self.options.use_evaluator and 'evaluator' in checkpoint.keys() and \
                 checkpoint['evaluator'] is not None:

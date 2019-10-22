@@ -156,7 +156,12 @@ class ReconstructionEnv:
         zero_filled_image, _, _ = models.fft_utils.preprocess_inputs(
             (self._current_mask, self._ground_truth, self._k_space), self.options.dataroot, device)
 
-        reconstruction, _, mask_embed = self._reconstructor(zero_filled_image, self._current_mask)
+        if self.options.use_reconstructions:
+            reconstruction, _, mask_embed = self._reconstructor(zero_filled_image,
+                                                                self._current_mask)
+        else:
+            reconstruction = zero_filled_image
+            mask_embed = None
 
         return reconstruction, mask_embed
 
