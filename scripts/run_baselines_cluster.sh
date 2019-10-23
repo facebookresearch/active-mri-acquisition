@@ -17,10 +17,10 @@ queue=dev
 INIT_LINES=5
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
-for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high"; do
+# TODO missing results for low_to_high_rnl and evaluator_net
+for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high_rnl"; do
     CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors_post_eval_tag/${NAME}
-    for policy in "random" "lowfirst"; do
-#    for policy in "evaluator_net"; do
+    for policy in "random" "lowfirst" "evaluator_net"; do
         obs_type=image_space
         job_name=active_acq_baselines_${NAME}_${policy}
 
