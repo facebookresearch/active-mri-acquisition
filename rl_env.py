@@ -68,10 +68,12 @@ class ReconstructionEnv:
         }
         if options.test_set == 'train':
             self._dataset_test = train_loader.dataset
-        elif options.test_set == 'valid':
+        elif options.test_set == 'val':
             self._dataset_test = valid_loader.dataset
-        else:
+        elif options.test_set == 'test':
             self._dataset_test = test_loader.dataset
+        else:
+            raise InvalidArgument('Valid options are train, val, test')
 
         self.num_train_images = min(self.options.num_train_images, len(self._dataset_train))
         self.num_test_images = min(self.options.num_test_images, len(self._dataset_test))
