@@ -35,7 +35,7 @@ if __name__ == '__main__':
         cpus_per_task=2,
         mem=100000,
         time=4320,
-        job_name='train_dqn_ssim',
+        job_name='train_many_dqns',
         signal_delay_s=600,
         comment='CVPR 2020 15/11')
     executor.submit(trainer_)
