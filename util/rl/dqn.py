@@ -28,6 +28,46 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
+class SimpleMLP(nn.Module):
+
+    def __init__(self,
+                 budget,
+                 image_width,
+                 initial_num_lines_per_side,
+                 num_hidden_layers=2,
+                 num_hidden=32,
+                 ignore_mask=True):
+        super(SimpleMLP, self).__init__()
+        self.initial_num_lines_per_side = initial_num_lines_per_side
+        self.ignore_mask = ignore_mask
+        self.num_inputs = budget if self.ignore_mask else self.image_width
+        num_actions = image_width - 2 * initial_num_lines_per_side
+        self.linear1 = nn.Sequential(nn.Linear(self.num_inputs, num_hidden), nn.ReLU())
+        hidden_layers = []
+        for i in range(num_hidden_layers):
+            hidden_layers.append(nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU()))
+        self.hidden = nn.Sequential(*hidden_layers)
+        self.output = nn.Linear(num_hidden, num_actions)
+        self.model = nn.Sequential(self.linear1, self.hidden, self.output)
+
+    def forward(self, x):
+        previous_actions = x[:, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
+        if self.ignore_mask:
+            input_tensor = torch.zeros(x.shape[0], self.num_inputs).to(x.device)
+            time_steps = previous_actions.sum(1).unsqueeze(1) / 2  # Remove /2 if not symmetric
+            # We allow the model to receive observations that are over budget during test
+            # Code below randomizes the input to the model for these observations
+            index_over_budget = (time_steps >= self.num_inputs).squeeze()
+            time_steps = time_steps.clamp(0, self.num_inputs - 1)
+            input_tensor.scatter_(1, time_steps.long(), 1)
+            input_tensor[index_over_budget] = torch.randn_like(input_tensor[index_over_budget])
+        else:
+            input_tensor = x
+        value = self.model(input_tensor)
+        value = value - 1e10 * previous_actions
+        return value
+
+
 class EvaluatorBasedValueNetwork(nn.Module):
 
     def __init__(self, image_width, initial_num_lines_per_side, mask_embed_dim):
@@ -45,6 +85,7 @@ class EvaluatorBasedValueNetwork(nn.Module):
 
     def forward(self, x):
         reconstruction = x[..., :-2, :]
+        # This is the mask according to action indices (which ignore initial lines)
         mask = x[:, 0, -2, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
         mask_embedding = x[0, 0, -1, :self.mask_embed_dim].view(1, -1, 1, 1)
         mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1, reconstruction.shape[2],
@@ -55,40 +96,10 @@ class EvaluatorBasedValueNetwork(nn.Module):
         return value
 
 
-class BasicValueNetwork(nn.Module):
-    """ The input to this model includes the reconstruction and the current mask. The
-        reconstruction is passed through a convolutional path and the mask through a few MLP layers.
-        Then both outputs are combined to produce the final value.
-    """
-
-    def __init__(self, num_actions):
-        super(BasicValueNetwork, self).__init__()
-
-        self.conv_image = nn.Sequential(
-            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
-
-        self.conv_fft = nn.Sequential(
-            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0), nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0), nn.ReLU(), Flatten())
-
-        self.fc = nn.Sequential(
-            nn.Linear(2 * 12 * 12 * 64, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(),
-            nn.Linear(256, num_actions))
-
-    def forward(self, x):
-        reconstructions = x[:, :2, :, :]
-        masked_rffts = x[:, 2:, :, :]
-        image_encoding = self.conv_image(reconstructions)
-        rfft_encoding = self.conv_image(masked_rffts)
-        return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
-
-
-def get_model(num_actions, options):
-    if options.dqn_model_type == 'basic':
-        return BasicValueNetwork(num_actions)
+def get_model(options):
+    if options.dqn_model_type == 'mlp':
+        return SimpleMLP(options.budget, options.image_width, options.initial_num_lines_per_side,
+                         options.dqn_mlp_ignore_mask)
     if options.dqn_model_type == 'evaluator':
         return EvaluatorBasedValueNetwork(options.image_width, options.initial_num_lines_per_side,
                                           options.mask_embedding_dim)
@@ -99,7 +110,7 @@ class DDQN(nn.Module):
 
     def __init__(self, num_actions, device, memory, opts):
         super(DDQN, self).__init__()
-        self.model = get_model(num_actions, opts)
+        self.model = get_model(opts)
         self.memory = memory
         self.optimizer = optim.Adam(self.parameters(), lr=opts.dqn_learning_rate)
         self.num_actions = num_actions
@@ -111,15 +122,19 @@ class DDQN(nn.Module):
 
     def _get_action_no_replacement(self, observation, eps_threshold):
         sample = random.random()
-        # See comment in DQNTrainer._train_dqn_policy for observation format,
-        # Index -2 recovers the mask associated to this observation
-        previous_actions = np.nonzero(observation[0, -2, self.opts.initial_num_lines_per_side:
-                                                  -self.opts.initial_num_lines_per_side])[0]
         if sample < eps_threshold:
+            # See comment in DQNTrainer._train_dqn_policy for observation format,
+            if self.opts.obs_type == 'only_mask':
+                mask = observation
+            else:
+                # Index -2 recovers the mask associated to this observation
+                mask = observation[0, -2, :]
+            previous_actions = np.nonzero(
+                mask[self.opts.initial_num_lines_per_side:-self.opts.initial_num_lines_per_side])[0]
             return random.choice([x for x in range(self.num_actions) if x not in previous_actions])
         with torch.no_grad():
             q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
-        return torch.argmax(q_values, dim=1).item()
+            return torch.argmax(q_values, dim=1).item()
 
     def _get_action_standard_e_greedy(self, observation, eps_threshold):
         sample = random.random()
@@ -365,11 +380,15 @@ class DQNTrainer:
             while not done:
                 epsilon = get_epsilon(self.steps, self.options)
                 action = self.policy.get_action(obs, epsilon, None)
-                # Format of observation is [bs, img_height + 2, img_width], where first
-                # img_height rows are reconstruction, next line is the mask, and final line is
-                # the mask embedding
-                is_repeated_action = bool(
-                    obs[0, -2, action + self.options.initial_num_lines_per_side])
+
+                if self.options.obs_type == 'only_mask':
+                    mask = obs
+                else:
+                    # Format of observation is [bs, img_height + 2, img_width], where first
+                    # img_height rows are reconstruction, next line is the mask, and final line is
+                    # the mask embedding
+                    mask = obs[0, -2, :]
+                is_repeated_action = bool(mask[action + self.options.initial_num_lines_per_side])
 
                 assert not (self.options.no_replacement_policy and is_repeated_action)
 

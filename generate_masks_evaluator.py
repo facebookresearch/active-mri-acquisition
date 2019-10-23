@@ -92,7 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--initial_index', type=int, default=0)
     parser.add_argument('--how_many_images', type=int, default=15000)
-    parser.add_argument('--test_set', choices=['train', 'test', 'valid'], default='train')
+    parser.add_argument('--test_set', choices=['train', 'test', 'val'], default='train')
     options_ = parser.parse_args()
 
     options_.dataset_dir = os.path.join(options_.dataset_dir, options_.test_set)

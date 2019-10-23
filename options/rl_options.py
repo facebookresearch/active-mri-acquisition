@@ -12,7 +12,9 @@ class RLOptions(BaseOptions):
             default=None,
             help='Directory where reconstructor is stored.')
         parser.add_argument(
-            '--obs_type', choices=['fourier_space', 'image_space'], default='image_space')
+            '--obs_type',
+            choices=['fourier_space', 'image_space', 'only_mask'],
+            default='image_space')
         parser.add_argument('--obs_to_numpy', action='store_true')
         parser.add_argument(
             '--policy',
@@ -62,7 +64,9 @@ class RLOptions(BaseOptions):
             help='Full path to the evaluator++ model to use.')
 
         # Reinforcement learning options
-        parser.add_argument('--dqn_model_type', choices=['basic', 'evaluator'], default='evaluator')
+        parser.add_argument('--dqn_model_type', choices=['mlp', 'evaluator'], default='evaluator')
+        parser.add_argument(
+            '--no_dqn_mlp_ignore_mask', dest='dqn_mlp_ignore_mask', action='store_false')
         parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
         parser.add_argument('--dqn_normalize', dest='dqn_normalize', action='store_true')
         parser.add_argument(
