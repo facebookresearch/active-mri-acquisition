@@ -36,5 +36,6 @@ if __name__ == '__main__':
         mem=100000,
         time=4320,
         job_name='train_dqn_ssim',
-        comment='CVPR 2020 15/11 and hard to handle preemption in this job. ')
+        signal_delay_s=600,
+        comment='CVPR 2020 15/11')
     executor.submit(trainer_)

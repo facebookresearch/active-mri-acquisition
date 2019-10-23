@@ -13,7 +13,7 @@ cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
 
 cd ${SRC_DIR}
 
-for mask in basic_rnl symmetric_basic_rnl low_to_high; do
+for mask in basic_rnl symmetric_basic_rnl low_to_high_rnl; do
     python train_submitit.py --dataroot KNEE \
     --mask_type ${mask} \
     --name ${mask} \

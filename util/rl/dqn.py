@@ -411,7 +411,6 @@ class DQNTrainer:
                 'average_auc_score_in_window',
                 np.sum(self.current_score_auc_window) / min(self.episode + 1, self.window_size),
                 self.episode)
-            # self.writer.add_scalar('cnt_repeated_actions', cnt_repeated_actions, self.episode)
 
             self.episode += 1
 
@@ -445,7 +444,8 @@ class DQNTrainer:
             'episode': self.episode,
             'steps': self.steps,
             'best_test_score': self.best_test_score,
-            'reward_images_in_window': self.reward_images_in_window
+            'reward_images_in_window': self.reward_images_in_window,
+            'current_score_auc_window': self.current_score_auc_window
         }, path)
 
     def load(self, path):
@@ -456,3 +456,4 @@ class DQNTrainer:
         self.episode = checkpoint['episode'] + 1
         self.best_test_score = checkpoint['best_test_score']
         self.reward_images_in_window = checkpoint['reward_images_in_window']
+        self.current_score_auc_window = checkpoint['current_score_auc_window']
