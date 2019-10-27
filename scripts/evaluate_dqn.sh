@@ -11,19 +11,22 @@ CHECKPOINTS_BASE=/checkpoint/lep/active_acq
 MODELS_DIR=${CHECKPOINTS_BASE}/all_reconstructors_post_eval_tag
 MODEL_TYPE=symmetric_basic_rnl
 
-SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/test_dqn_$(date +%Y%m%d_%H.%M.%S)
+#SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/test_dqn_$(date +%Y%m%d_%H.%M.%S)
+SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/eval_many_dqns
+rm -rf ${SRC_DIR}
 mkdir -p ${SRC_DIR}
 cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
 echo ${SRC_DIR}
 
-queue=dev
+queue=priority
 
 INIT_LINES=5
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
-WEIGHTS_DIR=ddqn_ssim/image_space.tupd5000.bs16.edecay500000.gamma0.5.lr0.0001.repbuf200000norepl1.nimgtr5000.metricssim.usescoasrew0_bu30_seed0_neptest100
+DQN_STR=image_space.tupd5000.bs16.edecay500000.gamma0.5.lr0.0001.repbuf300000norepl1.nimgtr10000000.metricmse.usescoasrew0_bu35_seed0_neptest100
+SUBDIR=all_dqns
 
-job_name=evaluate_dqn_activeacq
+job_name=evaluate_dqn_activeacq__${MODEL_TYPE}__${DQN_STR}
 
 # This creates a slurm script to call training
 SLURM=${JOBSCRIPTS_DIR}/run.${job_name}.slrm
@@ -39,7 +42,7 @@ echo "#SBATCH --cpus-per-task=2" >> ${SLURM}
 echo "#SBATCH --ntasks-per-node=1" >> ${SLURM}
 echo "#SBATCH --mem=64000" >> ${SLURM}
 echo "#SBATCH --time=4320" >> ${SLURM}
-# echo "#SBATCH --comment=\"NeurIPS deadline 05/23\"" >> ${SLURM}
+echo "#SBATCH --comment=\"CVPR deadline 11/15\"" >> ${SLURM}
 echo "#SBATCH --nodes=1" >> ${SLURM}
 
 echo "cd ${SRC_DIR}" >> ${SLURM}
@@ -47,8 +50,8 @@ echo "cd ${SRC_DIR}" >> ${SLURM}
 echo srun python acquire_rl.py --dataroot KNEE \
     --reconstructor_dir ${MODELS_DIR}/${MODEL_TYPE}\
     --evaluator_dir ${MODELS_DIR}/${MODEL_TYPE}/evaluator \
-    --checkpoints_dir ${MODELS_DIR}/${MODEL_TYPE}/dqn/ssim \
-    --dqn_weights_dir ${MODELS_DIR}/${MODEL_TYPE}/${WEIGHTS_DIR} \
+    --checkpoints_dir ${MODELS_DIR}/${MODEL_TYPE}/eval_${SUBDIR}/${DQN_STR} \
+    --dqn_weights_dir ${MODELS_DIR}/${MODEL_TYPE}/${SUBDIR}/${DQN_STR} \
     --test_set test \
     --num_test_images 1000 \
     --freq_save_test_stats 50 \
