@@ -155,12 +155,12 @@ class ReconstructionEnv:
         return mask
 
     def _get_current_reconstruction_and_mask_embedding(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        zero_filled_image, _, _ = models.fft_utils.preprocess_inputs(
+        zero_filled_image, _, mask_to_use = models.fft_utils.preprocess_inputs(
             (self._current_mask, self._ground_truth, self._k_space), self.options.dataroot, device)
 
         if self.options.use_reconstructions:
             reconstruction, _, mask_embed = self._reconstructor(zero_filled_image,
-                                                                self._current_mask)
+                                                                mask_to_use)
         else:
             reconstruction = zero_filled_image
             mask_embed = None
@@ -244,7 +244,7 @@ class ReconstructionEnv:
                 mask_to_use = self._current_mask
             if k_space is None:
                 k_space = self._k_space
-            image, _, _ = models.fft_utils.preprocess_inputs((mask_to_use, ground_truth, k_space),
+            image, _, mask_to_use = models.fft_utils.preprocess_inputs((mask_to_use, ground_truth, k_space),
                                                              self.options.dataroot, device)
             if use_reconstruction:  # pass through reconstruction network
                 image, _, _ = self._reconstructor(image, mask_to_use)
