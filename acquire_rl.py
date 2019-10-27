@@ -132,29 +132,41 @@ def get_experiment_str(options_):
 
 # Not a great policy specification protocol, but works for now.
 def get_policy(env, writer, logger, options_):
+    # use invalid_actions when using k_space knee data that are zero padded
+    # at some frequencies
+    valid_actions = list(range(env.action_space.n))
+    if options_.dataroot == 'KNEE_RAW':
+        #TODO: do we want to cnage the fixed numbers below or not?
+        invalid_actions = list(range(166 - options_.initial_num_lines_per_side,
+                                     202 - options_.initial_num_lines_per_side, 1))
+        valid_actions = np.setdiff1d(valid_actions, invalid_actions)
+        env.action_space.n = len(valid_actions)
+
     # This options affects how the score is computed by the environment
     # (whether it passes through reconstruction network or not after a new col. is scanned)
     logger.info(f'Use reconstructions is {options_.use_reconstructions}')
     if 'random' in options_.policy:
-        policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
+        policy = util.rl.simple_baselines.RandomPolicy(valid_actions)
     elif 'lowfirst' in options_.policy:
         policy = util.rl.simple_baselines.NextIndexPolicy(
-            range(env.action_space.n), not env.conjugate_symmetry)
+            valid_actions, not env.conjugate_symmetry)
     elif 'evaluator_net' in options_.policy:
         assert options_.obs_type == 'image_space'
+        # At the moment, Evaluator gets valid acctions in a mask - preprocess data function.
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator++' in options_.policy:
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
             options_.options.evaluator_pp_path, options_.initial_num_lines_per_side, rl_env.device)
     elif 'dqn' in options_.policy:
         assert options_.obs_to_numpy
+        #TODO: how to pass valid actions to DQN?
         dqn_trainer = util.rl.dqn.DQNTrainer(options_, env, writer, logger)
         dqn_trainer()
         policy = dqn_trainer.policy
     else:
         raise ValueError
 
-    return policy
+    return policy, env
 
 
 def main(options_, logger):
@@ -163,8 +175,8 @@ def main(options_, logger):
     options_.mask_embedding_dim = env.metadata['mask_embed_dim']
     options_.image_width = env.image_width
     env.set_training()
+    policy, env = get_policy(env, writer, logger, options_)  # Trains if necessary
     logger.info(f'Created environment with {env.action_space.n} actions')
-    policy = get_policy(env, writer, logger, options_)  # Trains if necessary
     env.set_testing()
     test_policy(env, policy, writer, logger, 0, options_)
 

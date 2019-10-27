@@ -4,7 +4,7 @@ from .reconstruction import init_func
 import functools
 import torch
 import torch.nn as nn
-
+from models.fft_utils import center_crop
 
 class SimpleSequential(nn.Module):
 
@@ -132,7 +132,7 @@ class EvaluatorNetwork(nn.Module):
         self.model = nn.Sequential(*sequence)
         self.apply(init_func)
 
-    def forward(self, input, mask_embedding=None):
+    def forward(self, input, mask_embedding=None, raw=False):
         """
 
         Args:
@@ -145,6 +145,9 @@ class EvaluatorNetwork(nn.Module):
                     shape   :   (batch_size, width)
 
         """
+        # if raw:
+        #     input = center_crop(input, [368, 320])
+        #     mask_embedding = center_crop(mask_embedding, [368, 320])
 
         spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding)
 

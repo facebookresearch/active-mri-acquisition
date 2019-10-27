@@ -370,4 +370,8 @@ class ReconstructionEnv:
             k_space_scores = self._evaluator(obs['reconstruction'].to(device),
                                              obs['mask_embedding'].to(device))
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
+            # if self.options.dataroot == 'KNEE_RAW':
+            #     tmp = torch.zeros(obs['mask'].shape)
+            #     tmp[0, 0, 0, 166:202] = 1
+            #     k_space_scores.masked_fill_(tmp.to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
