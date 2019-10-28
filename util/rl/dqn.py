@@ -414,6 +414,9 @@ class DQNTrainer:
 
             self.episode += 1
 
+            if self.episode % self.options.freq_dqn_checkpoint_save == 0:
+                self.checkpoint(submit_job=False)
+
         self.checkpoint(submit_job=False)
         return self.best_test_score
 
