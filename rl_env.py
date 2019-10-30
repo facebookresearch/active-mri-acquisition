@@ -73,7 +73,7 @@ class ReconstructionEnv:
         elif options.test_set == 'test':
             self._dataset_test = test_loader.dataset
         else:
-            raise InvalidArgument('Valid options are train, val, test')
+            raise ValueError('Valid options are train, val, test')
 
         self.num_train_images = min(self.options.num_train_images, len(self._dataset_train))
         self.num_test_images = min(self.options.num_test_images, len(self._dataset_test))

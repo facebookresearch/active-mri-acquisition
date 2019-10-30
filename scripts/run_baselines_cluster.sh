@@ -17,7 +17,6 @@ queue=dev
 INIT_LINES=5
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
-# TODO missing results for low_to_high_rnl and evaluator_net
 for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high_rnl"; do
     CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors_post_eval_tag/${NAME}
     for policy in "random" "lowfirst" "evaluator_net"; do
