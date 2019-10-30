@@ -48,10 +48,10 @@ def dicom_to_0_1_range(tensor):
     return (tensor.clamp(-3, 3) + 3) / 6
 
 
-def gaussian_nll_loss(reconstruction, target, logvar, options):
+def gaussian_nll_loss(reconstruction, target, logvar, dataroot):
     reconstruction = to_magnitude(reconstruction)
     target = to_magnitude(target)
-    if options.dataroot == 'KNEE_RAW':
+    if dataroot == 'KNEE_RAW':
         reconstruction = center_crop(reconstruction, [320, 320])
         target = center_crop(target, [320, 320])
         logvar = center_crop(logvar, [320, 320])
@@ -82,7 +82,12 @@ def preprocess_inputs(batch, dataroot, device):
 
 class GANLossKspace(nn.Module):
 
-    def __init__(self, use_lsgan=True, use_mse_as_energy=False, grad_ctx=False, gamma=100, options=None):
+    def __init__(self,
+                 use_lsgan=True,
+                 use_mse_as_energy=False,
+                 grad_ctx=False,
+                 gamma=100,
+                 options=None):
         super(GANLossKspace, self).__init__()
         # self.register_buffer('real_label', torch.ones(imSize, imSize))
         # self.register_buffer('fake_label', torch.zeros(imSize, imSize))

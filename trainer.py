@@ -238,7 +238,7 @@ class Trainer:
         if not self.options.only_evaluator:
             self.optimizers['G'].zero_grad()
             loss_G = self.losses['NLL'](reconstructed_image, target, uncertainty_map,
-                                        self.options).mean()
+                                        self.options.dataroot).mean()
             loss_G += loss_G_GAN
             loss_G.backward()
             self.optimizers['G'].step()

@@ -95,6 +95,8 @@ class RLOptions(BaseOptions):
         parser.add_argument(
             '--allow_replace_actions', dest='no_replacement_policy', action='store_false')
         parser.add_argument('--freq_dqn_checkpoint_save', type=int, default=10000)
+        parser.add_argument('--dqn_alternate_opt', dest='dqn_alternate_opt', action='store_true')
+        parser.add_argument('--reconstructor_lr', type=float, default=0.0002)
 
         self.isTrain = False
         return parser

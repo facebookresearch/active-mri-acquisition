@@ -7,7 +7,7 @@ import gym.spaces
 import numpy as np
 import torch
 import torch.nn.functional as F
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import data
 import models.evaluator
