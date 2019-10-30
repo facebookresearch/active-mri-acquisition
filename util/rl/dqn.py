@@ -103,6 +103,7 @@ class DDQN(nn.Module):
 
     # TODO add code to freeze reconstructor for some number of steps
     def __init__(self, num_actions, device, memory, opts, env=None):
+        # `env` != None indicates that the environment's reconstructor needs to be updated also
         super(DDQN, self).__init__()
         self.model = get_model(num_actions, opts)
         self.memory = memory
@@ -213,7 +214,11 @@ class DDQN(nn.Module):
         return self._update_dqn_parameters(dqn_batch, target_net)
 
     def _update_reconstructor_and_get_dqn_batch(self, batch):
-        assert self.env is not None
+        assert self.env is not None and self.opts.dqn_alternate_opt
+        # When using DQN alternate optimization, the replay buffer only stores the image index
+        # and the mask used during the call to step. This function needs to retrieve the image
+        # from the environment's training dataset, compute reconstructions with the current
+        # reconstructor, update it, and create observations (i.e., reconstructions) for the DQN
         prev_image_idx_and_mask = batch['observations'].to(self.device)
         next_image_idx_and_mask = batch['next_observations'].to(self.device)
 
@@ -287,6 +292,7 @@ class DQNTrainer:
             mem_capacity = 0 if self.load_replay_mem or options_.dqn_only_test \
                 else self._max_replay_buffer_size()
             self.logger.info(f'Creating replay buffer with capacity {mem_capacity}.')
+            # For alternate optimization, obs_shape is just image index plus mask
             self.replay_memory = util.rl.replay_buffer.ReplayMemory(
                 mem_capacity, (1 + self.env.image_width,)
                 if self.options.dqn_alternate_opt else self.env.observation_space.shape,
@@ -333,6 +339,7 @@ class DQNTrainer:
         # If replay will be loaded, set capacity to zero (defer allocation to `__call__()`)
         mem_capacity = 0 if self.load_replay_mem or self.options.dqn_only_test \
             else self._max_replay_buffer_size()
+        # For alternate optimization, obs_shape is just image index plus mask
         self.replay_memory = util.rl.replay_buffer.ReplayMemory(
             mem_capacity, (1 + self.env.image_width,)
             if self.options.dqn_alternate_opt else self.env.observation_space.shape,
@@ -383,6 +390,7 @@ class DQNTrainer:
                                         f'at {memory_path}. Allocating a new buffer with '
                                         f'capacity {mem_capacity}.')
 
+                    # For alternate optimization, obs_shape is just image index plus mask
                     self.replay_memory = util.rl.replay_buffer.ReplayMemory(
                         mem_capacity, (1 + self.env.image_width,)
                         if self.options.dqn_alternate_opt else self.env.observation_space.shape,
@@ -449,6 +457,7 @@ class DQNTrainer:
                 assert not (self.options.no_replacement_policy and is_repeated_action)
 
                 next_obs, reward, done, _ = self.env.step(action)
+                # See comment above for format of obs and how to obtain mask from it
                 image_and_mask_next_obs = np.array([info['image_idx']] + list(next_obs[0, -2, :]))
                 self.steps += 1
                 if self.options.dqn_alternate_opt:
