@@ -232,6 +232,9 @@ class DQNTrainer:
             self.reward_images_in_window = np.zeros(self.window_size)
             self.current_score_auc_window = np.zeros(self.window_size)
 
+            if self.options.dqn_alternate_opt_per_epoch:
+                self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer)
+
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
 
@@ -275,6 +278,9 @@ class DQNTrainer:
         self.window_size = min(self.options.num_train_images, 5000)
         self.reward_images_in_window = np.zeros(self.window_size)
         self.current_score_auc_window = np.zeros(self.window_size)
+
+        if self.options.dqn_alternate_opt_per_epoch:
+            self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer)
 
     def load_checkpoint_if_needed(self):
         if self.options.dqn_only_test:
@@ -384,7 +390,7 @@ class DQNTrainer:
                     self.target_net.load_state_dict(self.policy.state_dict())
 
                 # Adding per-step tensorboard logs
-                if self.steps % 50 == 0:
+                if self.steps % 250 == 0:
                     self.writer.add_scalar('epsilon', epsilon, self.steps)
                     if loss is not None:
                         self.writer.add_scalar('loss', loss, self.steps)
@@ -419,6 +425,11 @@ class DQNTrainer:
 
         self.checkpoint(submit_job=False)
         return self.best_test_score
+
+    def update_reconstructor_and_buffer(self):
+        self.env.retrain_reconstructor(self.logger, self.writer)
+        self.replay_memory.count_seen = 0
+        self.replay_memory.position = 0
 
     def __call__(self):
         if self.env is None:

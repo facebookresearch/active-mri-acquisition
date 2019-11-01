@@ -7,13 +7,14 @@ import gym.spaces
 import numpy as np
 import torch
 import torch.nn.functional as F
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import data
 import models.evaluator
 import models.fft_utils
 import models.reconstruction
 import util.util
+import util.rl.reconstructor_rl_trainer
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -85,7 +86,7 @@ class ReconstructionEnv:
         self._train_order = rng_train.permutation(len(self._dataset_train))
         self._test_order = rng.permutation(len(self._dataset_test))
         self._image_idx_test = 0
-        self._image_idx_train = 0
+        self._image_idx_train = -1
         self.data_model = ReconstructionEnv.DataMode.TRAIN
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
@@ -147,6 +148,12 @@ class ReconstructionEnv:
         self._current_score = None
         self._scans_left = None
 
+        # Variables used when alternate optimization is active
+        self.mask_dict = {}
+        self.epoch_finished_callback = None
+        self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
+            self._reconstructor, self._dataset_train, self.options)
+
     def _generate_initial_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
         for i in range(self.options.initial_num_lines_per_side):
@@ -176,7 +183,7 @@ class ReconstructionEnv:
     def set_training(self, reset_index=False):
         self.data_model = ReconstructionEnv.DataMode.TRAIN
         if reset_index:
-            self._image_idx_train = 0
+            self._image_idx_train = -1
 
     @staticmethod
     def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
@@ -306,8 +313,16 @@ class ReconstructionEnv:
                     set_idx = self._image_idx_test
                     self._image_idx_test += 1
                 else:
-                    set_idx = self._image_idx_train
+                    if (self._image_idx_train + 1) == self.num_train_images:
+                        if self.epoch_finished_callback is not None:
+                            self.epoch_finished_callback()
+
                     self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
+
+                    if self._image_idx_train == 0:
+                        self._reset_saved_masks_dict()
+
+                    set_idx = self._image_idx_train
 
             info['split'] = self.split_names[self.data_model]
             info['image_idx'] = set_order[set_idx]
@@ -347,6 +362,9 @@ class ReconstructionEnv:
         assert self._scans_left > 0
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action)
+        if self.data_model == ReconstructionEnv.DataMode.TRAIN:
+            self.mask_dict[self._train_order[self._image_idx_train]][-self._scans_left] = \
+                self._current_mask.squeeze().cpu().numpy()
         observation, new_score = self._compute_observation_and_score()
 
         metric = self.options.reward_metric
@@ -371,3 +389,20 @@ class ReconstructionEnv:
                                              obs['mask_embedding'].to(device))
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
+
+    def retrain_reconstructor(self, logger, writer):
+        logger.info(
+            f'Training reconstructor for {self.options.num_epochs_train_reconstructor} epochs')
+        self.reconstructor_trainer(self.mask_dict, writer)
+        logger.info('Done training reconstructor')
+
+        self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
+
+    def _reset_saved_masks_dict(self):
+        self.mask_dict.clear()
+        for image_index in self._train_order[:self.options.num_train_images]:
+            self.mask_dict[image_index] = np.zeros(
+                (self.options.budget, self.image_width), dtype=np.float32)
+
+    def set_epoch_finished_callback(self, callback: Callable):
+        self.epoch_finished_callback = callback
