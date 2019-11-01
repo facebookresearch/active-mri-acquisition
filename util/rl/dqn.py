@@ -209,7 +209,7 @@ class DDQN(nn.Module):
             dqn_batch = self._update_reconstructor_and_get_dqn_batch(batch)
         else:
             dqn_batch = {}
-            for key, tensor in batch.keys():
+            for key, tensor in batch.items():
                 dqn_batch[key] = tensor.to(self.device)
         return self._update_dqn_parameters(dqn_batch, target_net)
 
@@ -241,7 +241,6 @@ class DDQN(nn.Module):
             batch_for_reconstructor, self.env.options.dataroot, self.device)
         reconstructed_image, uncertainty_map, mask_embedding = self.env._reconstructor(
             zero_filled_image, mask)
-
         loss = models.fft_utils.gaussian_nll_loss(reconstructed_image, target, uncertainty_map,
                                                   self.env.options.dataroot).mean()
         loss.backward()
@@ -255,9 +254,15 @@ class DDQN(nn.Module):
             for i in range(len(reconstructed_image))
         ])
         batch_size = self.opts.rl_batch_size
+        observations = self.env.pack_reconstruction_tensors_to_obs_format(
+            reconstructed_image[:batch_size, :, :, :].detach(), mask[:batch_size, :, :, :].detach(),
+            mask_embedding[:batch_size, :, :, :].detach())
+        next_observations = self.env.pack_reconstruction_tensors_to_obs_format(
+            reconstructed_image[batch_size:, :, :, :].detach(), mask[batch_size:, :, :, :].detach(),
+            mask_embedding[batch_size:, :, :, :].detach())
         dqn_batch = {
-            'observations': reconstructed_image[:batch_size, :, :, :].detach(),
-            'next_observations': reconstructed_image[batch_size:, :, :, :].detach(),
+            'observations': observations,
+            'next_observations': next_observations,
             'actions': batch['actions'].to(self.device),
             'rewards': (all_scores[batch_size:] - all_scores[:batch_size]).to(self.device),
             'dones': batch['dones'].to(self.device)
@@ -531,6 +536,8 @@ class DQNTrainer:
             return submitit.helpers.DelayedSubmission(trainer)
 
     def save(self, path):
+        reconstructor = self.env._reconstructor.state_dict() if self.options.dqn_alternate_opt \
+            else None
         torch.save({
             'dqn_weights': self.policy.state_dict(),
             'target_weights': self.target_net.state_dict(),
@@ -538,7 +545,8 @@ class DQNTrainer:
             'steps': self.steps,
             'best_test_score': self.best_test_score,
             'reward_images_in_window': self.reward_images_in_window,
-            'current_score_auc_window': self.current_score_auc_window
+            'current_score_auc_window': self.current_score_auc_window,
+            'reconstructor': reconstructor
         }, path)
 
     def load(self, path):
@@ -550,3 +558,5 @@ class DQNTrainer:
         self.best_test_score = checkpoint['best_test_score']
         self.reward_images_in_window = checkpoint['reward_images_in_window']
         self.current_score_auc_window = checkpoint['current_score_auc_window']
+        if checkpoint['reconstructor'] is not None:
+            self.env._reconstructor.load_state_dict(checkpoint['reconstructor'])

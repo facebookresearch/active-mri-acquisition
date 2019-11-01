@@ -254,6 +254,14 @@ class ReconstructionEnv:
             for img in image
         ]
 
+    def pack_reconstruction_tensors_to_obs_format(self, reconstruction, mask, mask_embedding):
+        bs, _, h, w = reconstruction.shape
+        observation = torch.zeros(bs, 2, h + 2, w)
+        observation[:, :, :h, :] = reconstruction
+        observation[:, :, h, :] = mask.squeeze(1)
+        observation[:, :, h + 1, :self.metadata['mask_embed_dim']] = mask_embedding[0, :, 0, 0]
+        return observation
+
     def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
             reconstruction, mask_embedding = self._get_current_reconstruction_and_mask_embedding()
