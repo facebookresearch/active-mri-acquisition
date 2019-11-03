@@ -430,6 +430,7 @@ class DQNTrainer:
         self.env.retrain_reconstructor(self.logger, self.writer)
         self.replay_memory.count_seen = 0
         self.replay_memory.position = 0
+        self.checkpoint(save_memory=False, submit_job=False)
 
     def __call__(self):
         if self.env is None:
@@ -440,18 +441,24 @@ class DQNTrainer:
 
         return self._train_dqn_policy()
 
-    def checkpoint(self, submit_job=True):
+    def checkpoint(self, submit_job=True, save_memory=True):
         self.logger.info('Received preemption signal.')
         policy_path = os.path.join(self.options.checkpoints_dir, 'policy_checkpoint.pt')
         self.save(policy_path)
-        self.logger.info(f'Saved DQN checkpoint to {policy_path}. Now saving replay memory.')
-        memory_path = self.replay_memory.save(self.options.checkpoints_dir, 'replay_buffer.pt')
-        self.logger.info(f'Saved replay buffer to {memory_path}.')
-        trainer = DQNTrainer(self.options, load_replay_mem=True)
+        self.logger.info(f'Saved DQN checkpoint to {policy_path}')
+        if save_memory:
+            self.logger.info('Now saving replay memory.')
+            memory_path = self.replay_memory.save(self.options.checkpoints_dir, 'replay_buffer.pt')
+            self.logger.info(f'Saved replay buffer to {memory_path}.')
         if submit_job:
+            trainer = DQNTrainer(self.options, load_replay_mem=True)
             return submitit.helpers.DelayedSubmission(trainer)
 
+    # noinspection PyProtectedMember
     def save(self, path):
+        reconstructor = None
+        if self.options.dqn_alternate_opt_per_epoch:
+            reconstructor = self.env._reconstructor.state_dict()
         torch.save({
             'dqn_weights': self.policy.state_dict(),
             'target_weights': self.target_net.state_dict(),
@@ -459,9 +466,11 @@ class DQNTrainer:
             'steps': self.steps,
             'best_test_score': self.best_test_score,
             'reward_images_in_window': self.reward_images_in_window,
-            'current_score_auc_window': self.current_score_auc_window
+            'current_score_auc_window': self.current_score_auc_window,
+            'reconstructor': reconstructor
         }, path)
 
+    # noinspection PyProtectedMember
     def load(self, path):
         checkpoint = torch.load(path)
         self.policy.load_state_dict(checkpoint['dqn_weights'])
@@ -471,3 +480,5 @@ class DQNTrainer:
         self.best_test_score = checkpoint['best_test_score']
         self.reward_images_in_window = checkpoint['reward_images_in_window']
         self.current_score_auc_window = checkpoint['current_score_auc_window']
+        if checkpoint['reconstructor'] is not None:
+            self.env._reconstructor.load_state_dict(checkpoint['reconstructor'])
