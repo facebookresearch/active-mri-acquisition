@@ -20,7 +20,7 @@ class DatasetFromActiveAcq(torch.utils.data.Dataset):
         self.original_dataset = original_dataset
         self.masks_dict = masks_dict
         self.image_indices = [int(x) for x in masks_dict.keys()]
-        self.rng = np.random.RandomState(1337)
+        self.rng = np.random.RandomState()
 
     def __getitem__(self, index):
         if self.rng.random_sample() < 0.1:
