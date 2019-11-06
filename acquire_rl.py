@@ -59,7 +59,8 @@ def test_policy(env,
                 step,
                 options_,
                 test_on_train=False,
-                test_with_full_budget=False):
+                test_with_full_budget=False,
+                leave_no_trace=False):
     """ Evaluates a given policy for the environment on the test set. """
     env.set_testing(use_training_set=test_on_train)
     old_budget = env.options.budget
@@ -75,7 +76,8 @@ def test_policy(env,
         obs, _ = env.reset()
         policy.init_episode()
         if obs is None:
-            save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
+            if not leave_no_trace:
+                save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
             break
         episode += 1
         done = False
@@ -96,14 +98,18 @@ def test_policy(env,
             update_statistics(reconstruction_results, episode_step, statistics)
         average_total_reward += total_reward
         all_actions.append(actions)
-        logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
-        if not test_on_train and (episode % options_.freq_save_test_stats == 0):
+        if not leave_no_trace:
+            logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
+        if not test_on_train and not leave_no_trace \
+                and (episode % options_.freq_save_test_stats == 0):
             save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
     end = time.time()
-    logger.debug('Test run lasted {} seconds.'.format(end - start))
+    if not leave_no_trace:
+        logger.debug('Test run lasted {} seconds.'.format(end - start))
     test_score = compute_test_score_from_stats(statistics[options_.reward_metric])
     split = 'train' if test_on_train else 'test'
-    writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc', test_score, step)
+    if not leave_no_trace:
+        writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc', test_score, step)
     env.set_training()
     if test_with_full_budget:
         env.options.budget = old_budget
@@ -111,7 +117,7 @@ def test_policy(env,
     if options_.reward_metric == 'mse':  # DQN maximizes but we want to minimize MSE
         test_score = -test_score
 
-    return test_score
+    return test_score, statistics
 
 
 def get_experiment_str(options_):
@@ -160,6 +166,12 @@ def get_policy(env, writer, logger, options_):
 def main(options_, logger):
     writer = tensorboardX.SummaryWriter(options_.checkpoints_dir)
     env = rl_env.ReconstructionEnv(options_)
+    if options_.use_score_as_reward:
+        random_policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
+        env.set_testing()
+        _, statistics = test_policy(
+            env, random_policy, None, None, 0, options_, leave_no_trace=True)
+        env.set_reference_point_for_rewards(statistics)
     options_.mask_embedding_dim = env.metadata['mask_embed_dim']
     options_.image_width = env.image_width
     env.set_training()

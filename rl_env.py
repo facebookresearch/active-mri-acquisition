@@ -86,7 +86,7 @@ class ReconstructionEnv:
         self._test_order = rng.permutation(len(self._dataset_test))
         self._image_idx_test = 0
         self._image_idx_train = 0
-        self.data_model = ReconstructionEnv.DataMode.TRAIN
+        self.data_mode = ReconstructionEnv.DataMode.TRAIN
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
@@ -146,6 +146,8 @@ class ReconstructionEnv:
         self._current_mask = None
         self._current_score = None
         self._scans_left = None
+        self._reference_mean_for_reward = None
+        self._reference_std_for_reward = None
 
     def _generate_initial_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
@@ -168,13 +170,13 @@ class ReconstructionEnv:
         return reconstruction, mask_embed
 
     def set_testing(self, use_training_set=False, reset_index=True):
-        self.data_model = ReconstructionEnv.DataMode.TEST_ON_TRAIN if use_training_set \
+        self.data_mode = ReconstructionEnv.DataMode.TEST_ON_TRAIN if use_training_set \
             else ReconstructionEnv.DataMode.TEST
         if reset_index:
             self._image_idx_test = 0
 
     def set_training(self, reset_index=False):
-        self.data_model = ReconstructionEnv.DataMode.TRAIN
+        self.data_mode = ReconstructionEnv.DataMode.TRAIN
         if reset_index:
             self._image_idx_train = 0
 
@@ -290,7 +292,7 @@ class ReconstructionEnv:
         """
         info = {}
         if self.options.sequential_images:
-            if self.data_model == ReconstructionEnv.DataMode.TEST:
+            if self.data_mode == ReconstructionEnv.DataMode.TEST:
                 if self._image_idx_test == min(self.num_test_images, len(self._dataset_test)):
                     return None, info  # Returns None to signal that testing is done
                 set_order = self._test_order
@@ -300,7 +302,7 @@ class ReconstructionEnv:
             else:
                 set_order = self._train_order
                 dataset = self._dataset_train
-                if self.data_model == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
+                if self.data_mode == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
                     if self._image_idx_test == min(self.num_train_images, len(self._dataset_train)):
                         return None, info  # Returns None to signal that testing is done
                     set_idx = self._image_idx_test
@@ -309,7 +311,7 @@ class ReconstructionEnv:
                     set_idx = self._image_idx_train
                     self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
 
-            info['split'] = self.split_names[self.data_model]
+            info['split'] = self.split_names[self.data_mode]
             info['image_idx'] = set_order[set_idx]
             tmp = dataset.__getitem__(info['image_idx'])
             self._ground_truth = tmp[1]
@@ -319,7 +321,7 @@ class ReconstructionEnv:
             logging.debug(f"{info['split'].capitalize()} episode started "
                           f"with image {set_order[set_idx]}")
         else:
-            using_test_set = self.data_model == ReconstructionEnv.DataMode.TEST
+            using_test_set = self.data_mode == ReconstructionEnv.DataMode.TEST
             dataset_to_check = self._dataset_test if using_test_set else self._dataset_train
             info['split'] = 'test' if using_test_set else 'train'
             if using_test_set:
@@ -352,6 +354,11 @@ class ReconstructionEnv:
         metric = self.options.reward_metric
         reward_ = new_score[metric] if self.options.use_score_as_reward \
             else new_score[metric] - self._current_score[metric]
+        if self.data_mode == ReconstructionEnv.DataMode.TRAIN and \
+                self._reference_mean_for_reward is not None:
+            ref_mean_reward = self._reference_mean_for_reward[self._scans_left - 1]
+            ref_std_reward = self._reference_std_for_reward[self._scans_left - 1]
+            reward_ = (reward_ - ref_mean_reward) / ref_std_reward
         factor = 1 if self.options.use_score_as_reward else 100
         if self.options.reward_metric == 'mse':
             factor *= -1  # We try to minimize MSE, but DQN maximizes
@@ -371,3 +378,14 @@ class ReconstructionEnv:
                                              obs['mask_embedding'].to(device))
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
+
+    def set_reference_point_for_rewards(self, statistics: Dict[str, Dict]):
+        num_actions = min(self.options.budget, self.action_space.n)
+        self._reference_mean_for_reward = np.ndarray(num_actions)
+        self._reference_std_for_reward = np.ndarray(num_actions)
+        for t in range(num_actions - 1, -1, -1):
+            self._reference_mean_for_reward[t] = \
+                statistics[self.options.reward_metric][num_actions - t - 1]['mean']
+            self._reference_std_for_reward[t] = np.sqrt(
+                statistics[self.options.reward_metric][num_actions - t - 1]['m2'] /
+                (statistics[self.options.reward_metric][num_actions - t - 1]['count'] - 1))
