@@ -251,6 +251,14 @@ class DQNTrainer:
 
         # Initialize environment
         self.env = rl_env.ReconstructionEnv(self.options)
+        if self.options.use_score_as_reward:
+            self.logger.info('Running random policy to get reference point for reward.')
+            random_policy = util.rl.simple_baselines.RandomPolicy(range(self.env.action_space.n))
+            self.logger.info('Done computing reference.')
+            self.env.set_testing()
+            _, statistics = acquire_rl.test_policy(
+                self.env, random_policy, None, None, 0, self.options, leave_no_trace=True)
+            self.env.set_reference_point_for_rewards(statistics)
         self.options.mask_embedding_dim = self.env.metadata['mask_embed_dim']
         self.options.image_width = self.env.image_width
         self.env.set_training()

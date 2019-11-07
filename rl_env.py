@@ -380,12 +380,16 @@ class ReconstructionEnv:
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
 
     def set_reference_point_for_rewards(self, statistics: Dict[str, Dict]):
+        logging.info('Reference point will be set for reward.')
         num_actions = min(self.options.budget, self.action_space.n)
         self._reference_mean_for_reward = np.ndarray(num_actions)
         self._reference_std_for_reward = np.ndarray(num_actions)
         for t in range(num_actions - 1, -1, -1):
             self._reference_mean_for_reward[t] = \
-                statistics[self.options.reward_metric][num_actions - t - 1]['mean']
+                statistics[self.options.reward_metric][num_actions - t - 1]['mean'].item()
             self._reference_std_for_reward[t] = np.sqrt(
-                statistics[self.options.reward_metric][num_actions - t - 1]['m2'] /
+                statistics[self.options.reward_metric][num_actions - t - 1]['m2'].item() /
                 (statistics[self.options.reward_metric][num_actions - t - 1]['count'] - 1))
+        logging.info(f'The following reference will be used:')
+        logging.info(f'    mean: {self._reference_mean_for_reward}')
+        logging.info(f'std: {self._reference_std_for_reward}')

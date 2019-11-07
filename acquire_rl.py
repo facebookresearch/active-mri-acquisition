@@ -167,7 +167,9 @@ def main(options_, logger):
     writer = tensorboardX.SummaryWriter(options_.checkpoints_dir)
     env = rl_env.ReconstructionEnv(options_)
     if options_.use_score_as_reward:
+        logger.info('Running random policy to get reference point for reward.')
         random_policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
+        logger.info('Done computing reference.')
         env.set_testing()
         _, statistics = test_policy(
             env, random_policy, None, None, 0, options_, leave_no_trace=True)
@@ -211,5 +213,13 @@ if __name__ == '__main__':
     logger_.addHandler(fh)
 
     logger_.info(f'Results will be saved at {opts.checkpoints_dir}.')
+
+    logger_.info('Creating RL acquisition run with the following options:')
+    for key, value in vars(opts).items():
+        if key == 'device':
+            value = value.type
+        elif key == 'gpu_ids':
+            value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
+        logger_.info(f"    {key:>25}: {'None' if value is None else value:<30}")
 
     main(opts, logger_)
