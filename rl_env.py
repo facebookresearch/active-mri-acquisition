@@ -367,7 +367,7 @@ class ReconstructionEnv:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
             assert not self.options.obs_type == 'fourier_space' and not self.options.obs_to_numpy
-            mask_embedding = None if obs['mask_embedding'] is not None \
+            mask_embedding = None if obs['mask_embedding'] is None \
                 else obs['mask_embedding'].to(device)
             k_space_scores = self._evaluator(obs['reconstruction'].to(device), mask_embedding)
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
