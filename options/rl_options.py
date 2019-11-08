@@ -47,6 +47,8 @@ class RLOptions(BaseOptions):
             action='store_true',
             help='If true, order of training images does not depend on the seed (useful when'
             'using preemption to avoid having to keep track of current image index).')
+        parser.add_argument(
+            '--normalize_rewards_on_val', dest='normalize_rewards_on_val', action='store_true')
 
         # Options for the simple baselines
         parser.add_argument('--greedymc_num_samples', type=int, default=10)

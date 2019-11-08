@@ -87,7 +87,7 @@ class ReconstructionEnv:
         self._test_order = rng.permutation(len(self._dataset_test))
         self._image_idx_test = 0
         self._image_idx_train = -1
-        self.data_model = ReconstructionEnv.DataMode.TRAIN
+        self.data_mode = ReconstructionEnv.DataMode.TRAIN
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
@@ -327,7 +327,7 @@ class ReconstructionEnv:
 
                     set_idx = self._image_idx_train
 
-            info['split'] = self.split_names[self.data_model]
+            info['split'] = self.split_names[self.data_mode]
             info['image_idx'] = set_order[set_idx]
             tmp = dataset.__getitem__(info['image_idx'])
             self._ground_truth = tmp[1]
@@ -365,7 +365,7 @@ class ReconstructionEnv:
         assert self._scans_left > 0
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action)
-        if self.data_model == ReconstructionEnv.DataMode.TRAIN:
+        if self.data_mode == ReconstructionEnv.DataMode.TRAIN:
             self.mask_dict[self._train_order[self._image_idx_train]][-self._scans_left] = \
                 self._current_mask.squeeze().cpu().numpy()
         observation, new_score = self._compute_observation_and_score()
@@ -373,15 +373,14 @@ class ReconstructionEnv:
         metric = self.options.reward_metric
         reward_ = new_score[metric] if self.options.use_score_as_reward \
             else new_score[metric] - self._current_score[metric]
+        if self.options.reward_metric == 'mse':
+            reward_ *= -1  # We try to minimize MSE, but DQN maximizes
         if self.data_mode == ReconstructionEnv.DataMode.TRAIN and \
-                self._reference_mean_for_reward is not None:
+                self.options.normalize_rewards_on_val:
             ref_mean_reward = self._reference_mean_for_reward[self._scans_left - 1]
             ref_std_reward = self._reference_std_for_reward[self._scans_left - 1]
             reward_ = (reward_ - ref_mean_reward) / (2 * ref_std_reward * self.options.budget)
-        factor = 1 if self.options.use_score_as_reward else 100
-        if self.options.reward_metric == 'mse':
-            factor *= -1  # We try to minimize MSE, but DQN maximizes
-        reward = -1.0 if has_already_been_scanned else reward_.item() * factor
+        reward = -1.0 if has_already_been_scanned else reward_.item()
         self._current_score = new_score
 
         self._scans_left -= 1
@@ -404,11 +403,10 @@ class ReconstructionEnv:
         self._reference_mean_for_reward = np.ndarray(num_actions)
         self._reference_std_for_reward = np.ndarray(num_actions)
         for t in range(num_actions - 1, -1, -1):
-            self._reference_mean_for_reward[t] = \
-                statistics[self.options.reward_metric][num_actions - t - 1]['mean'].item()
+            self._reference_mean_for_reward[t] = statistics['rewards'][num_actions - t]['mean']
             self._reference_std_for_reward[t] = np.sqrt(
-                statistics[self.options.reward_metric][num_actions - t - 1]['m2'].item() /
-                (statistics[self.options.reward_metric][num_actions - t - 1]['count'] - 1))
+                statistics['rewards'][num_actions - t]['m2'] /
+                (statistics['rewards'][num_actions - t]['count'] - 1))
         logging.info(f'The following reference will be used:')
         logging.info(f'    mean: {self._reference_mean_for_reward}')
         logging.info(f'std: {self._reference_std_for_reward}')

@@ -66,9 +66,8 @@ def test_policy(env,
     old_budget = env.options.budget
     if test_with_full_budget:
         env.options.budget = env.action_space.n
-    average_total_reward = 0
     episode = 0
-    statistics = {'mse': {}, 'ssim': {}, 'psnr': {}}
+    statistics = {'mse': {}, 'ssim': {}, 'psnr': {}, 'rewards': {}}
     import time
     start = time.time()
     all_actions = []
@@ -86,6 +85,7 @@ def test_policy(env,
         episode_step = 0
         reconstruction_results = env.compute_score(
             options_.use_reconstructions, use_current_score=True)[0]
+        reconstruction_results['rewards'] = 0
         update_statistics(reconstruction_results, episode_step, statistics)
         while not done:
             action = policy.get_action(obs, 0., actions)
@@ -95,8 +95,8 @@ def test_policy(env,
             obs = next_obs
             episode_step += 1
             reconstruction_results = env.compute_score(use_current_score=True)[0]
+            reconstruction_results['rewards'] = reward
             update_statistics(reconstruction_results, episode_step, statistics)
-        average_total_reward += total_reward
         all_actions.append(actions)
         if not leave_no_trace:
             logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
@@ -166,7 +166,7 @@ def get_policy(env, writer, logger, options_):
 def main(options_, logger):
     writer = tensorboardX.SummaryWriter(options_.checkpoints_dir, flush_secs=60)
     env = rl_env.ReconstructionEnv(options_)
-    if options_.use_score_as_reward:
+    if options_.normalize_rewards_on_val:
         logger.info('Running random policy to get reference point for reward.')
         random_policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
         logger.info('Done computing reference.')

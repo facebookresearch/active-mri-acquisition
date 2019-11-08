@@ -255,7 +255,7 @@ class DQNTrainer:
 
         # Initialize environment
         self.env = rl_env.ReconstructionEnv(self.options)
-        if self.options.use_score_as_reward:
+        if self.options.normalize_rewards_on_val:
             self.logger.info('Running random policy to get reference point for reward.')
             random_policy = util.rl.simple_baselines.RandomPolicy(range(self.env.action_space.n))
             self.logger.info('Done computing reference.')
