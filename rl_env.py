@@ -7,13 +7,14 @@ import gym.spaces
 import numpy as np
 import torch
 import torch.nn.functional as F
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import data
 import models.evaluator
 import models.fft_utils
 import models.reconstruction
 import util.util
+import util.rl.reconstructor_rl_trainer
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -85,8 +86,8 @@ class ReconstructionEnv:
         self._train_order = rng_train.permutation(len(self._dataset_train))
         self._test_order = rng.permutation(len(self._dataset_test))
         self._image_idx_test = 0
-        self._image_idx_train = 0
-        self.data_mode = ReconstructionEnv.DataMode.TRAIN
+        self._image_idx_train = -1
+        self.data_model = ReconstructionEnv.DataMode.TRAIN
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
@@ -149,6 +150,13 @@ class ReconstructionEnv:
         self._reference_mean_for_reward = None
         self._reference_std_for_reward = None
 
+        # Variables used when alternate optimization is active
+        self.mask_dict = {}
+        self.epoch_count_callback = None
+        self.epoch_frequency_callback = None
+        self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
+            self._reconstructor, self._dataset_train, self.options)
+
     def _generate_initial_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
         for i in range(self.options.initial_num_lines_per_side):
@@ -178,7 +186,7 @@ class ReconstructionEnv:
     def set_training(self, reset_index=False):
         self.data_mode = ReconstructionEnv.DataMode.TRAIN
         if reset_index:
-            self._image_idx_train = 0
+            self._image_idx_train = -1
 
     @staticmethod
     def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
@@ -308,10 +316,18 @@ class ReconstructionEnv:
                     set_idx = self._image_idx_test
                     self._image_idx_test += 1
                 else:
-                    set_idx = self._image_idx_train
+                    if self.epoch_count_callback is not None:
+                        if (self._image_idx_train + 1) % self.epoch_frequency_callback == 0:
+                            self.epoch_count_callback()
+
                     self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
 
-            info['split'] = self.split_names[self.data_mode]
+                    if self._image_idx_train == 0:
+                        self._reset_saved_masks_dict()
+
+                    set_idx = self._image_idx_train
+
+            info['split'] = self.split_names[self.data_model]
             info['image_idx'] = set_order[set_idx]
             tmp = dataset.__getitem__(info['image_idx'])
             self._ground_truth = tmp[1]
@@ -349,6 +365,9 @@ class ReconstructionEnv:
         assert self._scans_left > 0
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action)
+        if self.data_model == ReconstructionEnv.DataMode.TRAIN:
+            self.mask_dict[self._train_order[self._image_idx_train]][-self._scans_left] = \
+                self._current_mask.squeeze().cpu().numpy()
         observation, new_score = self._compute_observation_and_score()
 
         metric = self.options.reward_metric
@@ -393,3 +412,22 @@ class ReconstructionEnv:
         logging.info(f'The following reference will be used:')
         logging.info(f'    mean: {self._reference_mean_for_reward}')
         logging.info(f'std: {self._reference_std_for_reward}')
+
+    def retrain_reconstructor(self, logger, writer):
+        logger.info(
+            f'Training reconstructor for {self.options.num_epochs_train_reconstructor} epochs')
+        self.reconstructor_trainer(self.mask_dict, writer)
+        logger.info('Done training reconstructor')
+
+        self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
+
+    def _reset_saved_masks_dict(self):
+        self.mask_dict.clear()
+        for image_index in self._train_order[:self.options.num_train_images]:
+            self.mask_dict[image_index] = np.zeros(
+                (self.options.budget, self.image_width), dtype=np.float32)
+
+    def set_epoch_finished_callback(self, callback: Callable, frequency: int):
+        # Every frequency number of epochs, the callback function will be called
+        self.epoch_count_callback = callback
+        self.epoch_frequency_callback = frequency

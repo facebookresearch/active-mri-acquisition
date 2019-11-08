@@ -96,5 +96,14 @@ class RLOptions(BaseOptions):
             '--allow_replace_actions', dest='no_replacement_policy', action='store_false')
         parser.add_argument('--freq_dqn_checkpoint_save', type=int, default=10000)
 
+        # Alternate optimization options
+        parser.add_argument(
+            '--dqn_alternate_opt_per_epoch',
+            dest='dqn_alternate_opt_per_epoch',
+            action='store_true')
+        parser.add_argument('--num_epochs_train_reconstructor', type=int, default=10)
+        parser.add_argument('--frequency_train_reconstructor', type=int, default=5000)
+        parser.add_argument('--reconstructor_lr', type=float, default=0.0002)
+
         self.isTrain = False
         return parser
