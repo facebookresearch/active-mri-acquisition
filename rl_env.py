@@ -316,11 +316,11 @@ class ReconstructionEnv:
                     set_idx = self._image_idx_test
                     self._image_idx_test += 1
                 else:
+                    self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
+
                     if self.epoch_count_callback is not None:
                         if (self._image_idx_train + 1) % self.epoch_frequency_callback == 0:
                             self.epoch_count_callback()
-
-                    self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
 
                     if self._image_idx_train == 0:
                         self._reset_saved_masks_dict()
