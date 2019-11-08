@@ -46,9 +46,13 @@ class EvaluatorBasedValueNetwork(nn.Module):
     def forward(self, x):
         reconstruction = x[..., :-2, :]
         mask = x[:, 0, -2, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
-        mask_embedding = x[0, 0, -1, :self.mask_embed_dim].view(1, -1, 1, 1)
-        mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1, reconstruction.shape[2],
-                                               reconstruction.shape[3])
+        if torch.isnan(x[0, 0, -1, 0]).item() == 1:
+            assert self.mask_embed_dim == 0
+            mask_embedding = None
+        else:
+            mask_embedding = x[0, 0, -1, :self.mask_embed_dim].view(1, -1, 1, 1)
+            mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1,
+                                                   reconstruction.shape[2], reconstruction.shape[3])
         value = self.evaluator(reconstruction, mask_embedding)
         # This makes the DQN max over the target values consider only non repeated actions
         value = value - 1e10 * mask

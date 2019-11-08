@@ -275,8 +275,11 @@ class ReconstructionEnv:
                 # The second to last row is the mask
                 observation[:, self.image_height, :] = self._current_mask.cpu().numpy()
                 # The last row is the mask embedding (padded with 0s if necessary)
-                observation[:, self.image_height + 1, :self.metadata['mask_embed_dim']] = \
-                    mask_embedding[0, :, 0, 0].cpu().numpy()
+                if self.metadata['mask_embed_dim'] == 0:
+                    observation[:, self.image_height + 1, 0] = np.nan
+                else:
+                    observation[:, self.image_height + 1, :self.metadata['mask_embed_dim']] = \
+                        mask_embedding[0, :, 0, 0].cpu().numpy()
 
         return observation, score
 
