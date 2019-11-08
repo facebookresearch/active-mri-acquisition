@@ -35,7 +35,7 @@ if __name__ == '__main__':
         cpus_per_task=2,
         mem=100000,
         time=4320,
-        job_name='dqn_normalize_rewards',
+        job_name='dqn_all_normalized_rewards',
         signal_delay_s=3600,
         comment='CVPR 2020 15/11')
     executor.submit(trainer_)
