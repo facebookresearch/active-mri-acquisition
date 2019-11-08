@@ -358,7 +358,7 @@ class ReconstructionEnv:
                 self._reference_mean_for_reward is not None:
             ref_mean_reward = self._reference_mean_for_reward[self._scans_left - 1]
             ref_std_reward = self._reference_std_for_reward[self._scans_left - 1]
-            reward_ = (reward_ - ref_mean_reward) / ref_std_reward
+            reward_ = (reward_ - ref_mean_reward) / (2 * ref_std_reward * self.options.budget)
         factor = 1 if self.options.use_score_as_reward else 100
         if self.options.reward_metric == 'mse':
             factor *= -1  # We try to minimize MSE, but DQN maximizes
