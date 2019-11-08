@@ -102,6 +102,7 @@ class RLOptions(BaseOptions):
             dest='dqn_alternate_opt_per_epoch',
             action='store_true')
         parser.add_argument('--num_epochs_train_reconstructor', type=int, default=10)
+        parser.add_argument('--frequency_train_reconstructor', type=int, default=5000)
         parser.add_argument('--reconstructor_lr', type=float, default=0.0002)
 
         self.isTrain = False

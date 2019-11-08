@@ -150,7 +150,8 @@ class ReconstructionEnv:
 
         # Variables used when alternate optimization is active
         self.mask_dict = {}
-        self.epoch_finished_callback = None
+        self.epoch_count_callback = None
+        self.epoch_frequency_callback = None
         self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
             self._reconstructor, self._dataset_train, self.options)
 
@@ -313,9 +314,9 @@ class ReconstructionEnv:
                     set_idx = self._image_idx_test
                     self._image_idx_test += 1
                 else:
-                    if (self._image_idx_train + 1) == self.num_train_images:
-                        if self.epoch_finished_callback is not None:
-                            self.epoch_finished_callback()
+                    if self.epoch_count_callback is not None:
+                        if (self._image_idx_train + 1) % self.epoch_frequency_callback == 0:
+                            self.epoch_count_callback()
 
                     self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
 
@@ -404,5 +405,7 @@ class ReconstructionEnv:
             self.mask_dict[image_index] = np.zeros(
                 (self.options.budget, self.image_width), dtype=np.float32)
 
-    def set_epoch_finished_callback(self, callback: Callable):
-        self.epoch_finished_callback = callback
+    def set_epoch_finished_callback(self, callback: Callable, frequency: int):
+        # Every frequency number of epochs, the callback function will be called
+        self.epoch_count_callback = callback
+        self.epoch_frequency_callback = frequency

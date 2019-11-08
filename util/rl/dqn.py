@@ -233,7 +233,8 @@ class DQNTrainer:
             self.current_score_auc_window = np.zeros(self.window_size)
 
             if self.options.dqn_alternate_opt_per_epoch:
-                self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer)
+                self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
+                                                     self.options.frequency_train_reconstructor)
 
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
@@ -280,7 +281,8 @@ class DQNTrainer:
         self.current_score_auc_window = np.zeros(self.window_size)
 
         if self.options.dqn_alternate_opt_per_epoch:
-            self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer)
+            self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
+                                                 self.options.frequency_train_reconstructor)
 
     def load_checkpoint_if_needed(self):
         if self.options.dqn_only_test:
