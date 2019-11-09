@@ -169,10 +169,10 @@ def main(options_, logger):
     if options_.normalize_rewards_on_val:
         logger.info('Running random policy to get reference point for reward.')
         random_policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
-        logger.info('Done computing reference.')
         env.set_testing()
         _, statistics = test_policy(
             env, random_policy, None, None, 0, options_, leave_no_trace=True)
+        logger.info('Done computing reference.')
         env.set_reference_point_for_rewards(statistics)
     options_.mask_embedding_dim = env.metadata['mask_embed_dim']
     options_.image_width = env.image_width

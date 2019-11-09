@@ -319,7 +319,8 @@ class ReconstructionEnv:
                     self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
 
                     if self.epoch_count_callback is not None:
-                        if (self._image_idx_train + 1) % self.epoch_frequency_callback == 0:
+                        if self._image_idx_train != 0 and \
+                                self._image_idx_train % self.epoch_frequency_callback == 0:
                             self.epoch_count_callback()
 
                     if self._image_idx_train == 0:
@@ -366,7 +367,12 @@ class ReconstructionEnv:
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action)
         if self.data_mode == ReconstructionEnv.DataMode.TRAIN:
-            self.mask_dict[self._train_order[self._image_idx_train]][-self._scans_left] = \
+            image_idx = self._train_order[self._image_idx_train]
+            if image_idx not in self.mask_dict.keys():
+                self.mask_dict[image_idx] = np.zeros(
+                    (self.options.budget, self.image_width), dtype=np.float32)
+
+            self.mask_dict[image_idx][-self._scans_left] = \
                 self._current_mask.squeeze().cpu().numpy()
         observation, new_score = self._compute_observation_and_score()
 
@@ -415,16 +421,13 @@ class ReconstructionEnv:
     def retrain_reconstructor(self, logger, writer):
         logger.info(
             f'Training reconstructor for {self.options.num_epochs_train_reconstructor} epochs')
-        self.reconstructor_trainer(self.mask_dict, writer)
+        self.reconstructor_trainer(self.mask_dict, logger, writer)
         logger.info('Done training reconstructor')
 
         self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
 
     def _reset_saved_masks_dict(self):
         self.mask_dict.clear()
-        for image_index in self._train_order[:self.options.num_train_images]:
-            self.mask_dict[image_index] = np.zeros(
-                (self.options.budget, self.image_width), dtype=np.float32)
 
     def set_epoch_finished_callback(self, callback: Callable, frequency: int):
         # Every frequency number of epochs, the callback function will be called

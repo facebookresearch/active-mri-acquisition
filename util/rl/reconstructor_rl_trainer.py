@@ -1,4 +1,5 @@
 import argparse
+import logging
 
 import numpy as np
 import tensorboardX
@@ -48,13 +49,17 @@ class ReconstructorRLTrainer:
             self.reconstructor.parameters(), lr=self.options.reconstructor_lr)
         self.num_epochs = 0
 
-    def __call__(self, masks_dict: Dict[int, np.ndarray], writer: tensorboardX.SummaryWriter):
+    def __call__(self, masks_dict: Dict[int, np.ndarray], logger: logging.Logger,
+                 writer: tensorboardX.SummaryWriter):
         # masks_dict is [image_index, matrix of N * W columns of masks for each image]
         # Only image indices appearing in this dictionary will be considered
         dataset = DatasetFromActiveAcq(self.original_dataset, masks_dict)
+        logger.info(f'Created dataset of len {dataset}.')
         data_loader = torch.utils.data.DataLoader(dataset, batch_size=40)
+        logger.info(f'Created dataloader with {len(data_loader)} batches.')
         self.reconstructor.train()
         for i in range(self.options.num_epochs_train_reconstructor):
+            logger.info(f'Starting epoch {i + 1}/{self.options.num_epochs_train_reconstructor}')
             total_loss = 0
             for batch in data_loader:
                 self.optimizer.zero_grad()
@@ -74,6 +79,7 @@ class ReconstructorRLTrainer:
                 total_loss += loss.item()
 
             self.num_epochs += 1
+            logger.info(f'Reconstructor loss: {total_loss}')
             writer.add_scalar('reconstructor_loss', total_loss, self.num_epochs)
 
         self.reconstructor.eval()
