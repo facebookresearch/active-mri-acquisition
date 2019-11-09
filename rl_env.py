@@ -373,6 +373,7 @@ class ReconstructionEnv:
         metric = self.options.reward_metric
         reward_ = new_score[metric] if self.options.use_score_as_reward \
             else new_score[metric] - self._current_score[metric]
+        reward_ = reward_.item()
         if self.options.reward_metric == 'mse':
             reward_ *= -1  # We try to minimize MSE, but DQN maximizes
         if self.data_mode == ReconstructionEnv.DataMode.TRAIN and \
@@ -380,7 +381,7 @@ class ReconstructionEnv:
             ref_mean_reward = self._reference_mean_for_reward[self._scans_left - 1]
             ref_std_reward = self._reference_std_for_reward[self._scans_left - 1]
             reward_ = (reward_ - ref_mean_reward) / (2 * ref_std_reward * self.options.budget)
-        reward = -1.0 if has_already_been_scanned else reward_.item()
+        reward = -1.0 if has_already_been_scanned else reward_
         self._current_score = new_score
 
         self._scans_left -= 1
