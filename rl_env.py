@@ -384,9 +384,8 @@ class ReconstructionEnv:
             reward_ *= -1  # We try to minimize MSE, but DQN maximizes
         if self.data_mode == ReconstructionEnv.DataMode.TRAIN and \
                 self.options.normalize_rewards_on_val:
-            ref_mean_reward = self._reference_mean_for_reward[self._scans_left - 1]
-            ref_std_reward = self._reference_std_for_reward[self._scans_left - 1]
-            reward_ = (reward_ - ref_mean_reward) / (2 * ref_std_reward * self.options.budget)
+            reward_ /= np.abs(self._reference_mean_for_reward[self.options.budget - 1])
+            reward_ /= (self.options.budget - 1)
         reward = -1.0 if has_already_been_scanned else reward_
         self._current_score = new_score
 
