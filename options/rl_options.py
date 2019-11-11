@@ -86,6 +86,8 @@ class RLOptions(BaseOptions):
         parser.add_argument('--rl_batch_size', type=int, default=16)
         parser.add_argument('--test_set', choices=['train', 'val', 'test'], default='test')
         parser.add_argument(
+            '--no_test_with_full_budget', dest='test_with_full_budget', action='store_false')
+        parser.add_argument(
             '--dqn_burn_in',
             type=int,
             default=200,

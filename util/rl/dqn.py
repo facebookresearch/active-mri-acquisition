@@ -351,7 +351,7 @@ class DQNTrainer:
                     self.logger,
                     self.episode,
                     self.options,
-                    test_with_full_budget=True)
+                    test_with_full_budget=self.options.test_with_full_budget)
                 if test_score > self.best_test_score:
                     policy_path = os.path.join(self.options.checkpoints_dir, 'policy_best.pt')
                     self.save(policy_path)
@@ -370,7 +370,7 @@ class DQNTrainer:
                     self.episode,
                     self.options,
                     test_on_train=True,
-                    test_with_full_budget=True)
+                    test_with_full_budget=self.options.test_with_full_budget)
 
             # Run an episode and update model
             obs, _ = self.env.reset()
