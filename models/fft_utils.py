@@ -112,16 +112,12 @@ class GANLossKspace(nn.Module):
                     target_tensor[:] = degree
             else:
                 pred, gt = pred_and_gt
-                w = gt.shape[2]
                 if self.options.dataroot == 'KNEE_RAW':
                     gt = center_crop(gt, [368, 320])
                     pred = center_crop(pred, [368, 320])
+                w = gt.shape[2]
                 ks_gt = fft(gt, normalized=True)
                 ks_input = fft(pred, normalized=True)
-                # mask k_space values where 0-padding was added
-                # if self.options.dataroot == 'KNEE_RAW':
-                #     ks_gt[:, :, :, 166:202] = ks_gt[:, :, :, 166:202] * 0.
-                #     ks_input[:, :, :, 166:202] = ks_input[:, :, :, 166:202] * 0.
                 ks_row_mse = F.mse_loss(
                     ks_input, ks_gt, reduce=False).sum(
                         1, keepdim=True).sum(

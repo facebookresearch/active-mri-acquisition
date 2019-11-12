@@ -68,12 +68,13 @@ def get_train_valid_loader(batch_size,
         raw_root = '/datasets01_101/fastMRI/112718'
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + ' not exists. Change to the right path.')
-        data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
+        data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=False)
         train_data = RawSliceData(
             raw_root + '/singlecoil_train',
             transform=data_transform,
             num_cols=368,
             num_volumes=None)
+        data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         valid_data = RawSliceData(
             raw_root + '/singlecoil_val', transform=data_transform, num_cols=368, num_volumes=None)
     else:
@@ -142,7 +143,7 @@ def get_test_loader(batch_size,
             raise ImportError(raw_root + ' not exists. Change to the right path.')
         data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         test_data = RawSliceData(
-            raw_root + '/singlecoil_test', transform=data_transform, num_cols=368)
+            raw_root + '/singlecoil_val', transform=data_transform, num_cols=368)
 
         def init_fun(_):
             return np.random.seed()

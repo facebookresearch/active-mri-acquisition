@@ -23,7 +23,7 @@ class SpectralMapDecomposition(nn.Module):
     def __init__(self):
         super(SpectralMapDecomposition, self).__init__()
 
-    def forward(self, reconstructed_image, mask_embedding):
+    def forward(self, reconstructed_image, mask_embedding, mask):
         """
 
         Args:
@@ -57,10 +57,15 @@ class SpectralMapDecomposition(nn.Module):
         masked_kspace = masked_kspace.view(batch_size * width, 2, height, width)
 
         # convert spectral maps to image space
+        separate_images = ifft(masked_kspace)
         # result is (batch, [real_M0, img_M0, real_M1, img_M1, ...],  height, width]
-        separate_images = ifft(masked_kspace).contiguous().view(batch_size, 2 * width, height,
-                                                                width)
+        separate_images = separate_images.contiguous().view(batch_size, 2, width, height, width)
 
+        # add mask information as a summation -- might not be optimal
+        if mask is not None:
+            separate_images = separate_images + mask.permute(0, 3, 1, 2).unsqueeze(1).detach()
+
+        separate_images = separate_images.contiguous().view(batch_size, 2 * width, height, width)
         # concatenate mask embedding
         if mask_embedding is not None:
             spectral_map = torch.cat([separate_images, mask_embedding], dim=1)
@@ -132,7 +137,7 @@ class EvaluatorNetwork(nn.Module):
         self.model = nn.Sequential(*sequence)
         self.apply(init_func)
 
-    def forward(self, input, mask_embedding=None, raw=False):
+    def forward(self, input, mask_embedding=None, mask=None):
         """
 
         Args:
@@ -145,12 +150,7 @@ class EvaluatorNetwork(nn.Module):
                     shape   :   (batch_size, width)
 
         """
-        # if raw:
-        #     input = center_crop(input, [368, 320])
-        #     mask_embedding = center_crop(mask_embedding, [368, 320])
-
-        spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding)
-
+        spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding, mask)
         return self.model(spectral_map_and_mask_embedding).squeeze(3).squeeze(2)
 
 

@@ -165,7 +165,7 @@ class ReconstructionEnv:
             reconstruction = zero_filled_image
             mask_embed = None
 
-        return reconstruction, mask_embed
+        return reconstruction, mask_embed, mask_to_use
 
     def set_testing(self, use_training_set=False, reset_index=True):
         self.data_model = ReconstructionEnv.DataMode.TEST_ON_TRAIN if use_training_set \
@@ -256,7 +256,7 @@ class ReconstructionEnv:
 
     def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
-            reconstruction, mask_embedding = self._get_current_reconstruction_and_mask_embedding()
+            reconstruction, mask_embedding, mask = self._get_current_reconstruction_and_mask_embedding()
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth,
                                                      self.options.dataroot == 'KNEE_RAW')
 
@@ -265,7 +265,7 @@ class ReconstructionEnv:
 
             observation = {
                 'reconstruction': reconstruction,
-                'mask': self._current_mask,
+                'mask': mask,
                 'mask_embedding': mask_embedding
             }
 
@@ -368,10 +368,11 @@ class ReconstructionEnv:
         with torch.no_grad():
             assert not self.options.obs_type == 'fourier_space' and not self.options.obs_to_numpy
             k_space_scores = self._evaluator(obs['reconstruction'].to(device),
-                                             obs['mask_embedding'].to(device))
+                                             obs['mask_embedding'].to(device) if obs['mask_embedding'] is not None else None,
+                                             obs['mask'])
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
-            if self.options.dataroot == 'KNEE_RAW':
-                tmp = torch.zeros(obs['mask'].shape)
-                tmp[0, 0, 0, 166:202] = 1
-                k_space_scores.masked_fill_(tmp.to(device).squeeze().byte(), 100000)
+            # if self.options.dataroot == 'KNEE_RAW':
+            #     tmp = torch.zeros(obs['mask'].shape)
+            #     tmp[0, 0, 0, 166:202] = 1
+            #     k_space_scores.masked_fill_(tmp.to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
