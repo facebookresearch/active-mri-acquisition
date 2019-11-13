@@ -41,8 +41,6 @@ class ReconstructionEnv:
             @param `options`: Should specify the following options:
                 -`reconstructor_dir`: directory where reconstructor is stored.
                 -`evaluator_dir`: directory where evaluator is stored.
-                -`sequential_images`: If true, each episode presents the next image in the dataset,
-                    otherwise a random image is presented.
                 -`budget`: how many actions to choose (the horizon of the episode).
                 -`obs_type`: one of {'fourier_space', 'image_space'}
                 -`initial_num_lines_per_side`: how many k-space lines to start with.
@@ -283,60 +281,47 @@ class ReconstructionEnv:
 
         return observation, score
 
-    def reset(self) -> Tuple[Union[Dict, None], Dict]:
+    def reset(self, start_with_initial_mask=False) -> Tuple[Union[Dict, None], Dict]:
         """ Loads a new image from the dataset and starts a new episode with this image.
 
-            If `self.options.sequential_images` is True, it loops over images in the dataset in
-            order. Otherwise, it selects a random image from the first
-            `self.num_{train/test}_images` in the dataset. In the sequential case,
-            the dataset is ordered according to `self._{train/test}_order`.
+            Loops over images in the dataset in order. The dataset is ordered according to
+            `self._{train/test}_order`.
         """
         info = {}
-        if self.options.sequential_images:
-            if self.data_model == ReconstructionEnv.DataMode.TEST:
-                if self._image_idx_test == min(self.num_test_images, len(self._dataset_test)):
+        if self.data_model == ReconstructionEnv.DataMode.TEST:
+            if self._image_idx_test == min(self.num_test_images, len(self._dataset_test)):
+                return None, info  # Returns None to signal that testing is done
+            set_order = self._test_order
+            dataset = self._dataset_test
+            set_idx = self._image_idx_test
+            self._image_idx_test += 1
+        else:
+            set_order = self._train_order
+            dataset = self._dataset_train
+            if self.data_model == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
+                if self._image_idx_test == min(self.num_train_images, len(self._dataset_train)):
                     return None, info  # Returns None to signal that testing is done
-                set_order = self._test_order
-                dataset = self._dataset_test
                 set_idx = self._image_idx_test
                 self._image_idx_test += 1
             else:
-                set_order = self._train_order
-                dataset = self._dataset_train
-                if self.data_model == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
-                    if self._image_idx_test == min(self.num_train_images, len(self._dataset_train)):
-                        return None, info  # Returns None to signal that testing is done
-                    set_idx = self._image_idx_test
-                    self._image_idx_test += 1
-                else:
-                    set_idx = self._image_idx_train
-                    self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
+                set_idx = self._image_idx_train
+                self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
 
-            info['split'] = self.split_names[self.data_model]
-            info['image_idx'] = set_order[set_idx]
-            tmp = dataset.__getitem__(info['image_idx'])
-            self._ground_truth = tmp[1]
-            if self.options.dataroot == 'KNEE_RAW':  # store k-space data too
-                self._k_space = tmp[2].unsqueeze(0)
-                self._ground_truth = self._ground_truth.permute(2, 0, 1)
-            logging.debug(f"{info['split'].capitalize()} episode started "
-                          f"with image {set_order[set_idx]}")
-        else:
-            using_test_set = self.data_model == ReconstructionEnv.DataMode.TEST
-            dataset_to_check = self._dataset_test if using_test_set else self._dataset_train
-            info['split'] = 'test' if using_test_set else 'train'
-            if using_test_set:
-                max_num_images = self.num_test_images
-            else:
-                max_num_images = self.num_train_images
-            dataset_len = min(len(dataset_to_check), max_num_images)
-            index_chosen_image = np.random.choice(dataset_len)
-            info['image_idx'] = index_chosen_image
-            logging.debug('{} episode started with randomly chosen image {}/{}'.format(
-                'Testing' if using_test_set else 'Training', index_chosen_image, dataset_len))
-            _, self._ground_truth = self._dataset_train.__getitem__(index_chosen_image)
+        info['split'] = self.split_names[self.data_model]
+        info['image_idx'] = set_order[set_idx]
+        tmp = dataset.__getitem__(info['image_idx'])
+
+        # Separate image data into image, mask and k-space (the last one only for RAW)
+        self._ground_truth = tmp[1]
+        if self.options.dataroot == 'KNEE_RAW':  # store k-space data too
+            self._k_space = tmp[2].unsqueeze(0)
+            self._ground_truth = self._ground_truth.permute(2, 0, 1)
+        logging.debug(f"{info['split'].capitalize()} episode started "
+                      f"with image {set_order[set_idx]}")
+
         self._ground_truth = self._ground_truth.to(device).unsqueeze(0)
-        self._current_mask = self._initial_mask
+        self._current_mask = self._initial_mask if start_with_initial_mask \
+            else tmp[0].to(device).unsqueeze(0)
         self._scans_left = min(self.options.budget, self.action_space.n)
         observation, score = self._compute_observation_and_score()
         self._current_score = score

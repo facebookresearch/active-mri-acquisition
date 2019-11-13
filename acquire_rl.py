@@ -72,7 +72,7 @@ def test_policy(env,
     start = time.time()
     all_actions = []
     while True:
-        obs, _ = env.reset()
+        obs, _ = env.reset(start_with_initial_mask=True)
         policy.init_episode()
         if obs is None:
             save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
@@ -173,8 +173,7 @@ if __name__ == '__main__':
     # Reading options
     opts = options.rl_options.RLOptions().parse()
     opts.batchSize = 1
-    opts.mask_type = 'grid'  # These two are ignored, only here for compatibility with loader
-    opts.masks_dir = None
+    opts.masks_dir = None  # Ignored, only here for compatibility with loader
 
     random.seed(opts.seed)
     np.random.seed(opts.seed)

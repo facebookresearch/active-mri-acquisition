@@ -33,13 +33,6 @@ class RLOptions(BaseOptions):
         parser.add_argument('--reward_metric', choices=['mse', 'ssim'], default='mse')
         parser.add_argument('--debug', dest='debug', action='store_true')
         parser.add_argument('--seed', type=int, default=0)
-        parser.add_argument(
-            '--sequential_images',
-            dest='sequential_images',
-            action='store_true',
-            help='If true, then the reconstruction environment\'s reset() function '
-            'will return images '
-            'in order.')
         parser.add_argument('--freq_save_test_stats', type=int, default=500)
         parser.add_argument(
             '--rl_env_train_no_seed',
@@ -47,6 +40,20 @@ class RLOptions(BaseOptions):
             action='store_true',
             help='If true, order of training images does not depend on the seed (useful when'
             'using preemption to avoid having to keep track of current image index).')
+        parser.add_argument(
+            '--mask_type',
+            type=str,
+            choices=[
+                'basic',
+                'symmetric_basic',
+                'low_to_high',
+                'grid',
+                'symmetric_grid',
+                'basic_rnl',
+                'symmetric_basic_rnl',
+                'low_to_high_rnl',
+            ],
+            help='The type of mask to use as initial state for episodes.')
 
         # Options for the simple baselines
         parser.add_argument('--greedymc_num_samples', type=int, default=10)

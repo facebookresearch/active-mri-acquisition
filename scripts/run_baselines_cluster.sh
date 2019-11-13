@@ -46,7 +46,6 @@ for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high_rnl"; do
         --seed 0 --gpu_ids 0 --policy ${policy} \
         --num_train_steps 0 --num_train_images 0 \
         --obs_type ${obs_type} \
-        --sequential_images \
         --initial_num_lines_per_side ${INIT_LINES} \
         --budget 1000 \
         --num_test_images 1000 \

@@ -347,17 +347,17 @@ class DQNTrainer:
                         f'Saved DQN model with score {self.best_test_score} to {policy_path}.')
 
             # Evaluate the current policy on training set
-            if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
-                    and self.options.num_train_images <= 5000:
-                acquire_rl.test_policy(
-                    self.env,
-                    self.policy,
-                    self.writer,
-                    self.logger,
-                    self.episode,
-                    self.options,
-                    test_on_train=True,
-                    test_with_full_budget=True)
+            # if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
+            #         and self.options.num_train_images <= 5000:
+            #     acquire_rl.test_policy(
+            #         self.env,
+            #         self.policy,
+            #         self.writer,
+            #         self.logger,
+            #         self.episode,
+            #         self.options,
+            #         test_on_train=True,
+            #         test_with_full_budget=True)
 
             # Run an episode and update model
             obs, _ = self.env.reset()

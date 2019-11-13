@@ -56,7 +56,6 @@ echo srun python acquire_rl.py --dataroot KNEE \
     --num_test_images 1000 \
     --freq_save_test_stats 50 \
     --dqn_test_episode_freq 0 \
-    --sequential_images \
     --initial_num_lines_per_side 5 \
     --obs_type image_space \
     --obs_to_numpy \
