@@ -46,11 +46,12 @@ class EvaluatorBasedValueNetwork(nn.Module):
     def forward(self, x):
         reconstruction = x[..., :-2, :]
         mask = x[:, 0, -2, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
+        bs = x.shape[0]
         if torch.isnan(x[0, 0, -1, 0]).item() == 1:
             assert self.mask_embed_dim == 0
             mask_embedding = None
         else:
-            mask_embedding = x[0, 0, -1, :self.mask_embed_dim].view(1, -1, 1, 1)
+            mask_embedding = x[:, 0, -1, :self.mask_embed_dim].view(bs, -1, 1, 1)
             mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1,
                                                    reconstruction.shape[2], reconstruction.shape[3])
         value = self.evaluator(reconstruction, mask_embedding)
@@ -347,17 +348,17 @@ class DQNTrainer:
                         f'Saved DQN model with score {self.best_test_score} to {policy_path}.')
 
             # Evaluate the current policy on training set
-            # if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
-            #         and self.options.num_train_images <= 5000:
-            #     acquire_rl.test_policy(
-            #         self.env,
-            #         self.policy,
-            #         self.writer,
-            #         self.logger,
-            #         self.episode,
-            #         self.options,
-            #         test_on_train=True,
-            #         test_with_full_budget=True)
+            if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
+                    and self.options.num_train_images <= 5000:
+                acquire_rl.test_policy(
+                    self.env,
+                    self.policy,
+                    self.writer,
+                    self.logger,
+                    self.episode,
+                    self.options,
+                    test_on_train=True,
+                    test_with_full_budget=True)
 
             # Run an episode and update model
             obs, _ = self.env.reset()
