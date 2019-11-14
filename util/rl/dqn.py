@@ -46,10 +46,15 @@ class EvaluatorBasedValueNetwork(nn.Module):
     def forward(self, x):
         reconstruction = x[..., :-2, :]
         mask = x[:, 0, -2, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
-        mask_embedding = x[0, 0, -1, :self.mask_embed_dim].view(1, -1, 1, 1)
-        mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1, reconstruction.shape[2],
-                                               reconstruction.shape[3])
-        value = self.evaluator(reconstruction, mask_embedding)
+        if torch.isnan(x[0, 0, -1, 0]).item() == 1:
+            assert self.mask_embed_dim == 0
+            mask_embedding = None
+        else:
+            mask_embedding = x[0, 0, -1, :self.mask_embed_dim].view(1, -1, 1, 1)
+            mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1,
+                                                   reconstruction.shape[2], reconstruction.shape[3])
+        # Evaluator receives the full mask with the size of image width (3rd input)
+        value = self.evaluator(reconstruction, mask_embedding, x[:, 0, -2, :].view(1, 1, 1, -1))
         # This makes the DQN max over the target values consider only non repeated actions
         value = value - 1e10 * mask
         return value
@@ -334,7 +339,7 @@ class DQNTrainer:
                     self.logger,
                     self.episode,
                     self.options,
-                    test_with_full_budget=True)
+                    test_with_full_budget=self.options.test_with_full_budget)
                 if test_score > self.best_test_score:
                     policy_path = os.path.join(self.options.checkpoints_dir, 'policy_best.pt')
                     self.save(policy_path)
@@ -353,7 +358,7 @@ class DQNTrainer:
                     self.episode,
                     self.options,
                     test_on_train=True,
-                    test_with_full_budget=True)
+                    test_with_full_budget=self.options.test_with_full_budget)
 
             # Run an episode and update model
             obs, _ = self.env.reset()
