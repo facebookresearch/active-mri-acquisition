@@ -52,8 +52,8 @@ class EvaluatorBasedValueNetwork(nn.Module):
             mask_embedding = None
         else:
             mask_embedding = x[:, 0, -1, :self.mask_embed_dim].view(bs, -1, 1, 1)
-            mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1,
-                                                   reconstruction.shape[2], reconstruction.shape[3])
+            mask_embedding = mask_embedding.repeat(1, 1, reconstruction.shape[2],
+                                                   reconstruction.shape[3])
         value = self.evaluator(reconstruction, mask_embedding)
         # This makes the DQN max over the target values consider only non repeated actions
         value = value - 1e10 * mask
