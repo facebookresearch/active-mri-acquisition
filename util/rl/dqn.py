@@ -269,7 +269,7 @@ class DQNTrainer:
             self.target_net.eval()
             self.logger.info(f'Created neural networks with {self.env.action_space.n} outputs.')
 
-            self.window_size = min(self.options.num_train_images, 5000)
+            self.window_size = min(self.options.num_train_images, 1000)
             self.reward_images_in_window = np.zeros(self.window_size)
             self.current_score_auc_window = np.zeros(self.window_size)
 
@@ -313,7 +313,7 @@ class DQNTrainer:
         self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, self.options).to(
             rl_env.device)
 
-        self.window_size = min(self.options.num_train_images, 5000)
+        self.window_size = min(self.options.num_train_images, 1000)
         self.reward_images_in_window = np.zeros(self.window_size)
         self.current_score_auc_window = np.zeros(self.window_size)
 
@@ -385,7 +385,7 @@ class DQNTrainer:
 
             # Evaluate the current policy on training set
             if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
-                    and self.options.num_train_images <= 5000:
+                    and self.options.num_train_images <= 1000:
                 acquire_rl.test_policy(
                     self.env,
                     self.policy,
@@ -429,9 +429,9 @@ class DQNTrainer:
                     if update_results['loss'] is not None:
                         self.writer.add_scalar('loss', update_results['loss'], self.steps)
                         self.writer.add_scalar('grad_norm', update_results['grad_norm'], self.steps)
-                        self.writer.add_scalar('mean_q_values', update_results['mean_q_values'],
+                        self.writer.add_scalar('mean_q_value', update_results['q_values_mean'],
                                                self.steps)
-                        self.writer.add_scalar('std_q_values', update_results['std_q_values'],
+                        self.writer.add_scalar('std_q_value', update_results['q_values_std'],
                                                self.steps)
                         if update_results['value'] is not None:
                             self.writer.add_scalar('value', update_results['value'], self.steps)

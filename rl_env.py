@@ -347,7 +347,7 @@ class ReconstructionEnv:
         self._current_score = new_score
 
         self._scans_left -= 1
-        done = (self._scans_left == 0)
+        done = (self._scans_left == 0) or (self._current_mask.byte().all().item() == 1)
 
         return observation, reward, done, {}
 
