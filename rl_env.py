@@ -78,10 +78,10 @@ class ReconstructionEnv:
         self.latest_train_images = []
 
         # For the training data the
-        rng = np.random.RandomState(options.seed)
-        rng_train = np.random.RandomState() if options.rl_env_train_no_seed else rng
+        self.rng = np.random.RandomState(options.seed)
+        rng_train = np.random.RandomState() if options.rl_env_train_no_seed else self.rng
         self._train_order = rng_train.permutation(len(self._dataset_train))
-        self._test_order = rng.permutation(len(self._dataset_test))
+        self._test_order = self.rng.permutation(len(self._dataset_test))
         self._image_idx_test = 0
         self._image_idx_train = 0
         self.data_model = ReconstructionEnv.DataMode.TRAIN
@@ -138,19 +138,35 @@ class ReconstructionEnv:
         num_actions = (self.image_width - 2 * options.initial_num_lines_per_side) // factor
         self.action_space = gym.spaces.Discrete(num_actions)
 
-        self._initial_mask = self._generate_initial_mask().to(device)
+        self._initial_mask = self._generate_initial_lowf_mask().to(device)
         self._ground_truth = None
         self._k_space = None
         self._current_mask = None
         self._current_score = None
         self._scans_left = None
 
-    def _generate_initial_mask(self):
+    def _generate_initial_lowf_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
         for i in range(self.options.initial_num_lines_per_side):
             mask[0, 0, 0, i] = 1
             mask[0, 0, 0, -(i + 1)] = 1
         return mask
+
+    def _generate_random_initial_mask(self):
+        mask = self._generate_initial_lowf_mask()
+        init_num_lines = self.options.initial_num_lines_per_side
+        zero_mask = mask[..., init_num_lines:-init_num_lines]
+        num_highf_lines = self.rng.choice(zero_mask.numel() - self.options.budget)
+        if self.conjugate_symmetry:
+            num_highf_lines //= 2
+            zeros_width = zero_mask.numel() // 2
+            active = self.rng.choice(zeros_width, size=num_highf_lines)
+            zero_mask[..., active] = 1
+            zero_mask[..., zeros_width * 2 - active - 1] = 1
+        else:
+            active = self.rng.choice(zero_mask.numel(), size=num_highf_lines)
+            zero_mask[..., active] = 1
+        return mask.to(self.options.device)
 
     def _get_current_reconstruction_and_mask_embedding(self) -> Tuple[torch.Tensor, torch.Tensor]:
         zero_filled_image, _, _ = models.fft_utils.preprocess_inputs(
@@ -320,8 +336,8 @@ class ReconstructionEnv:
                       f"with image {set_order[set_idx]}")
 
         self._ground_truth = self._ground_truth.to(device).unsqueeze(0)
-        self._current_mask = self._initial_mask if start_with_initial_mask \
-            else mask_image_raw[0].to(device).unsqueeze(0)
+        self._current_mask = self._initial_mask if start_with_initial_mask else \
+            self._generate_random_initial_mask()
         self._scans_left = min(self.options.budget, self.action_space.n)
         observation, score = self._compute_observation_and_score()
         self._current_score = score
@@ -347,7 +363,7 @@ class ReconstructionEnv:
         self._current_score = new_score
 
         self._scans_left -= 1
-        done = (self._scans_left == 0) or (self._current_mask.byte().all().item() == 1)
+        done = (self._scans_left == 0)
 
         return observation, reward, done, {}
 

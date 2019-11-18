@@ -171,7 +171,7 @@ class DDQN(nn.Module):
         self.model.train()
         batch = self.memory.sample()
         if batch is None:
-            return None, None, None, None
+            return None
         observations = batch['observations'].to(self.device)
         next_observations = batch['next_observations'].to(self.device)
         actions = batch['actions'].to(self.device)
@@ -424,9 +424,9 @@ class DQNTrainer:
                     self.target_net.load_state_dict(self.policy.state_dict())
 
                 # Adding per-step tensorboard logs
-                if self.steps % 500 == 0:
+                if self.steps % 250 == 0:
                     self.writer.add_scalar('epsilon', epsilon, self.steps)
-                    if update_results['loss'] is not None:
+                    if update_results is not None:
                         self.writer.add_scalar('loss', update_results['loss'], self.steps)
                         self.writer.add_scalar('grad_norm', update_results['grad_norm'], self.steps)
                         self.writer.add_scalar('mean_q_value', update_results['q_values_mean'],
