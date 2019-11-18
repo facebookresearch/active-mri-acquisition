@@ -309,19 +309,19 @@ class ReconstructionEnv:
 
         info['split'] = self.split_names[self.data_model]
         info['image_idx'] = set_order[set_idx]
-        tmp = dataset.__getitem__(info['image_idx'])
+        mask_image_raw = dataset.__getitem__(info['image_idx'])
 
         # Separate image data into image, mask and k-space (the last one only for RAW)
-        self._ground_truth = tmp[1]
+        self._ground_truth = mask_image_raw[1]
         if self.options.dataroot == 'KNEE_RAW':  # store k-space data too
-            self._k_space = tmp[2].unsqueeze(0)
+            self._k_space = mask_image_raw[2].unsqueeze(0)
             self._ground_truth = self._ground_truth.permute(2, 0, 1)
         logging.debug(f"{info['split'].capitalize()} episode started "
                       f"with image {set_order[set_idx]}")
 
         self._ground_truth = self._ground_truth.to(device).unsqueeze(0)
         self._current_mask = self._initial_mask if start_with_initial_mask \
-            else tmp[0].to(device).unsqueeze(0)
+            else mask_image_raw[0].to(device).unsqueeze(0)
         self._scans_left = min(self.options.budget, self.action_space.n)
         observation, score = self._compute_observation_and_score()
         self._current_score = score
