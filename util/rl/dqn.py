@@ -30,7 +30,7 @@ class Flatten(nn.Module):
 
 class EvaluatorBasedValueNetwork(nn.Module):
 
-    def __init__(self, image_width, initial_num_lines_per_side, mask_embed_dim):
+    def __init__(self, image_width, initial_num_lines_per_side, mask_embed_dim, use_dueling=False):
         super(EvaluatorBasedValueNetwork, self).__init__()
         num_actions = image_width - 2 * initial_num_lines_per_side
         self.evaluator = models.evaluator.EvaluatorNetwork(
@@ -42,6 +42,15 @@ class EvaluatorBasedValueNetwork(nn.Module):
             num_output_channels=num_actions)
         self.mask_embed_dim = mask_embed_dim
         self.initial_num_lines_per_side = initial_num_lines_per_side
+        self.use_dueling = use_dueling
+
+        self.value_stream = None
+        self.advantage_stream = None
+        if self.use_dueling:
+            self.value_stream = nn.Sequential(
+                nn.Linear(num_actions, num_actions), nn.ReLU(), nn.Linear(num_actions, 1))
+            self.advantage_stream = nn.Sequential(
+                nn.Linear(num_actions, num_actions), nn.ReLU(), nn.Linear(num_actions, num_actions))
 
     def forward(self, x):
         reconstruction = x[..., :-2, :]
@@ -54,10 +63,19 @@ class EvaluatorBasedValueNetwork(nn.Module):
             mask_embedding = x[:, 0, -1, :self.mask_embed_dim].view(bs, -1, 1, 1)
             mask_embedding = mask_embedding.repeat(1, 1, reconstruction.shape[2],
                                                    reconstruction.shape[3])
-        value = self.evaluator(reconstruction, mask_embedding)
+
+        value = None
+        advantage = None
+        if self.use_dueling:
+            features = self.evaluator(reconstruction, mask_embedding)
+            value = self.value_stream(features)
+            advantage = self.advantage_stream(features)
+            qvalue = value + (advantage - advantage.mean(dim=1).unsqueeze(1))
+        else:
+            qvalue = self.evaluator(reconstruction, mask_embedding)
         # This makes the DQN max over the target values consider only non repeated actions
-        value = value - 1e10 * mask
-        return value
+        qvalue = qvalue - 1e10 * mask
+        return {'qvalue': qvalue, 'value': value, 'advantage': advantage}
 
 
 class BasicValueNetwork(nn.Module):
@@ -88,15 +106,20 @@ class BasicValueNetwork(nn.Module):
         masked_rffts = x[:, 2:, :, :]
         image_encoding = self.conv_image(reconstructions)
         rfft_encoding = self.conv_image(masked_rffts)
-        return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
+        return {'qvalue': self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))}
 
 
 def get_model(num_actions, options):
     if options.dqn_model_type == 'basic':
+        if options.use_dueling_dqn:
+            raise NotImplementedError('Dueling DQN only implemented with dqn_model_type=evaluator.')
         return BasicValueNetwork(num_actions)
     if options.dqn_model_type == 'evaluator':
-        return EvaluatorBasedValueNetwork(options.image_width, options.initial_num_lines_per_side,
-                                          options.mask_embedding_dim)
+        return EvaluatorBasedValueNetwork(
+            options.image_width,
+            options.initial_num_lines_per_side,
+            options.mask_embedding_dim,
+            use_dueling=options.use_dueling_dqn)
     raise ValueError('Unknown model specified for DQN.')
 
 
@@ -123,7 +146,7 @@ class DDQN(nn.Module):
         if sample < eps_threshold:
             return random.choice([x for x in range(self.num_actions) if x not in previous_actions])
         with torch.no_grad():
-            q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
+            q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))['qvalue']
         return torch.argmax(q_values, dim=1).item()
 
     def _get_action_standard_e_greedy(self, observation, eps_threshold):
@@ -158,16 +181,17 @@ class DDQN(nn.Module):
         not_done_mask = (1 - dones).squeeze()
 
         # Compute Q-values and get best action according to online network
-        all_q_values_cur = self.forward(observations)
+        output_cur_step = self.forward(observations)
+        all_q_values_cur = output_cur_step['qvalue']
         q_values = all_q_values_cur.gather(1, actions.unsqueeze(1))
 
         # Compute target values using the best action found
         with torch.no_grad():
-            all_q_values_next = self.forward(next_observations)
+            all_q_values_next = self.forward(next_observations)['qvalue']
             target_values = torch.zeros(observations.shape[0], device=self.device)
             if not_done_mask.any().item() != 0:
                 best_actions = all_q_values_next.detach().max(1)[1]
-                target_values[not_done_mask] = target_net.forward(next_observations)\
+                target_values[not_done_mask] = target_net.forward(next_observations)['qvalue'] \
                     .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
 
             target_values = self.opts.gamma * target_values + rewards
@@ -188,9 +212,21 @@ class DDQN(nn.Module):
 
         self.optimizer.step()
 
-        return loss, grad_norm, \
-               q_values.detach().mean().cpu().numpy(), \
-               q_values.detach().std().cpu().numpy()
+        value = None
+        advantage = None
+        if output_cur_step['value'] is not None:
+            value = output_cur_step['value'].detach().mean().cpu().numpy()
+            advantage = output_cur_step['advantage'].detach().\
+                gather(1, actions.unsqueeze(1)).mean().cpu().numpy()
+
+        return {
+            'loss': loss,
+            'grad_norm': grad_norm,
+            'q_values_mean': q_values.detach().mean().cpu().numpy(),
+            'q_values_std': q_values.detach().std().cpu().numpy(),
+            'value': value,
+            'advantage': advantage
+        }
 
     def init_episode(self):
         pass
@@ -381,21 +417,26 @@ class DQNTrainer:
                 next_obs, reward, done, _ = self.env.step(action)
                 self.steps += 1
                 self.policy.add_experience(obs, action, next_obs, reward, done)
-                loss, grad_norm, mean_q_values, std_q_values = self.policy.update_parameters(
-                    self.target_net)
+                update_results = self.policy.update_parameters(self.target_net)
 
                 if self.steps % self.options.target_net_update_freq == 0:
                     self.logger.info('Updating target network.')
                     self.target_net.load_state_dict(self.policy.state_dict())
 
                 # Adding per-step tensorboard logs
-                if self.steps % 50 == 0:
+                if self.steps % 500 == 0:
                     self.writer.add_scalar('epsilon', epsilon, self.steps)
-                    if loss is not None:
-                        self.writer.add_scalar('loss', loss, self.steps)
-                        self.writer.add_scalar('grad_norm', grad_norm, self.steps)
-                        self.writer.add_scalar('mean_q_values', mean_q_values, self.steps)
-                        self.writer.add_scalar('std_q_values', std_q_values, self.steps)
+                    if update_results['loss'] is not None:
+                        self.writer.add_scalar('loss', update_results['loss'], self.steps)
+                        self.writer.add_scalar('grad_norm', update_results['grad_norm'], self.steps)
+                        self.writer.add_scalar('mean_q_values', update_results['mean_q_values'],
+                                               self.steps)
+                        self.writer.add_scalar('std_q_values', update_results['std_q_values'],
+                                               self.steps)
+                        if update_results['value'] is not None:
+                            self.writer.add_scalar('value', update_results['value'], self.steps)
+                            self.writer.add_scalar('advantage', update_results['advantage'],
+                                                   self.steps)
 
                 total_reward += reward
                 auc_score += self.env.compute_score(

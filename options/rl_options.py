@@ -103,6 +103,7 @@ class RLOptions(BaseOptions):
         parser.add_argument(
             '--allow_replace_actions', dest='no_replacement_policy', action='store_false')
         parser.add_argument('--freq_dqn_checkpoint_save', type=int, default=10000)
+        parser.add_argument('--use_dueling_dqn', dest='use_dueling_dqn', action='store_true')
 
         self.isTrain = False
         return parser
