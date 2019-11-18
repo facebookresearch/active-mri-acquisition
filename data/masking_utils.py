@@ -4,27 +4,39 @@ import torch
 from torch.utils.data import RandomSampler
 
 
-def get_mask_func(mask_type, which_dataset):
+def get_mask_func(mask_type, which_dataset, mask_uniform_highf=False):
     # Whether the number of lines is random or not
     random_num_lines = (mask_type[-4:] == '_rnl')
     if 'symmetric_basic' in mask_type:
         logging.info(f'Mask is symmetric uniform choice with random_num_lines={random_num_lines}.')
         return SymmetricUniformChoiceMaskFunc(
-            [0.125], [4], which_dataset, random_num_lines=random_num_lines)
+            [0.125], [4],
+            which_dataset,
+            random_num_lines=random_num_lines,
+            use_uniform_beta=mask_uniform_highf)
     if 'basic' in mask_type:
         # First two parameters are ignored if `random_num_lines` is True
         logging.info(f'Mask is fixed acceleration mask with random_num_lines={random_num_lines}.')
-        return BasicMaskFunc([0.125], [4], which_dataset, random_num_lines=random_num_lines)
+        return BasicMaskFunc(
+            [0.125], [4],
+            which_dataset,
+            random_num_lines=random_num_lines,
+            use_uniform_beta=mask_uniform_highf)
     if 'low_to_high' in mask_type:
         logging.info(f'Mask is symmetric low to high with random_num_lines={random_num_lines}.')
         return SymmetricLowToHighMaskFunc(
-            [0.125], [4], which_dataset, random_num_lines=random_num_lines)
+            [0.125], [4],
+            which_dataset,
+            random_num_lines=random_num_lines,
+            use_uniform_beta=mask_uniform_highf)
     if 'symmetric_grid' in mask_type:
         logging.info(f'Mask is symmetric grid.')
-        return SymmetricUniformGridMaskFunc([], [], which_dataset, random_num_lines=True)
+        return SymmetricUniformGridMaskFunc(
+            [], [], which_dataset, random_num_lines=True, use_uniform_beta=mask_uniform_highf)
     if 'grid' in mask_type:
         logging.info(f'Mask is grid (not symmetric).')
-        return UniformGridMaskFunc([], [], which_dataset, random_num_lines=True)
+        return UniformGridMaskFunc(
+            [], [], which_dataset, random_num_lines=True, use_uniform_beta=mask_uniform_highf)
     raise ValueError(f'Invalid mask type: {mask_type}.')
 
 
@@ -41,7 +53,12 @@ class FixedOrderRandomSampler(RandomSampler):
 
 class MaskFunc:
 
-    def __init__(self, center_fractions, accelerations, which_dataset, random_num_lines=False):
+    def __init__(self,
+                 center_fractions,
+                 accelerations,
+                 which_dataset,
+                 random_num_lines=False,
+                 use_uniform_beta=False):
         if len(center_fractions) != len(accelerations):
             raise ValueError('Number of center fractions should match number of accelerations')
 
@@ -52,8 +69,12 @@ class MaskFunc:
         # The lines below give approx. 4x acceleration on average.
         self.min_lowf_lines = 6 if which_dataset != 'KNEE_RAW' else 16
         self.max_lowf_lines = 16 if which_dataset != 'KNEE_RAW' else 44
-        self.highf_beta_alpha = 1
-        self.highf_beta_beta = 5
+        if use_uniform_beta:
+            self.highf_beta_alpha = 1
+            self.highf_beta_beta = 1
+        else:
+            self.highf_beta_alpha = 1
+            self.highf_beta_beta = 5
 
         self.rng = np.random.RandomState()
 
