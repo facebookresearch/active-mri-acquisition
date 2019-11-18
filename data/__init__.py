@@ -13,7 +13,7 @@ def create_data_loaders(options, is_test=False):
             which_dataset=options.dataroot,
             mask_type=options.mask_type,
             masks_dir=options.masks_dir,
-            mask_uniform_highf=options.mask_uniform_highf)
+            rnl_params=options.rnl_params)
         return train_loader, valid_loader
     else:
         test_loader = get_test_loader(
@@ -22,7 +22,7 @@ def create_data_loaders(options, is_test=False):
             pin_memory=True,
             which_dataset=options.dataroot,
             mask_type=options.mask_type,
-            mask_uniform_highf=options.mask_uniform_highf)
+            rnl_params=options.rnl_params)
         return test_loader
 
 

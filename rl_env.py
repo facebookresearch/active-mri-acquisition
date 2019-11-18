@@ -55,6 +55,10 @@ class ReconstructionEnv:
         self.image_height = 640 if options.dataroot == 'KNEE_RAW' else 128
         self.image_width = 368 if options.dataroot == 'KNEE_RAW' else 128
         self.conjugate_symmetry = (options.dataroot != 'KNEE_RAW')
+
+        self.options.rnl_params = f'{2 * self.options.initial_num_lines_per_side},' \
+            f'{2 * (self.options.initial_num_lines_per_side + 1)},1,5'
+
         train_loader, valid_loader = data.create_data_loaders(options, is_test=False)
         test_loader = data.create_data_loaders(options, is_test=True)
 
@@ -322,6 +326,9 @@ class ReconstructionEnv:
         self._ground_truth = self._ground_truth.to(device).unsqueeze(0)
         self._current_mask = self._initial_mask if start_with_initial_mask \
             else mask_image_raw[0].to(device).unsqueeze(0)
+        if self._current_mask.byte().all() == 1:
+            # No valid actions in this mask, replace with initial mask to have a valid mask
+            self._current_mask = self._initial_mask
         self._scans_left = min(self.options.budget, self.action_space.n)
         observation, score = self._compute_observation_and_score()
         self._current_score = score
@@ -347,7 +354,7 @@ class ReconstructionEnv:
         self._current_score = new_score
 
         self._scans_left -= 1
-        done = (self._scans_left == 0)
+        done = (self._scans_left == 0) or (self._current_mask.byte().all() == 1)
 
         return observation, reward, done, {}
 
