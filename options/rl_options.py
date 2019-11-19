@@ -54,7 +54,11 @@ class RLOptions(BaseOptions):
                 'low_to_high_rnl',
             ],
             help='The type of mask to use as initial state for episodes.')
-        parser.add_argument('--mask_uniform_highf', dest='mask_uniform_highf', action='store_true')
+        parser.add_argument(
+            '--rnl_params',
+            type=str,
+            default=None,
+            help='Format is min_lowf_lines,max_lowf_lines,highf_beta_alpha,highf_beta_beta')
 
         # Options for the simple baselines
         parser.add_argument('--greedymc_num_samples', type=int, default=10)

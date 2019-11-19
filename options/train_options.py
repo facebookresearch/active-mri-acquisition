@@ -107,7 +107,11 @@ class TrainOptions(BaseOptions):
                 'low_to_high_rnl',
             ],
             help='The type of mask to use.')
-        parser.add_argument('--mask_uniform_highf', dest='mask_uniform_highf', action='store_true')
+        parser.add_argument(
+            '--rnl_params',
+            type=str,
+            default=None,
+            help='Format is min_lowf_lines,max_lowf_lines,highf_beta_alpha,highf_beta_beta')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
 
         # ########################
