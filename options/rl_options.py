@@ -32,7 +32,7 @@ class RLOptions(BaseOptions):
             'decrease in score with respect to previous step.')
         parser.add_argument('--reward_metric', choices=['mse', 'ssim'], default='mse')
         parser.add_argument('--debug', dest='debug', action='store_true')
-        parser.add_argument('--job_name', type='str', default='active_acq')
+        parser.add_argument('--job_name', type=str, default='active_acq')
         parser.add_argument('--seed', type=int, default=0)
         parser.add_argument('--freq_save_test_stats', type=int, default=500)
         parser.add_argument(
