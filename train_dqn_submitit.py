@@ -32,9 +32,9 @@ if __name__ == '__main__':
         num_gpus=1,
         partition='priority',
         cpus_per_task=2,
-        mem=150000,
+        mem=256000,
         time=4320,
-        job_name='dqn_train_new_reset',
+        job_name=options_.job_name,
         signal_delay_s=3600,
         comment='only one gpu/cpu job. awkward to handle preemption in this job')
     executor.submit(trainer_)
