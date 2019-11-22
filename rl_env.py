@@ -88,7 +88,7 @@ class ReconstructionEnv:
         self._train_order = rng_train.permutation(len(self._dataset_train))
         self._test_order = self.rng.permutation(len(self._dataset_test))
         self._image_idx_test = 0
-        self._image_idx_train = -1
+        self._image_idx_train = 0
         self.data_mode = ReconstructionEnv.DataMode.TRAIN
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
@@ -188,7 +188,7 @@ class ReconstructionEnv:
     def set_training(self, reset_index=False):
         self.data_mode = ReconstructionEnv.DataMode.TRAIN
         if reset_index:
-            self._image_idx_train = -1
+            self._image_idx_train = 0
 
     @staticmethod
     def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
@@ -318,8 +318,6 @@ class ReconstructionEnv:
                 set_idx = self._image_idx_test
                 self._image_idx_test += 1
             else:
-                self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
-
                 if self.epoch_count_callback is not None:
                     if self._image_idx_train != 0 and \
                             self._image_idx_train % self.epoch_frequency_callback == 0:
@@ -329,12 +327,13 @@ class ReconstructionEnv:
                     self._reset_saved_masks_dict()
 
                 set_idx = self._image_idx_train
+                self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
 
         info['split'] = self.split_names[self.data_mode]
         info['image_idx'] = set_order[set_idx]
         mask_image_raw = dataset.__getitem__(info['image_idx'])
 
-        # Separating image data into ground truth, mask and raw (the last one for RAW only)
+        # Separate image data into ground truth, mask and k-space (the last one for RAW only)
         self._ground_truth = mask_image_raw[1]
         if self.options.dataroot == 'KNEE_RAW':  # store k-space data too
             self._k_space = mask_image_raw[2].unsqueeze(0)
