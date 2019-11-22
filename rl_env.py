@@ -15,6 +15,7 @@ import models.fft_utils
 import models.reconstruction
 import util.util
 import util.rl.reconstructor_rl_trainer
+import util.rl.utils
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -158,6 +159,16 @@ class ReconstructionEnv:
         self.epoch_frequency_callback = None
         self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
             self._reconstructor, self._dataset_train, self.options)
+
+        # Pre-compute reward normalization if necessary
+        if options.normalize_rewards_on_val:
+            logging.info('Running random policy to get reference point for reward.')
+            random_policy = util.rl.simple_baselines.RandomPolicy(range(self.action_space.n))
+            self.set_testing()
+            _, statistics = util.rl.utils.test_policy(
+                self, random_policy, None, None, 0, self.options, leave_no_trace=True)
+            logging.info('Done computing reference.')
+            self.set_reference_point_for_rewards(statistics)
 
     def _generate_initial_lowf_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
