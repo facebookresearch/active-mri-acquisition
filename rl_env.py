@@ -159,7 +159,8 @@ class ReconstructionEnv:
         self.epoch_count_callback = None
         self.epoch_frequency_callback = None
         self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
-            self._reconstructor, self._dataset_train, self.options)
+            self._reconstructor, self._dataset_train, self._dataset_test,
+            self._test_order[:self.num_test_images], self.options)
 
         # Pre-compute reward normalization if necessary
         if options.normalize_rewards_on_val:
