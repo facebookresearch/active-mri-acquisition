@@ -60,6 +60,8 @@ class RLOptions(BaseOptions):
             type=str,
             default=None,
             help='Format is min_lowf_lines,max_lowf_lines,highf_beta_alpha,highf_beta_beta')
+        parser.add_argument(
+            '--normalize_rewards_on_val', dest='normalize_rewards_on_val', action='store_true')
 
         # Options for the simple baselines
         parser.add_argument('--greedymc_num_samples', type=int, default=10)
@@ -97,6 +99,8 @@ class RLOptions(BaseOptions):
         parser.add_argument('--rl_batch_size', type=int, default=16)
         parser.add_argument('--test_set', choices=['train', 'val', 'test'], default='test')
         parser.add_argument(
+            '--no_test_with_full_budget', dest='test_with_full_budget', action='store_false')
+        parser.add_argument(
             '--dqn_burn_in',
             type=int,
             default=200,
@@ -109,6 +113,15 @@ class RLOptions(BaseOptions):
             '--allow_replace_actions', dest='no_replacement_policy', action='store_false')
         parser.add_argument('--freq_dqn_checkpoint_save', type=int, default=10000)
         parser.add_argument('--use_dueling_dqn', dest='use_dueling_dqn', action='store_true')
+
+        # Alternate optimization options
+        parser.add_argument(
+            '--dqn_alternate_opt_per_epoch',
+            dest='dqn_alternate_opt_per_epoch',
+            action='store_true')
+        parser.add_argument('--num_epochs_train_reconstructor', type=int, default=10)
+        parser.add_argument('--frequency_train_reconstructor', type=int, default=5000)
+        parser.add_argument('--reconstructor_lr', type=float, default=0.0002)
 
         self.isTrain = False
         return parser

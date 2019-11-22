@@ -7,13 +7,14 @@ import gym.spaces
 import numpy as np
 import torch
 import torch.nn.functional as F
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import data
 import models.evaluator
 import models.fft_utils
 import models.reconstruction
 import util.util
+import util.rl.reconstructor_rl_trainer
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -87,8 +88,8 @@ class ReconstructionEnv:
         self._train_order = rng_train.permutation(len(self._dataset_train))
         self._test_order = self.rng.permutation(len(self._dataset_test))
         self._image_idx_test = 0
-        self._image_idx_train = 0
-        self.data_model = ReconstructionEnv.DataMode.TRAIN
+        self._image_idx_train = -1
+        self.data_mode = ReconstructionEnv.DataMode.TRAIN
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
@@ -148,6 +149,15 @@ class ReconstructionEnv:
         self._current_mask = None
         self._current_score = None
         self._scans_left = None
+        self._reference_mean_for_reward = None
+        self._reference_std_for_reward = None
+
+        # Variables used when alternate optimization is active
+        self.mask_dict = {}
+        self.epoch_count_callback = None
+        self.epoch_frequency_callback = None
+        self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
+            self._reconstructor, self._dataset_train, self.options)
 
     def _generate_initial_lowf_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
@@ -170,15 +180,15 @@ class ReconstructionEnv:
         return reconstruction, mask_embed
 
     def set_testing(self, use_training_set=False, reset_index=True):
-        self.data_model = ReconstructionEnv.DataMode.TEST_ON_TRAIN if use_training_set \
+        self.data_mode = ReconstructionEnv.DataMode.TEST_ON_TRAIN if use_training_set \
             else ReconstructionEnv.DataMode.TEST
         if reset_index:
             self._image_idx_test = 0
 
     def set_training(self, reset_index=False):
-        self.data_model = ReconstructionEnv.DataMode.TRAIN
+        self.data_mode = ReconstructionEnv.DataMode.TRAIN
         if reset_index:
-            self._image_idx_train = 0
+            self._image_idx_train = -1
 
     @staticmethod
     def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
@@ -292,7 +302,7 @@ class ReconstructionEnv:
             `self._{train/test}_order`.
         """
         info = {}
-        if self.data_model == ReconstructionEnv.DataMode.TEST:
+        if self.data_mode == ReconstructionEnv.DataMode.TEST:
             if self._image_idx_test == min(self.num_test_images, len(self._dataset_test)):
                 return None, info  # Returns None to signal that testing is done
             set_order = self._test_order
@@ -302,20 +312,29 @@ class ReconstructionEnv:
         else:
             set_order = self._train_order
             dataset = self._dataset_train
-            if self.data_model == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
+            if self.data_mode == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
                 if self._image_idx_test == min(self.num_train_images, len(self._dataset_train)):
                     return None, info  # Returns None to signal that testing is done
                 set_idx = self._image_idx_test
                 self._image_idx_test += 1
             else:
-                set_idx = self._image_idx_train
                 self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
 
-        info['split'] = self.split_names[self.data_model]
+                if self.epoch_count_callback is not None:
+                    if self._image_idx_train != 0 and \
+                            self._image_idx_train % self.epoch_frequency_callback == 0:
+                        self.epoch_count_callback()
+
+                if self._image_idx_train == 0:
+                    self._reset_saved_masks_dict()
+
+                set_idx = self._image_idx_train
+
+        info['split'] = self.split_names[self.data_mode]
         info['image_idx'] = set_order[set_idx]
         mask_image_raw = dataset.__getitem__(info['image_idx'])
 
-        # Separate image data into image, mask and k-space (the last one only for RAW)
+        # Separating image data into ground truth, mask and raw (the last one for RAW only)
         self._ground_truth = mask_image_raw[1]
         if self.options.dataroot == 'KNEE_RAW':  # store k-space data too
             self._k_space = mask_image_raw[2].unsqueeze(0)
@@ -342,15 +361,27 @@ class ReconstructionEnv:
         assert self._scans_left > 0
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action)
+        if self.data_mode == ReconstructionEnv.DataMode.TRAIN:
+            image_idx = self._train_order[self._image_idx_train]
+            if image_idx not in self.mask_dict.keys():
+                self.mask_dict[image_idx] = np.zeros(
+                    (self.options.budget, self.image_width), dtype=np.float32)
+
+            self.mask_dict[image_idx][-self._scans_left] = \
+                self._current_mask.squeeze().cpu().numpy()
         observation, new_score = self._compute_observation_and_score()
 
         metric = self.options.reward_metric
         reward_ = new_score[metric] if self.options.use_score_as_reward \
             else new_score[metric] - self._current_score[metric]
-        factor = 1 if self.options.use_score_as_reward else 100
+        reward_ = reward_.item()
         if self.options.reward_metric == 'mse':
-            factor *= -1  # We try to minimize MSE, but DQN maximizes
-        reward = -1.0 if has_already_been_scanned else reward_.item() * factor
+            reward_ *= -1  # We try to minimize MSE, but DQN maximizes
+        if self.data_mode == ReconstructionEnv.DataMode.TRAIN and \
+                self.options.normalize_rewards_on_val:
+            reward_ /= np.abs(self._reference_mean_for_reward[self.options.budget - 1])
+            reward_ /= (self.options.budget - 1)
+        reward = -1.0 if has_already_been_scanned else reward_
         self._current_score = new_score
 
         self._scans_left -= 1
@@ -367,3 +398,33 @@ class ReconstructionEnv:
             k_space_scores = self._evaluator(obs['reconstruction'].to(device), mask_embedding)
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
+
+    def set_reference_point_for_rewards(self, statistics: Dict[str, Dict]):
+        logging.info('Reference point will be set for reward.')
+        num_actions = min(self.options.budget, self.action_space.n)
+        self._reference_mean_for_reward = np.ndarray(num_actions)
+        self._reference_std_for_reward = np.ndarray(num_actions)
+        for t in range(num_actions - 1, -1, -1):
+            self._reference_mean_for_reward[t] = statistics['rewards'][num_actions - t]['mean']
+            self._reference_std_for_reward[t] = np.sqrt(
+                statistics['rewards'][num_actions - t]['m2'] /
+                (statistics['rewards'][num_actions - t]['count'] - 1))
+        logging.info(f'The following reference will be used:')
+        logging.info(f'    mean: {self._reference_mean_for_reward}')
+        logging.info(f'std: {self._reference_std_for_reward}')
+
+    def retrain_reconstructor(self, logger, writer):
+        logger.info(
+            f'Training reconstructor for {self.options.num_epochs_train_reconstructor} epochs')
+        self.reconstructor_trainer(self.mask_dict, logger, writer)
+        logger.info('Done training reconstructor')
+
+        self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
+
+    def _reset_saved_masks_dict(self):
+        self.mask_dict.clear()
+
+    def set_epoch_finished_callback(self, callback: Callable, frequency: int):
+        # Every frequency number of epochs, the callback function will be called
+        self.epoch_count_callback = callback
+        self.epoch_frequency_callback = frequency

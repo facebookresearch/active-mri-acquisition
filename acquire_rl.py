@@ -59,15 +59,15 @@ def test_policy(env,
                 step,
                 options_,
                 test_on_train=False,
-                test_with_full_budget=False):
+                test_with_full_budget=False,
+                leave_no_trace=False):
     """ Evaluates a given policy for the environment on the test set. """
     env.set_testing(use_training_set=test_on_train)
     old_budget = env.options.budget
     if test_with_full_budget:
         env.options.budget = env.action_space.n
-    average_total_reward = 0
     episode = 0
-    statistics = {'mse': {}, 'ssim': {}, 'psnr': {}}
+    statistics = {'mse': {}, 'ssim': {}, 'psnr': {}, 'rewards': {}}
     import time
     start = time.time()
     all_actions = []
@@ -75,7 +75,8 @@ def test_policy(env,
         obs, _ = env.reset(start_with_initial_mask=True)
         policy.init_episode()
         if obs is None:
-            save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
+            if not leave_no_trace:
+                save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
             break
         episode += 1
         done = False
@@ -84,6 +85,7 @@ def test_policy(env,
         episode_step = 0
         reconstruction_results = env.compute_score(
             options_.use_reconstructions, use_current_score=True)[0]
+        reconstruction_results['rewards'] = 0
         update_statistics(reconstruction_results, episode_step, statistics)
         while not done:
             action = policy.get_action(obs, 0., actions)
@@ -93,17 +95,21 @@ def test_policy(env,
             obs = next_obs
             episode_step += 1
             reconstruction_results = env.compute_score(use_current_score=True)[0]
+            reconstruction_results['rewards'] = reward
             update_statistics(reconstruction_results, episode_step, statistics)
-        average_total_reward += total_reward
         all_actions.append(actions)
-        logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
-        if not test_on_train and (episode % options_.freq_save_test_stats == 0):
+        if not leave_no_trace:
+            logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
+        if not test_on_train and not leave_no_trace \
+                and (episode % options_.freq_save_test_stats == 0):
             save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
     end = time.time()
-    logger.debug('Test run lasted {} seconds.'.format(end - start))
+    if not leave_no_trace:
+        logger.debug('Test run lasted {} seconds.'.format(end - start))
     test_score = compute_test_score_from_stats(statistics[options_.reward_metric])
     split = 'train' if test_on_train else 'test'
-    writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc', test_score, step)
+    if not leave_no_trace:
+        writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc', test_score, step)
     env.set_training()
     if test_with_full_budget:
         env.options.budget = old_budget
@@ -111,7 +117,7 @@ def test_policy(env,
     if options_.reward_metric == 'mse':  # DQN maximizes but we want to minimize MSE
         test_score = -test_score
 
-    return test_score
+    return test_score, statistics
 
 
 def get_experiment_str(options_):
@@ -158,8 +164,16 @@ def get_policy(env, writer, logger, options_):
 
 
 def main(options_, logger):
-    writer = tensorboardX.SummaryWriter(options_.checkpoints_dir)
+    writer = tensorboardX.SummaryWriter(options_.checkpoints_dir, flush_secs=60)
     env = rl_env.ReconstructionEnv(options_)
+    if options_.normalize_rewards_on_val:
+        logger.info('Running random policy to get reference point for reward.')
+        random_policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
+        env.set_testing()
+        _, statistics = test_policy(
+            env, random_policy, None, None, 0, options_, leave_no_trace=True)
+        logger.info('Done computing reference.')
+        env.set_reference_point_for_rewards(statistics)
     options_.mask_embedding_dim = env.metadata['mask_embed_dim']
     options_.image_width = env.image_width
     env.set_training()
@@ -198,5 +212,13 @@ if __name__ == '__main__':
     logger_.addHandler(fh)
 
     logger_.info(f'Results will be saved at {opts.checkpoints_dir}.')
+
+    logger_.info('Creating RL acquisition run with the following options:')
+    for key, value in vars(opts).items():
+        if key == 'device':
+            value = value.type
+        elif key == 'gpu_ids':
+            value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
+        logger_.info(f"    {key:>25}: {'None' if value is None else value:<30}")
 
     main(opts, logger_)

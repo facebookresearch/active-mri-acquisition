@@ -273,6 +273,10 @@ class DQNTrainer:
             self.reward_images_in_window = np.zeros(self.window_size)
             self.current_score_auc_window = np.zeros(self.window_size)
 
+            if self.options.dqn_alternate_opt_per_epoch:
+                self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
+                                                     self.options.frequency_train_reconstructor)
+
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
 
@@ -292,6 +296,14 @@ class DQNTrainer:
 
         # Initialize environment
         self.env = rl_env.ReconstructionEnv(self.options)
+        if self.options.normalize_rewards_on_val:
+            self.logger.info('Running random policy to get reference point for reward.')
+            random_policy = util.rl.simple_baselines.RandomPolicy(range(self.env.action_space.n))
+            self.logger.info('Done computing reference.')
+            self.env.set_testing()
+            _, statistics = acquire_rl.test_policy(
+                self.env, random_policy, None, None, 0, self.options, leave_no_trace=True)
+            self.env.set_reference_point_for_rewards(statistics)
         self.options.mask_embedding_dim = self.env.metadata['mask_embed_dim']
         self.options.image_width = self.env.image_width
         self.env.set_training()
@@ -317,6 +329,10 @@ class DQNTrainer:
         self.reward_images_in_window = np.zeros(self.window_size)
         self.current_score_auc_window = np.zeros(self.window_size)
 
+        if self.options.dqn_alternate_opt_per_epoch:
+            self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
+                                                 self.options.frequency_train_reconstructor)
+
     def load_checkpoint_if_needed(self):
         if self.options.dqn_only_test:
             policy_path = os.path.join(self.options.dqn_weights_dir, 'policy_best.pt')
@@ -333,7 +349,8 @@ class DQNTrainer:
                 self.load(policy_path)
                 self.logger.info(f'Loaded DQN policy found at {policy_path}. Steps was set to '
                                  f'{self.steps}. Episodes set to {self.episode}.')
-                self.env._image_idx_train = self.episode + 1
+                if not self.options.dqn_alternate_opt_per_epoch:
+                    self.env._image_idx_train = self.episode + 1
             else:
                 self.logger.info(f'No policy found at {policy_path}, continue without checkpoint.')
             if self.load_replay_mem:
@@ -368,14 +385,14 @@ class DQNTrainer:
 
             # Evaluate the current policy
             if self.episode % self.options.dqn_test_episode_freq == 0:
-                test_score = acquire_rl.test_policy(
+                test_score, _ = acquire_rl.test_policy(
                     self.env,
                     self.policy,
                     self.writer,
                     self.logger,
                     self.episode,
                     self.options,
-                    test_with_full_budget=True)
+                    test_with_full_budget=self.options.test_with_full_budget)
                 if test_score > self.best_test_score:
                     policy_path = os.path.join(self.options.checkpoints_dir, 'policy_best.pt')
                     self.save(policy_path)
@@ -394,7 +411,7 @@ class DQNTrainer:
                     self.episode,
                     self.options,
                     test_on_train=True,
-                    test_with_full_budget=True)
+                    test_with_full_budget=self.options.test_with_full_budget)
 
             # Run an episode and update model
             obs, _ = self.env.reset()
@@ -466,6 +483,12 @@ class DQNTrainer:
         self.checkpoint(submit_job=False)
         return self.best_test_score
 
+    def update_reconstructor_and_buffer(self):
+        self.env.retrain_reconstructor(self.logger, self.writer)
+        self.replay_memory.count_seen = 0
+        self.replay_memory.position = 0
+        self.checkpoint(save_memory=False, submit_job=False)
+
     def __call__(self):
         if self.env is None:
             self._init_all()
@@ -475,18 +498,24 @@ class DQNTrainer:
 
         return self._train_dqn_policy()
 
-    def checkpoint(self, submit_job=True):
+    def checkpoint(self, submit_job=True, save_memory=True):
         self.logger.info('Received preemption signal.')
         policy_path = os.path.join(self.options.checkpoints_dir, 'policy_checkpoint.pt')
         self.save(policy_path)
-        self.logger.info(f'Saved DQN checkpoint to {policy_path}. Now saving replay memory.')
-        memory_path = self.replay_memory.save(self.options.checkpoints_dir, 'replay_buffer.pt')
-        self.logger.info(f'Saved replay buffer to {memory_path}.')
-        trainer = DQNTrainer(self.options, load_replay_mem=True)
+        self.logger.info(f'Saved DQN checkpoint to {policy_path}')
+        if save_memory:
+            self.logger.info('Now saving replay memory.')
+            memory_path = self.replay_memory.save(self.options.checkpoints_dir, 'replay_buffer.pt')
+            self.logger.info(f'Saved replay buffer to {memory_path}.')
         if submit_job:
+            trainer = DQNTrainer(self.options, load_replay_mem=True)
             return submitit.helpers.DelayedSubmission(trainer)
 
+    # noinspection PyProtectedMember
     def save(self, path):
+        reconstructor = None
+        if self.options.dqn_alternate_opt_per_epoch:
+            reconstructor = self.env._reconstructor.state_dict()
         torch.save({
             'dqn_weights': self.policy.state_dict(),
             'target_weights': self.target_net.state_dict(),
@@ -494,9 +523,11 @@ class DQNTrainer:
             'steps': self.steps,
             'best_test_score': self.best_test_score,
             'reward_images_in_window': self.reward_images_in_window,
-            'current_score_auc_window': self.current_score_auc_window
+            'current_score_auc_window': self.current_score_auc_window,
+            'reconstructor': reconstructor
         }, path)
 
+    # noinspection PyProtectedMember
     def load(self, path):
         checkpoint = torch.load(path)
         self.policy.load_state_dict(checkpoint['dqn_weights'])
@@ -506,3 +537,5 @@ class DQNTrainer:
         self.best_test_score = checkpoint['best_test_score']
         self.reward_images_in_window = checkpoint['reward_images_in_window']
         self.current_score_auc_window = checkpoint['current_score_auc_window']
+        if checkpoint['reconstructor'] is not None:
+            self.env._reconstructor.load_state_dict(checkpoint['reconstructor'])
