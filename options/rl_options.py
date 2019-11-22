@@ -33,13 +33,6 @@ class RLOptions(BaseOptions):
         parser.add_argument('--reward_metric', choices=['mse', 'ssim'], default='mse')
         parser.add_argument('--debug', dest='debug', action='store_true')
         parser.add_argument('--seed', type=int, default=0)
-        parser.add_argument(
-            '--sequential_images',
-            dest='sequential_images',
-            action='store_true',
-            help='If true, then the reconstruction environment\'s reset() function '
-            'will return images '
-            'in order.')
         parser.add_argument('--freq_save_test_stats', type=int, default=500)
         parser.add_argument(
             '--rl_env_train_no_seed',

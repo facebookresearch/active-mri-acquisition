@@ -51,7 +51,6 @@ echo srun python acquire_rl.py --dataroot KNEE \
     --test_set val \
     --num_train_images ${NUM_TRAIN_IMG} \
     --num_test_images 100 \
-    --sequential_images \
     --budget 35 \
     --seed 0 \
     --freq_save_test_stats 100000 \
