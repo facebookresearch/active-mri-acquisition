@@ -149,6 +149,7 @@ class ReconstructionEnv:
         self._k_space = None
         self._current_mask = None
         self._current_score = None
+        self._initial_score_episode = None
         self._scans_left = None
         self._reference_mean_for_reward = None
         self._reference_std_for_reward = None
@@ -211,7 +212,7 @@ class ReconstructionEnv:
             reconstruction = models.fft_utils.center_crop(reconstruction, [320, 320])
             ground_truth = models.fft_utils.center_crop(ground_truth, [320, 320])
 
-        mse = F.mse_loss(reconstruction, ground_truth)
+        mse = F.mse_loss(reconstruction, ground_truth).cpu()
         ssim = util.util.ssim_metric(reconstruction, ground_truth)
         psnr = util.util.psnr_metric(reconstruction, ground_truth)
 
@@ -361,6 +362,10 @@ class ReconstructionEnv:
         self._scans_left = min(self.options.budget, self.action_space.n)
         observation, score = self._compute_observation_and_score()
         self._current_score = score
+        self._initial_score_episode = {
+            key: value.item()
+            for key, value in self._current_score.items()
+        }
         return observation, info
 
     def step(self, action: int) -> Tuple[Dict[str, torch.Tensor], float, bool, Dict]:
@@ -382,16 +387,20 @@ class ReconstructionEnv:
         observation, new_score = self._compute_observation_and_score()
 
         metric = self.options.reward_metric
-        reward_ = new_score[metric] if self.options.use_score_as_reward \
-            else new_score[metric] - self._current_score[metric]
-        reward_ = reward_.item()
+        if self.options.use_score_as_reward:
+            reward_ = new_score[metric] - self._initial_score_episode[metric]
+        else:
+            reward_ = new_score[metric] - self._current_score[metric]
+        factor = 100
         if self.options.reward_metric == 'mse':
-            reward_ *= -1  # We try to minimize MSE, but DQN maximizes
+            factor *= -1  # We try to minimize MSE, but DQN maximizes
+        reward = -1.0 if has_already_been_scanned else reward_.item() * factor
+
+        # Apply normalization if present
         if self.data_mode == ReconstructionEnv.DataMode.TRAIN and \
                 self.options.normalize_rewards_on_val:
-            reward_ /= np.abs(self._reference_mean_for_reward[self.options.budget - 1])
-            reward_ /= (self.options.budget - 1)
-        reward = -1.0 if has_already_been_scanned else reward_
+            reward /= np.abs(self._reference_mean_for_reward[self.options.budget - 1])
+            reward /= (self.options.budget - 1)
         self._current_score = new_score
 
         self._scans_left -= 1
