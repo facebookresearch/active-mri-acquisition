@@ -13,8 +13,11 @@ import torch.optim as optim
 
 import acquire_rl
 import models.evaluator
+import models.fft_utils
 import rl_env
 import util.rl.replay_buffer
+
+from typing import Any, Dict, Optional
 
 
 def get_epsilon(steps_done, opts):
@@ -123,13 +126,22 @@ def get_model(num_actions, options):
     raise ValueError('Unknown model specified for DQN.')
 
 
+# noinspection PyProtectedMember
 class DDQN(nn.Module):
 
-    def __init__(self, num_actions, device, memory, opts):
+    # TODO add code to freeze reconstructor for some number of steps
+    def __init__(self, num_actions, device, memory, opts, env=None):
+        # `env` != None indicates that the environment's reconstructor needs to be updated also
         super(DDQN, self).__init__()
         self.model = get_model(num_actions, opts)
         self.memory = memory
         self.optimizer = optim.Adam(self.parameters(), lr=opts.dqn_learning_rate)
+        self.optimizer_reconstructor = None
+        self.env = None
+        if env is not None:
+            self.env = env
+            self.optimizer_reconstructor = optim.Adam(
+                env._reconstructor.parameters(), lr=opts.reconstructor_lr)
         self.num_actions = num_actions
         self.opts = opts
         self.device = device
@@ -167,16 +179,14 @@ class DDQN(nn.Module):
     def add_experience(self, observation, action, next_observation, reward, done):
         self.memory.push(observation, action, next_observation, reward, done)
 
-    def update_parameters(self, target_net):
+    def _update_dqn_parameters(self, dqn_batch, target_net):
         self.model.train()
-        batch = self.memory.sample()
-        if batch is None:
-            return None
-        observations = batch['observations'].to(self.device)
-        next_observations = batch['next_observations'].to(self.device)
-        actions = batch['actions'].to(self.device)
-        rewards = batch['rewards'].to(self.device).squeeze()
-        dones = batch['dones'].to(self.device)
+        self.optimizer.zero_grad()
+        observations = dqn_batch['observations'].to(self.device)
+        next_observations = dqn_batch['next_observations'].to(self.device)
+        actions = dqn_batch['actions'].to(self.device)
+        rewards = dqn_batch['rewards'].to(self.device).squeeze()
+        dones = dqn_batch['dones'].to(self.device)
 
         not_done_mask = (1 - dones).squeeze()
 
@@ -199,7 +209,6 @@ class DDQN(nn.Module):
         # loss = F.mse_loss(q_values, target_values.unsqueeze(1))
         loss = F.smooth_l1_loss(q_values, target_values.unsqueeze(1))
 
-        self.optimizer.zero_grad()
         loss.backward()
 
         # Compute total gradient norm (for logging purposes) and then clip gradients
@@ -228,10 +237,82 @@ class DDQN(nn.Module):
             'advantage': advantage
         }
 
+    def update_parameters(self, target_net) -> Optional[Dict[str, Any]]:
+        batch = self.memory.sample()
+        if batch is None:
+            return None
+        if self.opts.dqn_alternate_opt:
+            assert self.env is not None
+            assert self.opts.use_reconstructions
+            dqn_batch = self._update_reconstructor_and_get_dqn_batch(batch)
+        else:
+            dqn_batch = {}
+            for key, tensor in batch.items():
+                dqn_batch[key] = tensor.to(self.device)
+        return self._update_dqn_parameters(dqn_batch, target_net)
+
+    def _update_reconstructor_and_get_dqn_batch(self, batch):
+        assert self.env is not None and self.opts.dqn_alternate_opt
+        # When using DQN alternate optimization, the replay buffer only stores the image index
+        # and the mask used during the call to step. This function needs to retrieve the image
+        # from the environment's training dataset, compute reconstructions with the current
+        # reconstructor, update it, and create observations (i.e., reconstructions) for the DQN
+        prev_image_idx_and_mask = batch['observations'].to(self.device)
+        next_image_idx_and_mask = batch['next_observations'].to(self.device)
+
+        images, masks = [], []
+        for tensor in prev_image_idx_and_mask:
+            tmp = self.env._dataset_train.__getitem__(tensor[0])
+            masks.append(tensor[1:])
+            images.append(tmp[1])
+        for tensor in next_image_idx_and_mask:
+            tmp = self.env._dataset_train.__getitem__(tensor[0])
+            masks.append(tensor[1:])
+            images.append(tmp[1])
+
+        # Update for reconstructor network
+        self.env._reconstructor.train()
+        self.optimizer_reconstructor.zero_grad()
+        batch_for_reconstructor = (torch.stack(masks, dim=0).view(len(masks), 1, 1, -1),
+                                   torch.stack(images, dim=0))
+        zero_filled_image, target, mask = models.fft_utils.preprocess_inputs(
+            batch_for_reconstructor, self.env.options.dataroot, self.device)
+        reconstructed_image, uncertainty_map, mask_embedding = self.env._reconstructor(
+            zero_filled_image, mask)
+        loss = models.fft_utils.gaussian_nll_loss(reconstructed_image, target, uncertainty_map,
+                                                  self.env.options.dataroot).mean()
+        loss.backward()
+        self.optimizer_reconstructor.step()
+        self.env._reconstructor.eval()
+
+        # Now create a batch to update DQN model (obs, next_obs, rewards)
+        all_scores = torch.tensor([
+            self.env._compute_score(reconstructed_image[i].unsqueeze(0).detach(),
+                                    target[i].unsqueeze(0).detach(), False)[self.opts.reward_metric]
+            for i in range(len(reconstructed_image))
+        ])
+        batch_size = self.opts.rl_batch_size
+        observations = self.env.pack_reconstruction_tensors_to_obs_format(
+            reconstructed_image[:batch_size, :, :, :].detach(), mask[:batch_size, :, :, :].detach(),
+            mask_embedding[:batch_size, :, :, :].detach())
+        next_observations = self.env.pack_reconstruction_tensors_to_obs_format(
+            reconstructed_image[batch_size:, :, :, :].detach(), mask[batch_size:, :, :, :].detach(),
+            mask_embedding[batch_size:, :, :, :].detach())
+        dqn_batch = {
+            'observations': observations,
+            'next_observations': next_observations,
+            'actions': batch['actions'].to(self.device),
+            'rewards': (all_scores[batch_size:] - all_scores[:batch_size]).to(self.device),
+            'dones': batch['dones'].to(self.device)
+        }
+
+        return dqn_batch
+
     def init_episode(self):
         pass
 
 
+# noinspection PyProtectedMember
 class DQNTrainer:
 
     def __init__(self, options_, env=None, writer=None, logger=None, load_replay_mem=True):
@@ -254,17 +335,18 @@ class DQNTrainer:
             mem_capacity = 0 if self.load_replay_mem or options_.dqn_only_test \
                 else self._max_replay_buffer_size()
             self.logger.info(f'Creating replay buffer with capacity {mem_capacity}.')
+            # For alternate optimization, obs_shape is just image index plus mask
             self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-                mem_capacity,
-                self.env.observation_space.shape,
+                mem_capacity, (1 + self.env.image_width,)
+                if self.options.dqn_alternate_opt else self.env.observation_space.shape,
                 options_.rl_batch_size,
                 options_.dqn_burn_in,
                 use_normalization=options_.dqn_normalize)
             self.logger.info('Created replay buffer.')
 
-            self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
-                               options_).to(rl_env.device)
-            self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, options_).to(
+            self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory, options_,
+                               self.env if options_.dqn_alternate_opt else None).to(rl_env.device)
+            self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, options_, None).to(
                 rl_env.device)
             self.target_net.eval()
             self.logger.info(f'Created neural networks with {self.env.action_space.n} outputs.')
@@ -300,17 +382,18 @@ class DQNTrainer:
         # If replay will be loaded, set capacity to zero (defer allocation to `__call__()`)
         mem_capacity = 0 if self.load_replay_mem or self.options.dqn_only_test \
             else self._max_replay_buffer_size()
+        # For alternate optimization, obs_shape is just image index plus mask
         self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-            mem_capacity,
-            self.env.observation_space.shape,
+            mem_capacity, (1 + self.env.image_width,)
+            if self.options.dqn_alternate_opt else self.env.observation_space.shape,
             self.options.rl_batch_size,
             self.options.dqn_burn_in,
             use_normalization=self.options.dqn_normalize)
 
         # Initialize policy
-        self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
-                           self.options).to(rl_env.device)
-        self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, self.options).to(
+        self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory, self.options,
+                           self.env if self.options.dqn_alternate_opt else None).to(rl_env.device)
+        self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, self.options, None).to(
             rl_env.device)
 
         self.window_size = min(self.options.num_train_images, 5000)
@@ -350,9 +433,10 @@ class DQNTrainer:
                                         f'at {memory_path}. Allocating a new buffer with '
                                         f'capacity {mem_capacity}.')
 
+                    # For alternate optimization, obs_shape is just image index plus mask
                     self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-                        mem_capacity,
-                        self.env.observation_space.shape,
+                        mem_capacity, (1 + self.env.image_width,)
+                        if self.options.dqn_alternate_opt else self.env.observation_space.shape,
                         self.options.rl_batch_size,
                         self.options.dqn_burn_in,
                         use_normalization=self.options.dqn_normalize)
@@ -397,7 +481,8 @@ class DQNTrainer:
                     test_with_full_budget=True)
 
             # Run an episode and update model
-            obs, _ = self.env.reset()
+            obs, info = self.env.reset()
+            image_and_mask_obs = np.array([info['image_idx']] + list(obs[0, -2, :]))
             done = False
             total_reward = 0
             cnt_repeated_actions = 0
@@ -415,8 +500,14 @@ class DQNTrainer:
                 assert not (self.options.no_replacement_policy and is_repeated_action)
 
                 next_obs, reward, done, _ = self.env.step(action)
+                # See comment above for format of obs and how to obtain mask from it
+                image_and_mask_next_obs = np.array([info['image_idx']] + list(next_obs[0, -2, :]))
                 self.steps += 1
-                self.policy.add_experience(obs, action, next_obs, reward, done)
+                if self.options.dqn_alternate_opt:
+                    self.policy.add_experience(image_and_mask_obs, action, image_and_mask_next_obs,
+                                               -1, done)
+                else:
+                    self.policy.add_experience(obs, action, next_obs, reward, done)
                 update_results = self.policy.update_parameters(self.target_net)
 
                 if self.steps % self.options.target_net_update_freq == 0:
@@ -442,7 +533,7 @@ class DQNTrainer:
                 auc_score += self.env.compute_score(
                     True, use_current_score=True)[0][self.options.reward_metric]
                 obs = next_obs
-
+                image_and_mask_obs = image_and_mask_next_obs
                 cnt_repeated_actions += int(is_repeated_action)
 
             # Adding per-episode tensorboard logs
@@ -487,6 +578,8 @@ class DQNTrainer:
             return submitit.helpers.DelayedSubmission(trainer)
 
     def save(self, path):
+        reconstructor = self.env._reconstructor.state_dict() if self.options.dqn_alternate_opt \
+            else None
         torch.save({
             'dqn_weights': self.policy.state_dict(),
             'target_weights': self.target_net.state_dict(),
@@ -494,7 +587,8 @@ class DQNTrainer:
             'steps': self.steps,
             'best_test_score': self.best_test_score,
             'reward_images_in_window': self.reward_images_in_window,
-            'current_score_auc_window': self.current_score_auc_window
+            'current_score_auc_window': self.current_score_auc_window,
+            'reconstructor': reconstructor
         }, path)
 
     def load(self, path):
@@ -506,3 +600,5 @@ class DQNTrainer:
         self.best_test_score = checkpoint['best_test_score']
         self.reward_images_in_window = checkpoint['reward_images_in_window']
         self.current_score_auc_window = checkpoint['current_score_auc_window']
+        if checkpoint['reconstructor'] is not None:
+            self.env._reconstructor.load_state_dict(checkpoint['reconstructor'])

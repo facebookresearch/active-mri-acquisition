@@ -7,7 +7,7 @@ import gym.spaces
 import numpy as np
 import torch
 import torch.nn.functional as F
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import data
 import models.evaluator
@@ -256,6 +256,14 @@ class ReconstructionEnv:
                 img.unsqueeze(0), ground_truth, self.options.dataroot == 'KNEE_RAW')
             for img in image
         ]
+
+    def pack_reconstruction_tensors_to_obs_format(self, reconstruction, mask, mask_embedding):
+        bs, _, h, w = reconstruction.shape
+        observation = torch.zeros(bs, 2, h + 2, w)
+        observation[:, :, :h, :] = reconstruction
+        observation[:, :, h, :] = mask.squeeze(1)
+        observation[:, :, h + 1, :self.metadata['mask_embed_dim']] = mask_embedding[0, :, 0, 0]
+        return observation
 
     def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
