@@ -50,10 +50,10 @@ class MaskFunc:
         self.random_num_lines = random_num_lines
 
         # The lines below give approx. 4x acceleration on average.
-        self.min_lowf_lines = 6 if which_dataset != 'KNEE_RAW' else 16
-        self.max_lowf_lines = 16 if which_dataset != 'KNEE_RAW' else 44
+        self.min_lowf_lines = 6 if which_dataset != 'KNEE_RAW' else 30
+        self.max_lowf_lines = 16 if which_dataset != 'KNEE_RAW' else 32
         self.highf_beta_alpha = 1
-        self.highf_beta_beta = 5
+        self.highf_beta_beta = 5 if which_dataset != 'KNEE_RAW' else 10
 
         self.rng = np.random.RandomState()
 

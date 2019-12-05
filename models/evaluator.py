@@ -1,4 +1,4 @@
-from .fft_utils import fft, ifft
+from .fft_utils import fft, ifft, to_magnitude
 from .reconstruction import init_func
 
 import functools
@@ -23,7 +23,7 @@ class SpectralMapDecomposition(nn.Module):
     def __init__(self):
         super(SpectralMapDecomposition, self).__init__()
 
-    def forward(self, reconstructed_image, mask_embedding, mask):
+    def forward(self, reconstructed_image, mask_embedding, mask, magnitude=False):
         """
 
         Args:
@@ -82,15 +82,24 @@ class EvaluatorNetwork(nn.Module):
                  number_of_conv_layers=4,
                  use_sigmoid=False,
                  width=128,
+                 height=None,
                  mask_embed_dim=6,
-                 num_output_channels=None):
+                 num_output_channels=None,
+                 magnitude=False):
         print(f'[EvaluatorNetwork] -> n_layers = {number_of_conv_layers}')
         super(EvaluatorNetwork, self).__init__()
 
         self.spectral_map = SpectralMapDecomposition()
         self.mask_embed_dim = mask_embed_dim
 
-        number_of_input_channels = 2 * width + mask_embed_dim
+        if height == None:
+            height = width
+
+        chanels_multip = 2
+        if magnitude:
+            chanels_multip = 1
+
+        number_of_input_channels = chanels_multip * width + mask_embed_dim
 
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
 
@@ -109,7 +118,11 @@ class EvaluatorNetwork(nn.Module):
 
         for n in range(1, number_of_conv_layers):
             if n < number_of_conv_layers - 1:
-                out_channels = in_channels * 2
+                if n <= 4:
+                    out_channels = in_channels * 2
+                else:
+                    out_channels = in_channels // 2
+
             else:
                 out_channels = in_channels
 
@@ -121,9 +134,9 @@ class EvaluatorNetwork(nn.Module):
             ]
 
             in_channels = out_channels
-
-        kernel_size = width // 2**number_of_conv_layers
-        sequence += [nn.AvgPool2d(kernel_size=kernel_size)]
+        kernel_size_width = width // 2**number_of_conv_layers
+        kernel_size_height = height // 2**number_of_conv_layers
+        sequence += [nn.AvgPool2d(kernel_size=(kernel_size_height, kernel_size_width))]
 
         if num_output_channels is None:
             num_output_channels = width

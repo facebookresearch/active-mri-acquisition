@@ -313,6 +313,7 @@ class Trainer:
                 number_of_conv_layers=self.options.number_of_evaluator_convolution_layers,
                 use_sigmoid=False,
                 width=self.options.image_width,
+                height=640 if self.options.dataroot == 'KNEE_RAW' else None,
                 mask_embed_dim=self.options.mask_embed_dim)
             self.evaluator = torch.nn.DataParallel(self.evaluator).to(self.options.device)
 

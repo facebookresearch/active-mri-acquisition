@@ -119,6 +119,7 @@ class ReconstructionEnv:
                 .number_of_evaluator_convolution_layers,
                 use_sigmoid=False,
                 width=evaluator_checkpoint['options'].image_width,
+                height=640 if options.dataroot == 'KNEE_RAW' else None,
                 mask_embed_dim=evaluator_checkpoint['options'].mask_embed_dim)
             logging.info(f'Loaded evaluator from checkpoint.')
             self._evaluator.load_state_dict({
@@ -273,7 +274,7 @@ class ReconstructionEnv:
                 observation = np.zeros(self.observation_space.shape).astype(np.float32)
                 observation[:2, :self.image_height, :] = reconstruction[0].cpu().numpy()
                 # The second to last row is the mask
-                observation[:, self.image_height, :] = self._current_mask.cpu().numpy()
+                observation[:, self.image_height, :] = mask.cpu().numpy()
                 # The last row is the mask embedding (padded with 0s if necessary)
                 observation[:, self.image_height + 1, :self.metadata['mask_embed_dim']] = \
                     mask_embedding[0, :, 0, 0].cpu().numpy()
