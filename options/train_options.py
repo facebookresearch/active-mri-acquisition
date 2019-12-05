@@ -107,6 +107,11 @@ class TrainOptions(BaseOptions):
                 'low_to_high_rnl',
             ],
             help='The type of mask to use.')
+        parser.add_argument(
+            '--rnl_params',
+            type=str,
+            default=None,
+            help='Format is min_lowf_lines,max_lowf_lines,highf_beta_alpha,highf_beta_beta')
         parser.add_argument('--debug', action='store_true', help='debug and use small training set')
 
         # ########################
@@ -175,15 +180,9 @@ class TrainOptions(BaseOptions):
         # ########################
         parser.add_argument('--log_dir', type=str, default=None)
         parser.add_argument(
-            '--clip-param',
-            type=float,
-            default=0.2,
-            help='ppo clip parameter (default: 0.2)')
+            '--clip-param', type=float, default=0.2, help='ppo clip parameter (default: 0.2)')
         parser.add_argument(
-            '--ppo-epoch',
-            type=int,
-            default=4,
-            help='number of ppo epochs (default: 4)')
+            '--ppo-epoch', type=int, default=4, help='number of ppo epochs (default: 4)')
         parser.add_argument(
             '--num-mini-batch',
             type=int,
@@ -200,34 +199,13 @@ class TrainOptions(BaseOptions):
             default=0.01,
             help='entropy term coefficient (default: 0.01)')
         parser.add_argument(
-            '--eps',
-            type=float,
-            default=1e-5,
-            help='RMSprop optimizer epsilon (default: 1e-5)')
-        parser.add_argument(
-            '--max_grad_norm',
-            type=float,
-            default=None)
-        parser.add_argument(
-            '--use_clipped_value_loss',
-            type=bool,
-            default=True)
-        parser.add_argument(
-            '--num_processes',
-            type=int,
-            default=1)
-        parser.add_argument(
-            '--num_steps',
-            type=int,
-            default=2048)
-        parser.add_argument(
-            '--use_linear_lr_decay',
-            type=bool,
-            default=True)
-        parser.add_argument(
-            '--num_env_steps',
-            type=int,
-            default=1000000)
+            '--eps', type=float, default=1e-5, help='RMSprop optimizer epsilon (default: 1e-5)')
+        parser.add_argument('--max_grad_norm', type=float, default=None)
+        parser.add_argument('--use_clipped_value_loss', type=bool, default=True)
+        parser.add_argument('--num_processes', type=int, default=1)
+        parser.add_argument('--num_steps', type=int, default=2048)
+        parser.add_argument('--use_linear_lr_decay', type=bool, default=True)
+        parser.add_argument('--num_env_steps', type=int, default=1000000)
 
         self.isTrain = True
 

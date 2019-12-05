@@ -7,13 +7,15 @@ import gym.spaces
 import numpy as np
 import torch
 import torch.nn.functional as F
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import data
 import models.evaluator
 import models.fft_utils
 import models.reconstruction
 import util.util
+import util.rl.reconstructor_rl_trainer
+import util.rl.utils
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -41,8 +43,6 @@ class ReconstructionEnv:
             @param `options`: Should specify the following options:
                 -`reconstructor_dir`: directory where reconstructor is stored.
                 -`evaluator_dir`: directory where evaluator is stored.
-                -`sequential_images`: If true, each episode presents the next image in the dataset,
-                    otherwise a random image is presented.
                 -`budget`: how many actions to choose (the horizon of the episode).
                 -`obs_type`: one of {'fourier_space', 'image_space'}
                 -`initial_num_lines_per_side`: how many k-space lines to start with.
@@ -57,6 +57,10 @@ class ReconstructionEnv:
         self.image_height = 640 if options.dataroot == 'KNEE_RAW' else 128
         self.image_width = 368 if options.dataroot == 'KNEE_RAW' else 128
         self.conjugate_symmetry = (options.dataroot != 'KNEE_RAW')
+
+        self.options.rnl_params = f'{2 * self.options.initial_num_lines_per_side},' \
+            f'{2 * (self.options.initial_num_lines_per_side + 1)},1,5'
+
         train_loader, valid_loader = data.create_data_loaders(options, is_test=False)
         test_loader = data.create_data_loaders(options, is_test=True)
 
@@ -80,13 +84,13 @@ class ReconstructionEnv:
         self.latest_train_images = []
 
         # For the training data the
-        rng = np.random.RandomState(options.seed)
-        rng_train = np.random.RandomState() if options.rl_env_train_no_seed else rng
+        self.rng = np.random.RandomState(options.seed)
+        rng_train = np.random.RandomState() if options.rl_env_train_no_seed else self.rng
         self._train_order = rng_train.permutation(len(self._dataset_train))
-        self._test_order = rng.permutation(len(self._dataset_test))
+        self._test_order = self.rng.permutation(len(self._dataset_test))
         self._image_idx_test = 0
         self._image_idx_train = 0
-        self.data_model = ReconstructionEnv.DataMode.TRAIN
+        self.data_mode = ReconstructionEnv.DataMode.TRAIN
 
         reconstructor_checkpoint = load_checkpoint(options.reconstructor_dir, 'best_checkpoint.pth')
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
@@ -140,14 +144,35 @@ class ReconstructionEnv:
         num_actions = (self.image_width - 2 * options.initial_num_lines_per_side) // factor
         self.action_space = gym.spaces.Discrete(num_actions)
 
-        self._initial_mask = self._generate_initial_mask().to(device)
+        self._initial_mask = self._generate_initial_lowf_mask().to(device)
         self._ground_truth = None
         self._k_space = None
         self._current_mask = None
         self._current_score = None
+        self._initial_score_episode = None
         self._scans_left = None
+        self._reference_mean_for_reward = None
+        self._reference_std_for_reward = None
 
-    def _generate_initial_mask(self):
+        # Variables used when alternate optimization is active
+        self.mask_dict = {}
+        self.epoch_count_callback = None
+        self.epoch_frequency_callback = None
+        self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
+            self._reconstructor, self._dataset_train, self._dataset_test,
+            self._test_order[:self.num_test_images], self.options)
+
+        # Pre-compute reward normalization if necessary
+        if options.normalize_rewards_on_val:
+            logging.info('Running random policy to get reference point for reward.')
+            random_policy = util.rl.simple_baselines.RandomPolicy(range(self.action_space.n))
+            self.set_testing()
+            _, statistics = util.rl.utils.test_policy(
+                self, random_policy, None, None, 0, self.options, leave_no_trace=True)
+            logging.info('Done computing reference.')
+            self.set_reference_point_for_rewards(statistics)
+
+    def _generate_initial_lowf_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
         for i in range(self.options.initial_num_lines_per_side):
             mask[0, 0, 0, i] = 1
@@ -168,13 +193,13 @@ class ReconstructionEnv:
         return reconstruction, mask_embed
 
     def set_testing(self, use_training_set=False, reset_index=True):
-        self.data_model = ReconstructionEnv.DataMode.TEST_ON_TRAIN if use_training_set \
+        self.data_mode = ReconstructionEnv.DataMode.TEST_ON_TRAIN if use_training_set \
             else ReconstructionEnv.DataMode.TEST
         if reset_index:
             self._image_idx_test = 0
 
     def set_training(self, reset_index=False):
-        self.data_model = ReconstructionEnv.DataMode.TRAIN
+        self.data_mode = ReconstructionEnv.DataMode.TRAIN
         if reset_index:
             self._image_idx_train = 0
 
@@ -188,7 +213,7 @@ class ReconstructionEnv:
             reconstruction = models.fft_utils.center_crop(reconstruction, [320, 320])
             ground_truth = models.fft_utils.center_crop(ground_truth, [320, 320])
 
-        mse = F.mse_loss(reconstruction, ground_truth)
+        mse = F.mse_loss(reconstruction, ground_truth).cpu()
         ssim = util.util.ssim_metric(reconstruction, ground_truth)
         psnr = util.util.psnr_metric(reconstruction, ground_truth)
 
@@ -283,63 +308,65 @@ class ReconstructionEnv:
 
         return observation, score
 
-    def reset(self) -> Tuple[Union[Dict, None], Dict]:
+    def reset(self, start_with_initial_mask=False) -> Tuple[Union[Dict, None], Dict]:
         """ Loads a new image from the dataset and starts a new episode with this image.
 
-            If `self.options.sequential_images` is True, it loops over images in the dataset in
-            order. Otherwise, it selects a random image from the first
-            `self.num_{train/test}_images` in the dataset. In the sequential case,
-            the dataset is ordered according to `self._{train/test}_order`.
+            Loops over images in the dataset in order. The dataset is ordered according to
+            `self._{train/test}_order`.
         """
         info = {}
-        if self.options.sequential_images:
-            if self.data_model == ReconstructionEnv.DataMode.TEST:
-                if self._image_idx_test == min(self.num_test_images, len(self._dataset_test)):
+        if self.data_mode == ReconstructionEnv.DataMode.TEST:
+            if self._image_idx_test == min(self.num_test_images, len(self._dataset_test)):
+                return None, info  # Returns None to signal that testing is done
+            set_order = self._test_order
+            dataset = self._dataset_test
+            set_idx = self._image_idx_test
+            self._image_idx_test += 1
+        else:
+            set_order = self._train_order
+            dataset = self._dataset_train
+            if self.data_mode == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
+                if self._image_idx_test == min(self.num_train_images, len(self._dataset_train)):
                     return None, info  # Returns None to signal that testing is done
-                set_order = self._test_order
-                dataset = self._dataset_test
                 set_idx = self._image_idx_test
                 self._image_idx_test += 1
             else:
-                set_order = self._train_order
-                dataset = self._dataset_train
-                if self.data_model == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
-                    if self._image_idx_test == min(self.num_train_images, len(self._dataset_train)):
-                        return None, info  # Returns None to signal that testing is done
-                    set_idx = self._image_idx_test
-                    self._image_idx_test += 1
-                else:
-                    set_idx = self._image_idx_train
-                    self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
+                if self.epoch_count_callback is not None:
+                    if self._image_idx_train != 0 and \
+                            self._image_idx_train % self.epoch_frequency_callback == 0:
+                        self.epoch_count_callback()
 
-            info['split'] = self.split_names[self.data_model]
-            info['image_idx'] = set_order[set_idx]
-            tmp = dataset.__getitem__(info['image_idx'])
-            self._ground_truth = tmp[1]
-            if self.options.dataroot == 'KNEE_RAW':  # store k-space data too
-                self._k_space = tmp[2].unsqueeze(0)
-                self._ground_truth = self._ground_truth.permute(2, 0, 1)
-            logging.debug(f"{info['split'].capitalize()} episode started "
-                          f"with image {set_order[set_idx]}")
-        else:
-            using_test_set = self.data_model == ReconstructionEnv.DataMode.TEST
-            dataset_to_check = self._dataset_test if using_test_set else self._dataset_train
-            info['split'] = 'test' if using_test_set else 'train'
-            if using_test_set:
-                max_num_images = self.num_test_images
-            else:
-                max_num_images = self.num_train_images
-            dataset_len = min(len(dataset_to_check), max_num_images)
-            index_chosen_image = np.random.choice(dataset_len)
-            info['image_idx'] = index_chosen_image
-            logging.debug('{} episode started with randomly chosen image {}/{}'.format(
-                'Testing' if using_test_set else 'Training', index_chosen_image, dataset_len))
-            _, self._ground_truth = self._dataset_train.__getitem__(index_chosen_image)
+                if self._image_idx_train == 0:
+                    self._reset_saved_masks_dict()
+
+                set_idx = self._image_idx_train
+                self._image_idx_train = (self._image_idx_train + 1) % self.num_train_images
+
+        info['split'] = self.split_names[self.data_mode]
+        info['image_idx'] = set_order[set_idx]
+        mask_image_raw = dataset.__getitem__(info['image_idx'])
+
+        # Separate image data into ground truth, mask and k-space (the last one for RAW only)
+        self._ground_truth = mask_image_raw[1]
+        if self.options.dataroot == 'KNEE_RAW':  # store k-space data too
+            self._k_space = mask_image_raw[2].unsqueeze(0)
+            self._ground_truth = self._ground_truth.permute(2, 0, 1)
+        logging.debug(f"{info['split'].capitalize()} episode started "
+                      f"with image {set_order[set_idx]}")
+
         self._ground_truth = self._ground_truth.to(device).unsqueeze(0)
-        self._current_mask = self._initial_mask
+        self._current_mask = self._initial_mask if start_with_initial_mask \
+            else mask_image_raw[0].to(device).unsqueeze(0)
+        if self._current_mask.byte().all() == 1:
+            # No valid actions in this mask, replace with initial mask to have a valid mask
+            self._current_mask = self._initial_mask
         self._scans_left = min(self.options.budget, self.action_space.n)
         observation, score = self._compute_observation_and_score()
         self._current_score = score
+        self._initial_score_episode = {
+            key: value.item()
+            for key, value in self._current_score.items()
+        }
         return observation, info
 
     def step(self, action: int) -> Tuple[Dict[str, torch.Tensor], float, bool, Dict]:
@@ -350,19 +377,35 @@ class ReconstructionEnv:
         assert self._scans_left > 0
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action)
+        if self.data_mode == ReconstructionEnv.DataMode.TRAIN:
+            image_idx = self._train_order[self._image_idx_train]
+            if image_idx not in self.mask_dict.keys():
+                self.mask_dict[image_idx] = np.zeros(
+                    (self.options.budget, self.image_width), dtype=np.float32)
+
+            self.mask_dict[image_idx][-self._scans_left] = \
+                self._current_mask.squeeze().cpu().numpy()
         observation, new_score = self._compute_observation_and_score()
 
         metric = self.options.reward_metric
-        reward_ = new_score[metric] if self.options.use_score_as_reward \
-            else new_score[metric] - self._current_score[metric]
-        factor = 1 if self.options.use_score_as_reward else 100
+        if self.options.use_score_as_reward:
+            reward_ = new_score[metric] - self._initial_score_episode[metric]
+        else:
+            reward_ = new_score[metric] - self._current_score[metric]
+        factor = 100
         if self.options.reward_metric == 'mse':
             factor *= -1  # We try to minimize MSE, but DQN maximizes
         reward = -1.0 if has_already_been_scanned else reward_.item() * factor
+
+        # Apply normalization if present
+        if self.data_mode == ReconstructionEnv.DataMode.TRAIN and \
+                self.options.normalize_rewards_on_val:
+            reward /= np.abs(self._reference_mean_for_reward[self.options.budget - 1])
+            reward /= (self.options.budget - 1)
         self._current_score = new_score
 
         self._scans_left -= 1
-        done = (self._scans_left == 0)
+        done = (self._scans_left == 0) or (self._current_mask.byte().all() == 1)
 
         return observation, reward, done, {}
 
@@ -375,3 +418,33 @@ class ReconstructionEnv:
             k_space_scores = self._evaluator(obs['reconstruction'].to(device), mask_embedding)
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
+
+    def set_reference_point_for_rewards(self, statistics: Dict[str, Dict]):
+        logging.info('Reference point will be set for reward.')
+        num_actions = min(self.options.budget, self.action_space.n)
+        self._reference_mean_for_reward = np.ndarray(num_actions)
+        self._reference_std_for_reward = np.ndarray(num_actions)
+        for t in range(num_actions - 1, -1, -1):
+            self._reference_mean_for_reward[t] = statistics['rewards'][num_actions - t]['mean']
+            self._reference_std_for_reward[t] = np.sqrt(
+                statistics['rewards'][num_actions - t]['m2'] /
+                (statistics['rewards'][num_actions - t]['count'] - 1))
+        logging.info(f'The following reference will be used:')
+        logging.info(f'    mean: {self._reference_mean_for_reward}')
+        logging.info(f'std: {self._reference_std_for_reward}')
+
+    def retrain_reconstructor(self, logger, writer):
+        logger.info(
+            f'Training reconstructor for {self.options.num_epochs_train_reconstructor} epochs')
+        self.reconstructor_trainer(self.mask_dict, logger, writer)
+        logger.info('Done training reconstructor')
+
+        self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
+
+    def _reset_saved_masks_dict(self):
+        self.mask_dict.clear()
+
+    def set_epoch_finished_callback(self, callback: Callable, frequency: int):
+        # Every frequency number of epochs, the callback function will be called
+        self.epoch_count_callback = callback
+        self.epoch_frequency_callback = frequency

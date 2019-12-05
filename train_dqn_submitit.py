@@ -10,7 +10,6 @@ import util.rl.dqn
 if __name__ == '__main__':
     options_ = options.rl_options.RLOptions().parse()
     options_.batchSize = 1
-    options_.mask_type = 'grid'  # These two are ignored, only here for compatibility with loader
     options_.masks_dir = None
     options_.dqn_resume = True
 
@@ -33,9 +32,9 @@ if __name__ == '__main__':
         num_gpus=1,
         partition='priority',
         cpus_per_task=2,
-        mem=100000,
+        mem=256000,
         time=4320,
-        job_name='long_dqn_trains',
+        job_name=options_.job_name,
         signal_delay_s=3600,
-        comment='CVPR 2020 15/11')
+        comment='only one gpu/cpu job. awkward to handle preemption in this job')
     executor.submit(trainer_)

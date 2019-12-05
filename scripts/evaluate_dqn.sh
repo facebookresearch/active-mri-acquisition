@@ -13,18 +13,18 @@ MODEL_TYPE=symmetric_basic_rnl
 
 #SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/test_dqn_$(date +%Y%m%d_%H.%M.%S)
 SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/eval_many_dqns
-rm -rf ${SRC_DIR}
-mkdir -p ${SRC_DIR}
-cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
-echo ${SRC_DIR}
+#rm -rf ${SRC_DIR}
+#mkdir -p ${SRC_DIR}
+#cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
+#echo ${SRC_DIR}
 
-queue=priority
+queue=dev
 
 INIT_LINES=5
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
-DQN_STR=image_space.tupd5000.bs16.edecay500000.gamma0.5.lr0.0001.repbuf300000norepl1.nimgtr10000000.metricmse.usescoasrew0_bu35_seed0_neptest100
-SUBDIR=all_dqns
+DQN_STR=image_space.tupd5000.bs16.edecay500000.gamma0.0.lr0.0001.repbuf300000norepl1.nimgtr10000000.metricssim.usescoasrew0_bu35_seed0_neptest100
+SUBDIR=long_dqns
 
 job_name=evaluate_dqn_activeacq__${MODEL_TYPE}__${DQN_STR}
 
@@ -56,7 +56,6 @@ echo srun python acquire_rl.py --dataroot KNEE \
     --num_test_images 1000 \
     --freq_save_test_stats 50 \
     --dqn_test_episode_freq 0 \
-    --sequential_images \
     --initial_num_lines_per_side 5 \
     --obs_type image_space \
     --obs_to_numpy \
