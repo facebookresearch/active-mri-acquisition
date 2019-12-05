@@ -94,6 +94,8 @@ class RLOptions(BaseOptions):
         parser.add_argument('--gamma', type=float, default=0.5)
         parser.add_argument(
             '--allow_replace_actions', dest='no_replacement_policy', action='store_false')
+        parser.add_argument(
+            '--no_test_with_full_budget', dest='test_with_full_budget', action='store_false')
 
         self.isTrain = False
         return parser

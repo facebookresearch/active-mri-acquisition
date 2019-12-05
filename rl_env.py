@@ -73,7 +73,7 @@ class ReconstructionEnv:
         elif options.test_set == 'test':
             self._dataset_test = test_loader.dataset
         else:
-            raise InvalidArgument('Valid options are train, val, test')
+            raise ValueError('Valid options are train, val, test')
 
         self.num_train_images = min(self.options.num_train_images, len(self._dataset_train))
         self.num_test_images = min(self.options.num_test_images, len(self._dataset_test))
@@ -155,13 +155,13 @@ class ReconstructionEnv:
             mask[0, 0, 0, -(i + 1)] = 1
         return mask
 
-    def _get_current_reconstruction_and_mask_embedding(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_current_reconstruction_and_mask_embedding(self) \
+            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         zero_filled_image, _, mask_to_use = models.fft_utils.preprocess_inputs(
             (self._current_mask, self._ground_truth, self._k_space), self.options.dataroot, device)
 
         if self.options.use_reconstructions:
-            reconstruction, _, mask_embed = self._reconstructor(zero_filled_image,
-                                                                mask_to_use)
+            reconstruction, _, mask_embed = self._reconstructor(zero_filled_image, mask_to_use)
         else:
             reconstruction = zero_filled_image
             mask_embed = None
@@ -245,8 +245,8 @@ class ReconstructionEnv:
                 mask_to_use = self._current_mask
             if k_space is None:
                 k_space = self._k_space
-            image, _, mask_to_use = models.fft_utils.preprocess_inputs((mask_to_use, ground_truth, k_space),
-                                                             self.options.dataroot, device)
+            image, _, mask_to_use = models.fft_utils.preprocess_inputs(
+                (mask_to_use, ground_truth, k_space), self.options.dataroot, device)
             if use_reconstruction:  # pass through reconstruction network
                 image, _, _ = self._reconstructor(image, mask_to_use)
         return [
@@ -257,7 +257,8 @@ class ReconstructionEnv:
 
     def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
-            reconstruction, mask_embedding, mask = self._get_current_reconstruction_and_mask_embedding()
+            reconstruction, mask_embedding, mask = \
+                self._get_current_reconstruction_and_mask_embedding()
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth,
                                                      self.options.dataroot == 'KNEE_RAW')
 
@@ -276,8 +277,11 @@ class ReconstructionEnv:
                 # The second to last row is the mask
                 observation[:, self.image_height, :] = mask.cpu().numpy()
                 # The last row is the mask embedding (padded with 0s if necessary)
-                observation[:, self.image_height + 1, :self.metadata['mask_embed_dim']] = \
-                    mask_embedding[0, :, 0, 0].cpu().numpy()
+                if self.metadata['mask_embed_dim'] == 0:
+                    observation[:, self.image_height + 1, 0] = np.nan
+                else:
+                    observation[:, self.image_height + 1, :self.metadata['mask_embed_dim']] = \
+                        mask_embedding[0, :, 0, 0].cpu().numpy()
 
         return observation, score
 
@@ -368,9 +372,9 @@ class ReconstructionEnv:
         """ Returns the action recommended by the evaluator network of `self._evaluator`. """
         with torch.no_grad():
             assert not self.options.obs_type == 'fourier_space' and not self.options.obs_to_numpy
-            k_space_scores = self._evaluator(obs['reconstruction'].to(device),
-                                             obs['mask_embedding'].to(device) if obs['mask_embedding'] is not None else None,
-                                             obs['mask'])
+            k_space_scores = self._evaluator(
+                obs['reconstruction'].to(device), obs['mask_embedding'].to(device)
+                if obs['mask_embedding'] is not None else None, obs['mask'])
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
             # if self.options.dataroot == 'KNEE_RAW':
             #     tmp = torch.zeros(obs['mask'].shape)
