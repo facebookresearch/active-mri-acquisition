@@ -119,6 +119,7 @@ class ReconstructionEnv:
                 .number_of_evaluator_convolution_layers,
                 use_sigmoid=False,
                 width=evaluator_checkpoint['options'].image_width,
+                height=640 if options.dataroot == 'KNEE_RAW' else None,
                 mask_embed_dim=evaluator_checkpoint['options'].mask_embed_dim)
             logging.info(f'Loaded evaluator from checkpoint.')
             self._evaluator.load_state_dict({
