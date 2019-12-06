@@ -141,9 +141,19 @@ class ReconstructionEnv:
 
         self.metadata = {'mask_embed_dim': reconstructor_checkpoint['options'].mask_embed_dim}
 
+        # Setting up valid actions
         factor = 2 if self.conjugate_symmetry else 1
         num_actions = (self.image_width - 2 * options.initial_num_lines_per_side) // factor
-        self.action_space = gym.spaces.Discrete(num_actions)
+        self.valid_actions = list(range(num_actions))
+        if self.options.dataroot == 'KNEE_RAW':
+            # use invalid_actions when using k_space knee data that are zero padded
+            # at some frequencies
+            # TODO: do we want to change the fixed numbers below or not?
+            invalid_actions = list(
+                range(166 - self.options.initial_num_lines_per_side,
+                      202 - self.options.initial_num_lines_per_side, 1))
+            self.valid_actions = np.setdiff1d(self.valid_actions, invalid_actions)
+        self.action_space = gym.spaces.Discrete(len(self.valid_actions))
 
         self._initial_mask = self._generate_initial_lowf_mask().to(device)
         self._ground_truth = None
