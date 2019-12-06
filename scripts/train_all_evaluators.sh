@@ -1,6 +1,6 @@
 #!/bin/bash
 
-EXTRA_OPTIONS=--only_evaluator
+EXTRA_OPTIONS="--only_evaluator --number_of_evaluator_filters 256"
 
 CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_post_eval_tag
 
@@ -21,7 +21,7 @@ for mask in basic_rnl symmetric_basic_rnl low_to_high_rnl; do
     --use_submitit \
     --submitit_logs_dir ${CHECKPOINTS_DIR}/submitit_logs \
     --batchSize 40 \
-    --gpu_ids 0,1,2,3,4,5,6,7 --print_freq 50 --lr 0.0006 --grad_ctx --max_epochs 150 \
+    --gpu_ids 0,1,2,3,4,5,6,7 --print_freq 50 --lr 0.0006 --grad_ctx --max_epochs 200 \
     --print_freq 200 --use_mse_as_disc_energy --lambda_gan 0.1 \
     --save_latest_freq 2000 \
     --weights_checkpoint ${CHECKPOINTS_DIR}/${mask}/best_checkpoint.pth \

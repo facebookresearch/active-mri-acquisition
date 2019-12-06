@@ -9,6 +9,7 @@ import os
 
 from torch.utils.data import Dataset
 
+
 def ifftshift(x, dim=None):
     if dim is None:
         dim = tuple(range(x.dim()))
@@ -43,7 +44,6 @@ def roll(x, shift, dim):
     left = x.narrow(dim, 0, x.size(dim) - shift)
     right = x.narrow(dim, x.size(dim) - shift, shift)
     return torch.cat((right, left), dim=dim)
-
 
 
 class RawSliceData(Dataset):

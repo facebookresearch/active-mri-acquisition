@@ -91,7 +91,10 @@ class Trainer:
         self.losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}
 
         if self.options.only_evaluator:
-            self.options.checkpoints_dir = os.path.join(self.options.checkpoints_dir, 'evaluator')
+            self.options.checkpoints_dir = os.path.join(
+                self.options.checkpoints_dir,
+                f'evaluator_{self.options.number_of_evaluator_filters}',
+            )
         if not os.path.exists(self.options.checkpoints_dir):
             os.makedirs(self.options.checkpoints_dir)
 

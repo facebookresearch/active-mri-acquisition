@@ -11,10 +11,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-import acquire_rl
 import models.evaluator
 import rl_env
 import util.rl.replay_buffer
+import util.rl.utils
 
 
 def get_epsilon(steps_done, opts):
@@ -30,7 +30,7 @@ class Flatten(nn.Module):
 
 class EvaluatorBasedValueNetwork(nn.Module):
 
-    def __init__(self, image_width, initial_num_lines_per_side, mask_embed_dim):
+    def __init__(self, image_width, initial_num_lines_per_side, mask_embed_dim, use_dueling=False):
         super(EvaluatorBasedValueNetwork, self).__init__()
         num_actions = image_width - 2 * initial_num_lines_per_side
         self.evaluator = models.evaluator.EvaluatorNetwork(
@@ -42,6 +42,15 @@ class EvaluatorBasedValueNetwork(nn.Module):
             num_output_channels=num_actions)
         self.mask_embed_dim = mask_embed_dim
         self.initial_num_lines_per_side = initial_num_lines_per_side
+        self.use_dueling = use_dueling
+
+        self.value_stream = None
+        self.advantage_stream = None
+        if self.use_dueling:
+            self.value_stream = nn.Sequential(
+                nn.Linear(num_actions, num_actions), nn.ReLU(), nn.Linear(num_actions, 1))
+            self.advantage_stream = nn.Sequential(
+                nn.Linear(num_actions, num_actions), nn.ReLU(), nn.Linear(num_actions, num_actions))
 
     def forward(self, x):
         reconstruction = x[..., :-2, :]
@@ -52,14 +61,22 @@ class EvaluatorBasedValueNetwork(nn.Module):
             mask_embedding = None
         else:
             mask_embedding = x[:, 0, -1, :self.mask_embed_dim].view(bs, -1, 1, 1)
-            mask_embedding = mask_embedding.repeat(reconstruction.shape[0], 1,
-                                                   reconstruction.shape[2], reconstruction.shape[3])
-        # Evaluator receives the full mask with the size of image width (3rd input)
-        value = self.evaluator(reconstruction, mask_embedding, x[:, 0, -2, :].contiguous().view(
-            bs, 1, 1, -1))
+            mask = x[:, 0, -2, :].contiguous().view(bs, 1, 1, -1)
+            mask_embedding = mask_embedding.repeat(1, 1, reconstruction.shape[2],
+                                                   reconstruction.shape[3])
+
+        value = None
+        advantage = None
+        if self.use_dueling:
+            features = self.evaluator(reconstruction, mask_embedding, mask)
+            value = self.value_stream(features)
+            advantage = self.advantage_stream(features)
+            qvalue = value + (advantage - advantage.mean(dim=1).unsqueeze(1))
+        else:
+            qvalue = self.evaluator(reconstruction, mask_embedding)
         # This makes the DQN max over the target values consider only non repeated actions
-        value = value - 1e10 * mask
-        return value
+        qvalue = qvalue - 1e10 * mask
+        return {'qvalue': qvalue, 'value': value, 'advantage': advantage}
 
 
 class BasicValueNetwork(nn.Module):
@@ -90,15 +107,20 @@ class BasicValueNetwork(nn.Module):
         masked_rffts = x[:, 2:, :, :]
         image_encoding = self.conv_image(reconstructions)
         rfft_encoding = self.conv_image(masked_rffts)
-        return self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))
+        return {'qvalue': self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))}
 
 
 def get_model(num_actions, options):
     if options.dqn_model_type == 'basic':
+        if options.use_dueling_dqn:
+            raise NotImplementedError('Dueling DQN only implemented with dqn_model_type=evaluator.')
         return BasicValueNetwork(num_actions)
     if options.dqn_model_type == 'evaluator':
-        return EvaluatorBasedValueNetwork(options.image_width, options.initial_num_lines_per_side,
-                                          options.mask_embedding_dim)
+        return EvaluatorBasedValueNetwork(
+            options.image_width,
+            options.initial_num_lines_per_side,
+            options.mask_embedding_dim,
+            use_dueling=options.use_dueling_dqn)
     raise ValueError('Unknown model specified for DQN.')
 
 
@@ -125,7 +147,7 @@ class DDQN(nn.Module):
         if sample < eps_threshold:
             return random.choice([x for x in range(self.num_actions) if x not in previous_actions])
         with torch.no_grad():
-            q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
+            q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))['qvalue']
         return torch.argmax(q_values, dim=1).item()
 
     def _get_action_standard_e_greedy(self, observation, eps_threshold):
@@ -133,7 +155,7 @@ class DDQN(nn.Module):
         if sample < eps_threshold:
             return random.randrange(self.num_actions)
         with torch.no_grad():
-            q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))
+            q_values = self(torch.from_numpy(observation).unsqueeze(0).to(self.device))['qvalue']
         return torch.argmax(q_values, dim=1).item()
 
     def get_action(self, observation, eps_threshold, _):
@@ -150,7 +172,7 @@ class DDQN(nn.Module):
         self.model.train()
         batch = self.memory.sample()
         if batch is None:
-            return None, None, None, None
+            return None
         observations = batch['observations'].to(self.device)
         next_observations = batch['next_observations'].to(self.device)
         actions = batch['actions'].to(self.device)
@@ -160,16 +182,17 @@ class DDQN(nn.Module):
         not_done_mask = (1 - dones).squeeze()
 
         # Compute Q-values and get best action according to online network
-        all_q_values_cur = self.forward(observations)
+        output_cur_step = self.forward(observations)
+        all_q_values_cur = output_cur_step['qvalue']
         q_values = all_q_values_cur.gather(1, actions.unsqueeze(1))
 
         # Compute target values using the best action found
         with torch.no_grad():
-            all_q_values_next = self.forward(next_observations)
+            all_q_values_next = self.forward(next_observations)['qvalue']
             target_values = torch.zeros(observations.shape[0], device=self.device)
             if not_done_mask.any().item() != 0:
                 best_actions = all_q_values_next.detach().max(1)[1]
-                target_values[not_done_mask] = target_net.forward(next_observations)\
+                target_values[not_done_mask] = target_net.forward(next_observations)['qvalue'] \
                     .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
 
             target_values = self.opts.gamma * target_values + rewards
@@ -190,9 +213,21 @@ class DDQN(nn.Module):
 
         self.optimizer.step()
 
-        return loss, grad_norm, \
-               q_values.detach().mean().cpu().numpy(), \
-               q_values.detach().std().cpu().numpy()
+        value = None
+        advantage = None
+        if output_cur_step['value'] is not None:
+            value = output_cur_step['value'].detach().mean().cpu().numpy()
+            advantage = output_cur_step['advantage'].detach().\
+                gather(1, actions.unsqueeze(1)).mean().cpu().numpy()
+
+        return {
+            'loss': loss,
+            'grad_norm': grad_norm,
+            'q_values_mean': q_values.detach().mean().cpu().numpy(),
+            'q_values_std': q_values.detach().std().cpu().numpy(),
+            'value': value,
+            'advantage': advantage
+        }
 
     def init_episode(self):
         pass
@@ -239,6 +274,10 @@ class DQNTrainer:
             self.reward_images_in_window = np.zeros(self.window_size)
             self.current_score_auc_window = np.zeros(self.window_size)
 
+            if self.options.dqn_alternate_opt_per_epoch:
+                self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
+                                                     self.options.frequency_train_reconstructor)
+
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
 
@@ -283,6 +322,10 @@ class DQNTrainer:
         self.reward_images_in_window = np.zeros(self.window_size)
         self.current_score_auc_window = np.zeros(self.window_size)
 
+        if self.options.dqn_alternate_opt_per_epoch:
+            self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
+                                                 self.options.frequency_train_reconstructor)
+
     def load_checkpoint_if_needed(self):
         if self.options.dqn_only_test:
             policy_path = os.path.join(self.options.dqn_weights_dir, 'policy_best.pt')
@@ -299,7 +342,8 @@ class DQNTrainer:
                 self.load(policy_path)
                 self.logger.info(f'Loaded DQN policy found at {policy_path}. Steps was set to '
                                  f'{self.steps}. Episodes set to {self.episode}.')
-                self.env._image_idx_train = self.episode + 1
+                if not self.options.dqn_alternate_opt_per_epoch:
+                    self.env._image_idx_train = self.episode + 1
             else:
                 self.logger.info(f'No policy found at {policy_path}, continue without checkpoint.')
             if self.load_replay_mem:
@@ -334,7 +378,7 @@ class DQNTrainer:
 
             # Evaluate the current policy
             if self.episode % self.options.dqn_test_episode_freq == 0:
-                test_score = acquire_rl.test_policy(
+                test_score, _ = util.rl.utils.test_policy(
                     self.env,
                     self.policy,
                     self.writer,
@@ -350,17 +394,17 @@ class DQNTrainer:
                         f'Saved DQN model with score {self.best_test_score} to {policy_path}.')
 
             # Evaluate the current policy on training set
-            # if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
-            #         and self.options.num_train_images <= 5000:
-            #     acquire_rl.test_policy(
-            #         self.env,
-            #         self.policy,
-            #         self.writer,
-            #         self.logger,
-            #         self.episode,
-            #         self.options,
-            #         test_on_train=True,
-            #         test_with_full_budget=self.options.test_with_full_budget)
+            if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
+                    and self.options.num_train_images <= 1000:
+                util.rl.utils.test_policy(
+                    self.env,
+                    self.policy,
+                    self.writer,
+                    self.logger,
+                    self.episode,
+                    self.options,
+                    test_on_train=True,
+                    test_with_full_budget=self.options.test_with_full_budget)
 
             # Run an episode and update model
             obs, _ = self.env.reset()
@@ -383,21 +427,26 @@ class DQNTrainer:
                 next_obs, reward, done, _ = self.env.step(action)
                 self.steps += 1
                 self.policy.add_experience(obs, action, next_obs, reward, done)
-                loss, grad_norm, mean_q_values, std_q_values = self.policy.update_parameters(
-                    self.target_net)
+                update_results = self.policy.update_parameters(self.target_net)
 
                 if self.steps % self.options.target_net_update_freq == 0:
                     self.logger.info('Updating target network.')
                     self.target_net.load_state_dict(self.policy.state_dict())
 
                 # Adding per-step tensorboard logs
-                if self.steps % 50 == 0:
+                if self.steps % 250 == 0:
                     self.writer.add_scalar('epsilon', epsilon, self.steps)
-                    if loss is not None:
-                        self.writer.add_scalar('loss', loss, self.steps)
-                        self.writer.add_scalar('grad_norm', grad_norm, self.steps)
-                        self.writer.add_scalar('mean_q_values', mean_q_values, self.steps)
-                        self.writer.add_scalar('std_q_values', std_q_values, self.steps)
+                    if update_results is not None:
+                        self.writer.add_scalar('loss', update_results['loss'], self.steps)
+                        self.writer.add_scalar('grad_norm', update_results['grad_norm'], self.steps)
+                        self.writer.add_scalar('mean_q_value', update_results['q_values_mean'],
+                                               self.steps)
+                        self.writer.add_scalar('std_q_value', update_results['q_values_std'],
+                                               self.steps)
+                        if update_results['value'] is not None:
+                            self.writer.add_scalar('value', update_results['value'], self.steps)
+                            self.writer.add_scalar('advantage', update_results['advantage'],
+                                                   self.steps)
 
                 total_reward += reward
                 auc_score += self.env.compute_score(
@@ -421,8 +470,17 @@ class DQNTrainer:
 
             self.episode += 1
 
+            if self.episode % self.options.freq_dqn_checkpoint_save == 0:
+                self.checkpoint(submit_job=False)
+
         self.checkpoint(submit_job=False)
         return self.best_test_score
+
+    def update_reconstructor_and_buffer(self):
+        self.env.retrain_reconstructor(self.logger, self.writer)
+        self.replay_memory.count_seen = 0
+        self.replay_memory.position = 0
+        self.checkpoint(save_memory=False, submit_job=False)
 
     def __call__(self):
         if self.env is None:
@@ -433,18 +491,24 @@ class DQNTrainer:
 
         return self._train_dqn_policy()
 
-    def checkpoint(self, submit_job=True):
+    def checkpoint(self, submit_job=True, save_memory=True):
         self.logger.info('Received preemption signal.')
         policy_path = os.path.join(self.options.checkpoints_dir, 'policy_checkpoint.pt')
         self.save(policy_path)
-        self.logger.info(f'Saved DQN checkpoint to {policy_path}. Now saving replay memory.')
-        memory_path = self.replay_memory.save(self.options.checkpoints_dir, 'replay_buffer.pt')
-        self.logger.info(f'Saved replay buffer to {memory_path}.')
-        trainer = DQNTrainer(self.options, load_replay_mem=True)
+        self.logger.info(f'Saved DQN checkpoint to {policy_path}')
+        if save_memory:
+            self.logger.info('Now saving replay memory.')
+            memory_path = self.replay_memory.save(self.options.checkpoints_dir, 'replay_buffer.pt')
+            self.logger.info(f'Saved replay buffer to {memory_path}.')
         if submit_job:
+            trainer = DQNTrainer(self.options, load_replay_mem=True)
             return submitit.helpers.DelayedSubmission(trainer)
 
+    # noinspection PyProtectedMember
     def save(self, path):
+        reconstructor = None
+        if self.options.dqn_alternate_opt_per_epoch:
+            reconstructor = self.env._reconstructor.state_dict()
         torch.save({
             'dqn_weights': self.policy.state_dict(),
             'target_weights': self.target_net.state_dict(),
@@ -452,9 +516,11 @@ class DQNTrainer:
             'steps': self.steps,
             'best_test_score': self.best_test_score,
             'reward_images_in_window': self.reward_images_in_window,
-            'current_score_auc_window': self.current_score_auc_window
+            'current_score_auc_window': self.current_score_auc_window,
+            'reconstructor': reconstructor
         }, path)
 
+    # noinspection PyProtectedMember
     def load(self, path):
         checkpoint = torch.load(path)
         self.policy.load_state_dict(checkpoint['dqn_weights'])
@@ -464,3 +530,5 @@ class DQNTrainer:
         self.best_test_score = checkpoint['best_test_score']
         self.reward_images_in_window = checkpoint['reward_images_in_window']
         self.current_score_auc_window = checkpoint['current_score_auc_window']
+        if checkpoint['reconstructor'] is not None:
+            self.env._reconstructor.load_state_dict(checkpoint['reconstructor'])

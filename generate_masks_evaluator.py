@@ -100,7 +100,6 @@ if __name__ == '__main__':
         os.makedirs(options_.dataset_dir)
 
     # Adding config options expected by `rl_env.ReconstructionEnv`
-    options_.sequential_images = True
     options_.budget = 368 if options_.dataroot == 'KNEE_RAW' else 128
     options_.obs_type = 'image_space'
     options_.num_train_images = 2000000

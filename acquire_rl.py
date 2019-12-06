@@ -13,105 +13,7 @@ import util.rl.dqn
 import util.rl.evaluator_plus_plus
 import util.rl.replay_buffer
 import util.rl.simple_baselines
-
-
-def update_statistics(value, episode_step, statistics):
-    """ Updates a running mean and standard deviation for `episode_step`, given `value`.
-        https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
-    """
-    assert len(value) == len(statistics)
-    for k, v in statistics.items():
-        if episode_step not in statistics[k]:
-            statistics[k][episode_step] = {'mean': 0, 'm2': 0, 'count': 0}
-        statistics[k][episode_step]['count'] += 1
-        delta = value[k] - statistics[k][episode_step]['mean']
-        statistics[k][episode_step]['mean'] += delta / statistics[k][episode_step]['count']
-        delta2 = value[k] - statistics[k][episode_step]['mean']
-        statistics[k][episode_step]['m2'] += delta * delta2
-
-
-def compute_test_score_from_stats(statistics):
-    """ Computes a single-value score from a set of time step statistics. """
-    score = 0
-    for episode_step, step_stats in statistics.items():
-        score += step_stats['mean']
-    return score
-
-
-def save_statistics_and_actions(statistics, all_actions, episode, logger, options_):
-    logger.info(f'Episode {episode}. Saving statistics to {options_.checkpoints_dir}.')
-    np.save(
-        os.path.join(options_.checkpoints_dir, 'test_stats_mse_{}'.format(episode)),
-        statistics['mse'])
-    np.save(
-        os.path.join(options_.checkpoints_dir, 'test_stats_ssim_{}'.format(episode)),
-        statistics['ssim'])
-    np.save(
-        os.path.join(options_.checkpoints_dir, 'test_stats_psnr_{}'.format(episode)),
-        statistics['psnr'])
-    np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
-
-
-def test_policy(env,
-                policy,
-                writer,
-                logger,
-                step,
-                options_,
-                test_on_train=False,
-                test_with_full_budget=False):
-    """ Evaluates a given policy for the environment on the test set. """
-    env.set_testing(use_training_set=test_on_train)
-    old_budget = env.options.budget
-    if test_with_full_budget:
-        env.options.budget = env.action_space.n
-    average_total_reward = 0
-    episode = 0
-    statistics = {'mse': {}, 'ssim': {}, 'psnr': {}}
-    import time
-    start = time.time()
-    all_actions = []
-    while True:
-        obs, _ = env.reset()
-        policy.init_episode()
-        if obs is None:
-            save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
-            break
-        episode += 1
-        done = False
-        total_reward = 0
-        actions = []
-        episode_step = 0
-        reconstruction_results = env.compute_score(
-            options_.use_reconstructions, use_current_score=True)[0]
-        update_statistics(reconstruction_results, episode_step, statistics)
-        while not done:
-            action = policy.get_action(obs, 0., actions)
-            actions.append(action)
-            next_obs, reward, done, _ = env.step(action)
-            total_reward += reward
-            obs = next_obs
-            episode_step += 1
-            reconstruction_results = env.compute_score(use_current_score=True)[0]
-            update_statistics(reconstruction_results, episode_step, statistics)
-        average_total_reward += total_reward
-        all_actions.append(actions)
-        logger.debug('Actions and reward: {}, {}'.format(actions, total_reward))
-        if not test_on_train and (episode % options_.freq_save_test_stats == 0):
-            save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
-    end = time.time()
-    logger.debug('Test run lasted {} seconds.'.format(end - start))
-    test_score = compute_test_score_from_stats(statistics[options_.reward_metric])
-    split = 'train' if test_on_train else 'test'
-    writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc', test_score, step)
-    env.set_training()
-    if test_with_full_budget:
-        env.options.budget = old_budget
-
-    if options_.reward_metric == 'mse':  # DQN maximizes but we want to minimize MSE
-        test_score = -test_score
-
-    return test_score
+import util.rl.utils
 
 
 def get_experiment_str(options_):
@@ -170,7 +72,7 @@ def get_policy(env, writer, logger, options_):
 
 
 def main(options_, logger):
-    writer = tensorboardX.SummaryWriter(options_.checkpoints_dir)
+    writer = tensorboardX.SummaryWriter(options_.checkpoints_dir, flush_secs=60)
     env = rl_env.ReconstructionEnv(options_)
     options_.mask_embedding_dim = env.metadata['mask_embed_dim']
     options_.image_width = env.image_width
@@ -178,15 +80,14 @@ def main(options_, logger):
     policy, env = get_policy(env, writer, logger, options_)  # Trains if necessary
     logger.info(f'Created environment with {env.action_space.n} actions')
     env.set_testing()
-    test_policy(env, policy, writer, logger, 0, options_)
+    util.rl.utils.test_policy(env, policy, writer, logger, 0, options_)
 
 
 if __name__ == '__main__':
     # Reading options
     opts = options.rl_options.RLOptions().parse()
     opts.batchSize = 1
-    opts.mask_type = 'grid'  # These two are ignored, only here for compatibility with loader
-    opts.masks_dir = None
+    opts.masks_dir = None  # Ignored, only here for compatibility with loader
 
     random.seed(opts.seed)
     np.random.seed(opts.seed)
@@ -211,5 +112,13 @@ if __name__ == '__main__':
     logger_.addHandler(fh)
 
     logger_.info(f'Results will be saved at {opts.checkpoints_dir}.')
+
+    logger_.info('Creating RL acquisition run with the following options:')
+    for key, value in vars(opts).items():
+        if key == 'device':
+            value = value.type
+        elif key == 'gpu_ids':
+            value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
+        logger_.info(f"    {key:>25}: {'None' if value is None else value:<30}")
 
     main(opts, logger_)
