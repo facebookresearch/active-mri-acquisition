@@ -4,7 +4,7 @@ import torch
 # this function returns two channels where the first one (real part) is in image space
 from torch import nn as nn
 from torch.nn import functional as F
-from data.ft_data_loader.ft_util_vaes import ifftshift
+from data.ft_data_loader.ft_util_vaes import ifftshift, fftshift
 
 
 def ifft(x, normalized=False, ifft_shift=False):
@@ -69,6 +69,8 @@ def preprocess_inputs(batch, dataroot, device):
     target = batch[1].to(device)
     if dataroot == 'KNEE_RAW':
         k_space = batch[2].permute(0, 3, 1, 2).to(device)
+        # alter mask to always include the highest frequencies that include padding
+        mask = torch.where(to_magnitude(k_space).sum(2).unsqueeze(2)==0., torch.tensor(1.).to(device), mask)
         masked_true_k_space = torch.where(mask.byte(), k_space, torch.tensor(0.).to(device))
         zero_filled_reconstruction = ifft(masked_true_k_space, ifft_shift=True)
         target = target.permute(0, 3, 1, 2)
@@ -111,7 +113,6 @@ class GANLossKspace(nn.Module):
             else:
                 pred, gt = pred_and_gt
                 if self.options.dataroot == 'KNEE_RAW':
-                    #TODO: double check if this does not change action assignments
                     gt = center_crop(gt, [368, 320])
                     pred = center_crop(pred, [368, 320])
                 w = gt.shape[2]

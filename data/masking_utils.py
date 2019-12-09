@@ -59,10 +59,10 @@ class MaskFunc:
 
         if rnl_params is None:
             # The lines below give approx. 4x acceleration on average.
-            self.min_lowf_lines = 6 if which_dataset != 'KNEE_RAW' else 16
-            self.max_lowf_lines = 16 if which_dataset != 'KNEE_RAW' else 44
+            self.min_lowf_lines = 10 if which_dataset != 'KNEE_RAW' else 30
+            self.max_lowf_lines = 12 if which_dataset != 'KNEE_RAW' else 32
             self.highf_beta_alpha = 1
-            self.highf_beta_beta = 5
+            self.highf_beta_beta = 5 if which_dataset != 'KNEE_RAW' else 10
         else:
             params = [int(x) for x in rnl_params.split(',')]
             assert len(params) == 4

@@ -117,6 +117,8 @@ class TrainOptions(BaseOptions):
         # ########################
         # New options
         # ########################
+        parser.add_argument('--add_mask_eval', action='store_true',
+                            help='Summation of mask to observation in evaluator')
         parser.add_argument('--weights_checkpoint', type=str, default=None)
         parser.add_argument('--validation_train_split_ratio', type=float, default=0.9)
         parser.add_argument(

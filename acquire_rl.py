@@ -34,16 +34,19 @@ def get_experiment_str(options_):
 
 # Not a great policy specification protocol, but works for now.
 def get_policy(env, writer, logger, options_):
+    valid_actions = env.valid_actions
+
     # This options affects how the score is computed by the environment
     # (whether it passes through reconstruction network or not after a new col. is scanned)
     logger.info(f'Use reconstructions is {options_.use_reconstructions}')
     if 'random' in options_.policy:
-        policy = util.rl.simple_baselines.RandomPolicy(range(env.action_space.n))
+        policy = util.rl.simple_baselines.RandomPolicy(valid_actions)
     elif 'lowfirst' in options_.policy:
-        policy = util.rl.simple_baselines.NextIndexPolicy(
-            range(env.action_space.n), not env.conjugate_symmetry)
+        policy = util.rl.simple_baselines.NextIndexPolicy(valid_actions, not env.conjugate_symmetry)
     elif 'evaluator_net' in options_.policy:
         assert options_.obs_type == 'image_space'
+        # At the moment, Evaluator gets valid actions in a mask - preprocess data function.
+        # So, no need to pass `valid_actions`
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
     elif 'evaluator++' in options_.policy:
         policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
@@ -65,8 +68,8 @@ def main(options_, logger):
     options_.mask_embedding_dim = env.metadata['mask_embed_dim']
     options_.image_width = env.image_width
     env.set_training()
-    logger.info(f'Created environment with {env.action_space.n} actions')
     policy = get_policy(env, writer, logger, options_)  # Trains if necessary
+    logger.info(f'Created environment with {env.action_space.n} actions')
     env.set_testing()
     util.rl.utils.test_policy(env, policy, writer, logger, 0, options_)
 

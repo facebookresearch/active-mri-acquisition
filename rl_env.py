@@ -123,6 +123,7 @@ class ReconstructionEnv:
                 .number_of_evaluator_convolution_layers,
                 use_sigmoid=False,
                 width=evaluator_checkpoint['options'].image_width,
+                height=640 if options.dataroot == 'KNEE_RAW' else None,
                 mask_embed_dim=evaluator_checkpoint['options'].mask_embed_dim)
             logging.info(f'Loaded evaluator from checkpoint.')
             self._evaluator.load_state_dict({
@@ -140,9 +141,19 @@ class ReconstructionEnv:
 
         self.metadata = {'mask_embed_dim': reconstructor_checkpoint['options'].mask_embed_dim}
 
+        # Setting up valid actions
         factor = 2 if self.conjugate_symmetry else 1
         num_actions = (self.image_width - 2 * options.initial_num_lines_per_side) // factor
-        self.action_space = gym.spaces.Discrete(num_actions)
+        self.valid_actions = list(range(num_actions))
+        if self.options.dataroot == 'KNEE_RAW':
+            # use invalid_actions when using k_space knee data that are zero padded
+            # at some frequencies
+            # TODO: do we want to change the fixed numbers below or not?
+            invalid_actions = list(
+                range(166 - self.options.initial_num_lines_per_side,
+                      202 - self.options.initial_num_lines_per_side, 1))
+            self.valid_actions = np.setdiff1d(self.valid_actions, invalid_actions)
+        self.action_space = gym.spaces.Discrete(len(self.valid_actions))
 
         self._initial_mask = self._generate_initial_lowf_mask().to(device)
         self._ground_truth = None
@@ -179,18 +190,18 @@ class ReconstructionEnv:
             mask[0, 0, 0, -(i + 1)] = 1
         return mask
 
-    def _get_current_reconstruction_and_mask_embedding(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        zero_filled_image, _, _ = models.fft_utils.preprocess_inputs(
+    def _get_current_reconstruction_and_mask_embedding(self) \
+            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        zero_filled_image, _, mask_to_use = models.fft_utils.preprocess_inputs(
             (self._current_mask, self._ground_truth, self._k_space), self.options.dataroot, device)
 
         if self.options.use_reconstructions:
-            reconstruction, _, mask_embed = self._reconstructor(zero_filled_image,
-                                                                self._current_mask)
+            reconstruction, _, mask_embed = self._reconstructor(zero_filled_image, mask_to_use)
         else:
             reconstruction = zero_filled_image
             mask_embed = None
 
-        return reconstruction, mask_embed
+        return reconstruction, mask_embed, mask_to_use
 
     def set_testing(self, use_training_set=False, reset_index=True):
         self.data_mode = ReconstructionEnv.DataMode.TEST_ON_TRAIN if use_training_set \
@@ -269,8 +280,8 @@ class ReconstructionEnv:
                 mask_to_use = self._current_mask
             if k_space is None:
                 k_space = self._k_space
-            image, _, _ = models.fft_utils.preprocess_inputs((mask_to_use, ground_truth, k_space),
-                                                             self.options.dataroot, device)
+            image, _, mask_to_use = models.fft_utils.preprocess_inputs(
+                (mask_to_use, ground_truth, k_space), self.options.dataroot, device)
             if use_reconstruction:  # pass through reconstruction network
                 image, _, _ = self._reconstructor(image, mask_to_use)
         return [
@@ -281,7 +292,8 @@ class ReconstructionEnv:
 
     def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
-            reconstruction, mask_embedding = self._get_current_reconstruction_and_mask_embedding()
+            reconstruction, mask_embedding, mask = \
+                self._get_current_reconstruction_and_mask_embedding()
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth,
                                                      self.options.dataroot == 'KNEE_RAW')
 
@@ -290,7 +302,7 @@ class ReconstructionEnv:
 
             observation = {
                 'reconstruction': reconstruction,
-                'mask': self._current_mask,
+                'mask': mask,
                 'mask_embedding': mask_embedding
             }
 
@@ -298,7 +310,7 @@ class ReconstructionEnv:
                 observation = np.zeros(self.observation_space.shape).astype(np.float32)
                 observation[:2, :self.image_height, :] = reconstruction[0].cpu().numpy()
                 # The second to last row is the mask
-                observation[:, self.image_height, :] = self._current_mask.cpu().numpy()
+                observation[:, self.image_height, :] = mask.cpu().numpy()
                 # The last row is the mask embedding (padded with 0s if necessary)
                 if self.metadata['mask_embed_dim'] == 0:
                     observation[:, self.image_height + 1, 0] = np.nan
@@ -415,8 +427,13 @@ class ReconstructionEnv:
             assert not self.options.obs_type == 'fourier_space' and not self.options.obs_to_numpy
             mask_embedding = None if obs['mask_embedding'] is None \
                 else obs['mask_embedding'].to(device)
-            k_space_scores = self._evaluator(obs['reconstruction'].to(device), mask_embedding)
+            k_space_scores = self._evaluator(obs['reconstruction'].to(device), mask_embedding,
+                                             obs['mask'] if self.options.add_mask_eval else None)
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
+            # if self.options.dataroot == 'KNEE_RAW':
+            #     tmp = torch.zeros(obs['mask'].shape)
+            #     tmp[0, 0, 0, 166:202] = 1
+            #     k_space_scores.masked_fill_(tmp.to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
 
     def set_reference_point_for_rewards(self, statistics: Dict[str, Dict]):

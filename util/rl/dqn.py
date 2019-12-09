@@ -34,7 +34,7 @@ class EvaluatorBasedValueNetwork(nn.Module):
         super(EvaluatorBasedValueNetwork, self).__init__()
         num_actions = image_width - 2 * initial_num_lines_per_side
         self.evaluator = models.evaluator.EvaluatorNetwork(
-            number_of_filters=256,
+            number_of_filters=128,
             number_of_conv_layers=4,
             use_sigmoid=False,
             width=image_width,
@@ -61,13 +61,14 @@ class EvaluatorBasedValueNetwork(nn.Module):
             mask_embedding = None
         else:
             mask_embedding = x[:, 0, -1, :self.mask_embed_dim].view(bs, -1, 1, 1)
+            mask = x[:, 0, -2, :].contiguous().view(bs, 1, 1, -1)
             mask_embedding = mask_embedding.repeat(1, 1, reconstruction.shape[2],
                                                    reconstruction.shape[3])
 
         value = None
         advantage = None
         if self.use_dueling:
-            features = self.evaluator(reconstruction, mask_embedding)
+            features = self.evaluator(reconstruction, mask_embedding, mask)
             value = self.value_stream(features)
             advantage = self.advantage_stream(features)
             qvalue = value + (advantage - advantage.mean(dim=1).unsqueeze(1))

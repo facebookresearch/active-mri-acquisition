@@ -1,10 +1,10 @@
-from .fft_utils import fft, ifft
+from .fft_utils import fft, ifft, to_magnitude
 from .reconstruction import init_func
 
 import functools
 import torch
 import torch.nn as nn
-
+from models.fft_utils import center_crop
 
 class SimpleSequential(nn.Module):
 
@@ -23,7 +23,7 @@ class SpectralMapDecomposition(nn.Module):
     def __init__(self):
         super(SpectralMapDecomposition, self).__init__()
 
-    def forward(self, reconstructed_image, mask_embedding):
+    def forward(self, reconstructed_image, mask_embedding, mask):
         """
 
         Args:
@@ -57,10 +57,15 @@ class SpectralMapDecomposition(nn.Module):
         masked_kspace = masked_kspace.view(batch_size * width, 2, height, width)
 
         # convert spectral maps to image space
+        separate_images = ifft(masked_kspace)
         # result is (batch, [real_M0, img_M0, real_M1, img_M1, ...],  height, width]
-        separate_images = ifft(masked_kspace).contiguous().view(batch_size, 2 * width, height,
-                                                                width)
+        separate_images = separate_images.contiguous().view(batch_size, 2, width, height, width)
 
+        # add mask information as a summation -- might not be optimal
+        if mask is not None:
+            separate_images = separate_images + mask.permute(0, 3, 1, 2).unsqueeze(1).detach()
+
+        separate_images = separate_images.contiguous().view(batch_size, 2 * width, height, width)
         # concatenate mask embedding
         if mask_embedding is not None:
             spectral_map = torch.cat([separate_images, mask_embedding], dim=1)
@@ -77,13 +82,18 @@ class EvaluatorNetwork(nn.Module):
                  number_of_conv_layers=4,
                  use_sigmoid=False,
                  width=128,
+                 height=None,
                  mask_embed_dim=6,
-                 num_output_channels=None):
+                 num_output_channels=None,
+                 magnitude=False):
         print(f'[EvaluatorNetwork] -> n_layers = {number_of_conv_layers}')
         super(EvaluatorNetwork, self).__init__()
 
         self.spectral_map = SpectralMapDecomposition()
         self.mask_embed_dim = mask_embed_dim
+
+        if height == None:
+            height = width
 
         number_of_input_channels = 2 * width + mask_embed_dim
 
@@ -104,7 +114,11 @@ class EvaluatorNetwork(nn.Module):
 
         for n in range(1, number_of_conv_layers):
             if n < number_of_conv_layers - 1:
-                out_channels = in_channels * 2
+                if n <= 4:
+                    out_channels = in_channels * 2
+                else:
+                    out_channels = in_channels // 2
+
             else:
                 out_channels = in_channels
 
@@ -116,9 +130,9 @@ class EvaluatorNetwork(nn.Module):
             ]
 
             in_channels = out_channels
-
-        kernel_size = width // 2**number_of_conv_layers
-        sequence += [nn.AvgPool2d(kernel_size=kernel_size)]
+        kernel_size_width = width // 2**number_of_conv_layers
+        kernel_size_height = height // 2**number_of_conv_layers
+        sequence += [nn.AvgPool2d(kernel_size=(kernel_size_height, kernel_size_width))]
 
         if num_output_channels is None:
             num_output_channels = width
@@ -132,7 +146,7 @@ class EvaluatorNetwork(nn.Module):
         self.model = nn.Sequential(*sequence)
         self.apply(init_func)
 
-    def forward(self, input, mask_embedding=None):
+    def forward(self, input, mask_embedding=None, mask=None):
         """
 
         Args:
@@ -145,9 +159,7 @@ class EvaluatorNetwork(nn.Module):
                     shape   :   (batch_size, width)
 
         """
-
-        spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding)
-
+        spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding, mask)
         return self.model(spectral_map_and_mask_embedding).squeeze(3).squeeze(2)
 
 
