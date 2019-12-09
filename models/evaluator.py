@@ -23,7 +23,7 @@ class SpectralMapDecomposition(nn.Module):
     def __init__(self):
         super(SpectralMapDecomposition, self).__init__()
 
-    def forward(self, reconstructed_image, mask_embedding, mask, magnitude=False):
+    def forward(self, reconstructed_image, mask_embedding, mask):
         """
 
         Args:
@@ -95,11 +95,7 @@ class EvaluatorNetwork(nn.Module):
         if height == None:
             height = width
 
-        chanels_multip = 2
-        if magnitude:
-            chanels_multip = 1
-
-        number_of_input_channels = chanels_multip * width + mask_embed_dim
+        number_of_input_channels = 2 * width + mask_embed_dim
 
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
 
