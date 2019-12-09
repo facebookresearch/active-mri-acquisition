@@ -60,6 +60,8 @@ class RLOptions(BaseOptions):
             type=str,
             default=None,
             help='Full path to the evaluator++ model to use.')
+        parser.add_argument('--add_mask_eval', action='store_true',
+                            help='Summation of mask to observation in evaluator')
 
         # Reinforcement learning options
         parser.add_argument('--dqn_model_type', choices=['basic', 'evaluator'], default='evaluator')
