@@ -428,7 +428,7 @@ class ReconstructionEnv:
             mask_embedding = None if obs['mask_embedding'] is None \
                 else obs['mask_embedding'].to(device)
             k_space_scores = self._evaluator(obs['reconstruction'].to(device), mask_embedding,
-                                             obs['mask'])
+                                             obs['mask'] if self.options.add_mask_eval else None)
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
             # if self.options.dataroot == 'KNEE_RAW':
             #     tmp = torch.zeros(obs['mask'].shape)

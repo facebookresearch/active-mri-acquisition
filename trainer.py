@@ -215,12 +215,14 @@ class Trainer:
             detached_fake = fake.detach()
             if self.options.mask_embed_dim != 0:
                 mask_embedding = mask_embedding.detach()
-            output = self.evaluator(detached_fake, mask_embedding, mask)
+            output = self.evaluator(detached_fake, mask_embedding, mask
+                                    if self.options.add_mask_eval else None)
             loss_D_fake = self.losses['GAN'](
                 output, False, mask, degree=0, pred_and_gt=(detached_fake, target))
 
             real = target
-            output = self.evaluator(real, mask_embedding, mask)
+            output = self.evaluator(real, mask_embedding, mask
+                                    if self.options.add_mask_eval else None)
             loss_D_real = self.losses['GAN'](
                 output, True, mask, degree=1, pred_and_gt=(detached_fake, target))
 
@@ -229,7 +231,8 @@ class Trainer:
             self.optimizers['D'].step()
 
             if not self.options.only_evaluator:
-                output = self.evaluator(fake, mask_embedding, mask)
+                output = self.evaluator(fake, mask_embedding, mask
+                                        if self.options.add_mask_eval else None)
                 loss_G_GAN = self.losses['GAN'](
                     output, True, mask, degree=1, updateG=True, pred_and_gt=(fake, target))
                 loss_G_GAN *= self.options.lambda_gan
