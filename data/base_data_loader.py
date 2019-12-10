@@ -1,31 +1,17 @@
 """
 Source : https://gist.github.com/kevinzakka/d33bf8d6c7f06a9d8c76d97a7879f5cb#file-data_loader-py
 """
-import logging
 import pathlib
 import os
 
 import torch
 import numpy as np
 
-from torch.utils.data.sampler import SubsetRandomSampler, Sampler
+from torch.utils.data.sampler import SubsetRandomSampler
 
-from .DICOM_data_loader import DicomDataTransform, Slice, SliceWithPrecomputedMasks
+from .DICOM_data_loader import DicomDataTransform, Slice
 from .RAW_data_loader import RawDataTransform, RawSliceData
 from .masking_utils import get_mask_func
-
-
-class BaseDataLoader():
-
-    def __init__(self):
-        pass
-
-    def initialize(self, opt):
-        self.opt = opt
-        pass
-
-    def load_data():
-        return None
 
 
 def get_train_valid_loader(batch_size,
@@ -33,19 +19,11 @@ def get_train_valid_loader(batch_size,
                            pin_memory=False,
                            which_dataset='KNEE',
                            mask_type='basic',
-                           masks_dir=None,
-                           rnl_params=None):
+                           rnl_params=None,
+                           num_volumes_train=None,
+                           num_volumes_val=None):
 
-    if which_dataset == 'KNEE_PRECOMPUTED_MASKS':
-        dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
-        data_transform_train = DicomDataTransform(None, fixed_seed=None, seed_per_image=True)
-        data_transform_valid = DicomDataTransform(None, fixed_seed=None, seed_per_image=True)
-        train_data = SliceWithPrecomputedMasks(
-            data_transform_train, dicom_root, masks_dir, which='train')
-        valid_data = SliceWithPrecomputedMasks(
-            data_transform_valid, dicom_root, masks_dir, which='val')
-
-    elif which_dataset == 'KNEE':
+    if which_dataset == 'KNEE':
         mask_func = get_mask_func(mask_type, which_dataset, rnl_params=rnl_params)
         dicom_root = pathlib.Path('/checkpoint/jzb/data/mmap')
         data_transform = DicomDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
@@ -55,7 +33,7 @@ def get_train_valid_loader(batch_size,
             which='train',
             resolution=128,
             scan_type='all',
-            num_volumes=None,
+            num_volumes=num_volumes_train,
             num_rand_slices=None)
         valid_data = Slice(
             data_transform,
@@ -63,7 +41,7 @@ def get_train_valid_loader(batch_size,
             which='val',
             resolution=128,
             scan_type='all',
-            num_volumes=None,
+            num_volumes=num_volumes_val,
             num_rand_slices=None)
 
     elif which_dataset == 'KNEE_RAW':

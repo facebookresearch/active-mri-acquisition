@@ -117,8 +117,12 @@ class TrainOptions(BaseOptions):
         # ########################
         # New options
         # ########################
-        parser.add_argument('--add_mask_eval', action='store_true',
-                            help='Summation of mask to observation in evaluator')
+        parser.add_argument('--num_volumes_train', type=int, default=None)
+        parser.add_argument('--num_volumes_val', type=int, default=None)
+        parser.add_argument(
+            '--add_mask_eval',
+            action='store_true',
+            help='Summation of mask to observation in evaluator')
         parser.add_argument('--weights_checkpoint', type=str, default=None)
         parser.add_argument('--validation_train_split_ratio', type=float, default=0.9)
         parser.add_argument(
@@ -159,11 +163,6 @@ class TrainOptions(BaseOptions):
         # Options for both Reconstructor and Evaluator Model
         parser.add_argument('--mask_embed_dim', type=int, default=6)
         parser.add_argument('--image_width', type=int, default=128)
-        parser.add_argument(
-            '--masks_dir',
-            type=str,
-            default=None,
-            help='Directory to load the masks from if dataroot is KNEE_PRECOMPUTED_MASKS')
 
         # Options moved from old model file
         parser.add_argument(

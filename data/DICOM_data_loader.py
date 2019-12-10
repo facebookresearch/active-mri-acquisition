@@ -51,60 +51,6 @@ class Slice(Dataset):
             return len(self.dataset) * self.num_rand_slices
 
 
-class SliceWithPrecomputedMasks(Dataset):
-    """ This refers to a dataset of pre-computed masks where the Slice object had the following
-        characteristics:
-            -resolution: 128, scan_type='all', num_volumes=None, num_rand_slices=None
-
-        Only a subset of the masks where computed, specified by the list `self.available_masks`.
-    """
-
-    def __init__(self, transform, dicom_root, masks_dir, which='train'):
-        self.transform = transform
-        self.dataset = _DicomDataset(dicom_root / str(128) / which, 'all', num_volumes=None)
-        self.num_slices = self.dataset.metadata['num_slices']
-        self.rng = np.random.RandomState()
-
-        self.masks_location = masks_dir
-        self.masks_location = os.path.join(self.masks_location, which)
-        # File format is masks_{begin_idx}-{end_idx}.p. The lines below obtain all begin_idx
-        self.maskfile_begin_indices = sorted([
-            int(x.split('_')[1].split('-')[0])
-            for x in os.listdir(self.masks_location)
-            if 'masks' in x
-        ])
-        self.maskfile_end_indices = sorted([
-            int(x.split('_')[1].split('-')[1].split('.')[0])
-            for x in os.listdir(self.masks_location)
-            if 'masks' in x
-        ])
-        self.masks_per_file = self.maskfile_begin_indices[1] - self.maskfile_begin_indices[0]
-
-    def __getitem__(self, i):
-        available_mask_index = i // self.masks_per_file
-        mask_file_index = self.maskfile_begin_indices[available_mask_index]
-        mask_index = i % self.masks_per_file
-
-        volume_i, slice_i = divmod(i, self.num_slices)
-        volume, volume_metadata = self.dataset[volume_i]
-        slice = volume[slice_i:slice_i + 1]
-        slice = slice.astype(np.float32)
-        _, image = self.transform(slice, volume_metadata['mean'], volume_metadata['std'])
-
-        # Now load the pre-computed mask
-        filename = os.path.join(
-            self.masks_location,
-            f'masks_{mask_file_index}-{self.maskfile_end_indices[available_mask_index]}.p')
-        with open(filename, 'rb') as f:
-            data = pickle.load(f)
-            mask = torch.from_numpy(data[mask_index]).view(1, 1, 128).float()
-
-        return mask, image, None
-
-    def __len__(self):
-        return self.maskfile_end_indices[-1]
-
-
 class DicomDataTransform:
 
     # If `seed` is none and `seed_per_image` is True, masks will be generated with a unique seed
