@@ -53,6 +53,8 @@ class BaseOptions():
             type=str,
             help='customized suffix: opt.name = opt.name + suffix: '
             'e.g., {model}_{which_model_netG}_size{loadSize}')
+        parser.add_argument('--num_volumes_train', type=int, default=None)
+        parser.add_argument('--num_volumes_val', type=int, default=None)
 
         # adding for my project fmri
         parser.add_argument(

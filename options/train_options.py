@@ -117,8 +117,6 @@ class TrainOptions(BaseOptions):
         # ########################
         # New options
         # ########################
-        parser.add_argument('--num_volumes_train', type=int, default=None)
-        parser.add_argument('--num_volumes_val', type=int, default=None)
         parser.add_argument(
             '--add_mask_eval',
             action='store_true',
