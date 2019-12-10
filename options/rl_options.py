@@ -42,6 +42,10 @@ class RLOptions(BaseOptions):
             help='If true, order of training images does not depend on the seed (useful when'
             'using preemption to avoid having to keep track of current image index).')
         parser.add_argument(
+            '--train_with_fixed_initial_mask',
+            dest='train_with_fixed_initial_mask',
+            action='store_true')
+        parser.add_argument(
             '--mask_type',
             type=str,
             choices=[
@@ -75,8 +79,10 @@ class RLOptions(BaseOptions):
             type=str,
             default=None,
             help='Full path to the evaluator++ model to use.')
-        parser.add_argument('--add_mask_eval', action='store_true',
-                            help='Summation of mask to observation in evaluator')
+        parser.add_argument(
+            '--add_mask_eval',
+            action='store_true',
+            help='Summation of mask to observation in evaluator')
 
         # Reinforcement learning options
         parser.add_argument('--dqn_model_type', choices=['basic', 'evaluator'], default='evaluator')

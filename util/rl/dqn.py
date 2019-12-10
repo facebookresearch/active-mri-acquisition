@@ -407,7 +407,8 @@ class DQNTrainer:
                     test_with_full_budget=self.options.test_with_full_budget)
 
             # Run an episode and update model
-            obs, _ = self.env.reset()
+            obs, _ = self.env.reset(
+                start_with_initial_mask=self.options.train_with_fixed_initial_mask)
             done = False
             total_reward = 0
             cnt_repeated_actions = 0
