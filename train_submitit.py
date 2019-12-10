@@ -20,9 +20,9 @@ if __name__ == '__main__':
     executor = submitit.SlurmExecutor(folder=options_.submitit_logs_dir, max_num_timeout=3)
     executor.update_parameters(
         num_gpus=8,
-        partition='priority',
+        partition='learnfair',
         cpus_per_task=16,
         mem=128000,
         time=4320,
-        comment='CVPR 11/15 deadline')
+        comment='nothing')
     executor.submit(trainer_)
