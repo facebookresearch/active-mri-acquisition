@@ -86,7 +86,7 @@ class RLOptions(BaseOptions):
 
         # Reinforcement learning options
         parser.add_argument('--dqn_model_type', choices=['basic', 'evaluator'], default='evaluator')
-        parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
+        parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_false')
         parser.add_argument('--dqn_normalize', dest='dqn_normalize', action='store_true')
         parser.add_argument(
             '--dqn_only_test',
