@@ -18,7 +18,8 @@ INIT_LINES=5
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}
 
 for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high_rnl"; do
-    CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors_post_eval_tag/${NAME}
+#    CHECKPOINT_DIR=/checkpoint/lep/active_acq/all_reconstructors_post_eval_tag/${NAME}
+    CHECKPOINT_DIR=/checkpoint/lep/active_acq/smaller_dicom_dataset/num_vol_train_10000/${NAME}
     for policy in "random" "lowfirst" "evaluator_net"; do
         obs_type=image_space
         job_name=active_acq_baselines_${NAME}_${policy}
@@ -49,6 +50,7 @@ for NAME in "basic_rnl" "symmetric_basic_rnl" "low_to_high_rnl"; do
         --initial_num_lines_per_side ${INIT_LINES} \
         --budget 1000 \
         --num_test_images 1000 \
+        --mask_type basic_rnl \
         --freq_save_test_stats 50 >> ${SLURM}
 
          sbatch ${SLURM}
