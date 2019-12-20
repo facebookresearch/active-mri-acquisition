@@ -11,10 +11,10 @@ CHECKPOINTS_DIR=/checkpoint/${USER}/active_acq/smaller_dicom_dataset/num_vol_tra
 #SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/train_evaluators_$(date +%Y%m%d_%H.%M.%S)
 SRC_DIR=/private/home/lep/code/versions/Active_Acquisition/train_reconstructors_dicom_smaller
 
-echo ${SRC_DIR}
-
-mkdir -p ${SRC_DIR}
-cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
+#echo ${SRC_DIR}
+#
+#mkdir -p ${SRC_DIR}
+#cp -r /private/home/lep/code/Active_Acquisition/* ${SRC_DIR}
 
 cd ${SRC_DIR}
 
