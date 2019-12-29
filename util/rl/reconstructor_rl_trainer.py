@@ -18,13 +18,14 @@ class DatasetFromActiveAcq(torch.utils.data.Dataset):
     # will be sampled from.
 
     def __init__(self, original_dataset: torch.utils.data.Dataset,
-                 masks_dict: Dict[int, np.ndarray]):
+                 masks_dict: Dict[int, np.ndarray], dataroot: str):
         # masks_dict is [image_index, matrix of N * W columns of masks for each image]
         super(DatasetFromActiveAcq, self).__init__()
         self.original_dataset = original_dataset
         self.masks_dict = masks_dict
         self.image_indices = [int(x) for x in masks_dict.keys()]
         self.rng = np.random.RandomState()
+        self.dataroot = dataroot
 
     def __getitem__(self, index):
         if self.rng.random_sample() < 0.1:
@@ -32,10 +33,17 @@ class DatasetFromActiveAcq(torch.utils.data.Dataset):
             # as a form of regularization
             return self.original_dataset.__getitem__(self.rng.choice(len(self.original_dataset)))
         image_index = self.image_indices[index]
-        _, image = self.original_dataset.__getitem__(image_index)  # assumes DICOM
-        mask_index = int(self.rng.beta(1, 5) * self.masks_dict[image_index].shape[0])
-        mask = torch.from_numpy(self.masks_dict[image_index][mask_index])
-        return mask.view(1, 1, -1), image
+        masK_image_raw = self.original_dataset.__getitem__(image_index)
+        if self.dataroot == 'KNEE':
+            mask_index = int(self.rng.beta(1, 5) * self.masks_dict[image_index].shape[0])
+            mask = torch.from_numpy(self.masks_dict[image_index][mask_index])
+            return mask.view(1, 1, -1), masK_image_raw[1]
+        elif self.dataroot == 'KNEE_RAW':
+            mask_index = int(self.rng.beta(1, 10) * self.masks_dict[image_index].shape[0])
+            mask = torch.from_numpy(self.masks_dict[image_index][mask_index])
+            return mask.view(1, 1, -1), masK_image_raw[1], masK_image_raw[2]
+        else:
+            raise NotImplementedError('Only supported for options.dataroot KNEE or KNEE_RAW')
 
     def __len__(self):
         return len(self.image_indices)
@@ -60,14 +68,18 @@ class ReconstructorRLTrainer:
                  writer: tensorboardX.SummaryWriter):
         # masks_dict is [image_index, matrix of N * W columns of masks for each image]
         # Only image indices appearing in this dictionary will be considered
-        dataset_train = DatasetFromActiveAcq(self.original_train_dataset, masks_dict)
+        dataset_train = DatasetFromActiveAcq(self.original_train_dataset, masks_dict,
+                                             self.options.dataroot)
         logger.info(f'Created dataset of len {dataset_train}.')
         data_loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=40, num_workers=8)
         logger.info(f'Created dataloader with {len(data_loader_train)} batches.')
 
         sampler = torch.utils.data.SubsetRandomSampler(self.validation_indices)
         data_loader_validation = torch.utils.data.DataLoader(
-            self.validation_dataset, sampler=sampler, batch_size=40, num_workers=8)
+            self.validation_dataset,
+            sampler=sampler,
+            batch_size=self.options.alternate_opt_batch_size,
+            num_workers=8)
         logger.info(f'Created validation dataloader with {len(data_loader_validation)} batches.')
 
         self.reconstructor.train()

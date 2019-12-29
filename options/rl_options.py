@@ -130,6 +130,7 @@ class RLOptions(BaseOptions):
         parser.add_argument('--num_epochs_train_reconstructor', type=int, default=10)
         parser.add_argument('--frequency_train_reconstructor', type=int, default=5000)
         parser.add_argument('--reconstructor_lr', type=float, default=0.00002)
+        parser.add_argument('--alternate_opt_batch_size', type=int, default=40)
 
         self.isTrain = False
         return parser

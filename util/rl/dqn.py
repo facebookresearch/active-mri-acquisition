@@ -266,10 +266,13 @@ class DQNTrainer:
                 use_normalization=options_.dqn_normalize)
             self.logger.info('Created replay buffer.')
 
-            self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
-                               options_).to(rl_env.device)
-            self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, options_).to(
-                rl_env.device)
+            if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+                device = torch.device('cuda:1')
+            else:
+                device = rl_env.device
+            self.policy = DDQN(self.env.action_space.n, device, self.replay_memory,
+                               options_).to(device)
+            self.target_net = DDQN(self.env.action_space.n, device, None, options_).to(device)
             self.target_net.eval()
             self.logger.info(f'Created neural networks with {self.env.action_space.n} outputs.')
 
@@ -316,10 +319,14 @@ class DQNTrainer:
             use_normalization=self.options.dqn_normalize)
 
         # Initialize policy
-        self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
-                           self.options).to(rl_env.device)
-        self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, self.options).to(
-            rl_env.device)
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+            device = torch.device('cuda:1')
+        else:
+            device = rl_env.device
+
+        self.policy = DDQN(self.env.action_space.n, device, self.replay_memory,
+                           self.options).to(device)
+        self.target_net = DDQN(self.env.action_space.n, device, None, self.options).to(device)
 
         self.window_size = min(self.options.num_train_images, 5000)
         self.reward_images_in_window = np.zeros(self.window_size)

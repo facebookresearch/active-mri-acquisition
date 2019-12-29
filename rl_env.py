@@ -17,7 +17,7 @@ import util.util
 import util.rl.reconstructor_rl_trainer
 import util.rl.utils
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 def load_checkpoint(checkpoints_dir: str, name: str = 'best_checkpoint.pth') -> Optional[Dict]:
@@ -453,9 +453,14 @@ class ReconstructionEnv:
     def retrain_reconstructor(self, logger, writer):
         logger.info(
             f'Training reconstructor for {self.options.num_epochs_train_reconstructor} epochs')
+        del self._current_mask
+        del self._ground_truth
+        self._initial_mask.to('cpu')
+        torch.cuda.empty_cache()
         self.reconstructor_trainer(self.mask_dict, logger, writer)
         logger.info('Done training reconstructor')
 
+        self._initial_mask.to(device)
         self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
 
     def _reset_saved_masks_dict(self):
