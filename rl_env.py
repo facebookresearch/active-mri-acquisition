@@ -456,11 +456,18 @@ class ReconstructionEnv:
         del self._current_mask
         del self._ground_truth
         self._initial_mask.to('cpu')
+        self._reconstructor.to(torch.device('cpu'))
         torch.cuda.empty_cache()
-        self.reconstructor_trainer(self.mask_dict, logger, writer)
-        logger.info('Done training reconstructor')
-
+        trained_reconstructor = self.reconstructor_trainer(self.mask_dict, logger, writer)
+        self._reconstructor.load_state_dict({
+            key.replace('module.', ''): val
+            for key, val in trained_reconstructor.state_dict().items()
+        })
+        trained_reconstructor.to(torch.device('cpu'))
+        self._reconstructor.to(device)
         self._initial_mask.to(device)
+
+        logger.info('Done training reconstructor')
         self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
 
     def _reset_saved_masks_dict(self):

@@ -320,7 +320,7 @@ class DQNTrainer:
 
         # Initialize policy
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-            device = torch.device('cuda:1')
+            device = torch.device(f'cuda:{torch.cuda.device_count() - 1}')
         else:
             device = rl_env.device
 

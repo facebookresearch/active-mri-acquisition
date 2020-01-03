@@ -58,14 +58,18 @@ class ReconstructorRLTrainer:
         self.original_train_dataset = original_train_dataset
         self.validation_dataset = validation_dataset
         self.validation_indices = validation_indices
-        self.reconstructor = reconstructor
+        # Use all GPUs except the last one, which is used for DQN
+        self.reconstructor = torch.nn.DataParallel(reconstructor,
+                                                   list(range(torch.cuda.device_count() - 1)))
         self.options = options
         self.optimizer = optim.Adam(
             self.reconstructor.parameters(), lr=self.options.reconstructor_lr)
         self.num_epochs = 0
 
     def __call__(self, masks_dict: Dict[int, np.ndarray], logger: logging.Logger,
-                 writer: tensorboardX.SummaryWriter):
+                 writer: tensorboardX.SummaryWriter) -> models.reconstruction.ReconstructorNetwork:
+        self.reconstructor.to(torch.device('cuda'))
+        logger.info(f'Training reconstructor with device IDS: {self.reconstructor.device_ids}')
         # masks_dict is [image_index, matrix of N * W columns of masks for each image]
         # Only image indices appearing in this dictionary will be considered
         dataset_train = DatasetFromActiveAcq(self.original_train_dataset, masks_dict,
@@ -78,7 +82,7 @@ class ReconstructorRLTrainer:
         data_loader_validation = torch.utils.data.DataLoader(
             self.validation_dataset,
             sampler=sampler,
-            batch_size=self.options.alternate_opt_batch_size,
+            batch_size=self.options.alternate_opt_batch_size * (torch.cuda.device_count() - 1),
             num_workers=8)
         logger.info(f'Created validation dataloader with {len(data_loader_validation)} batches.')
 
@@ -128,6 +132,4 @@ class ReconstructorRLTrainer:
 
             self.num_epochs += 1
 
-        self.reconstructor.eval()
-
-        return 0
+        return self.reconstructor
