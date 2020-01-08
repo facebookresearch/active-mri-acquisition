@@ -169,9 +169,12 @@ class ReconstructionEnv:
         self.mask_dict = {}
         self.epoch_count_callback = None
         self.epoch_frequency_callback = None
-        self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
-            self._reconstructor, self._dataset_train, self._dataset_test,
-            self._test_order[:self.num_test_images], self.options)
+        if torch.cuda.device_count() < 2:
+            self.reconstructor_trainer = None
+        else:
+            self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
+                self._reconstructor, self._dataset_train, self._dataset_test,
+                self._test_order[:self.num_test_images], self.options)
 
         # Pre-compute reward normalization if necessary
         if options.normalize_rewards_on_val:
