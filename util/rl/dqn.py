@@ -28,6 +28,50 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
+class SimpleMLP(nn.Module):
+
+    def __init__(self,
+                 budget,
+                 image_width,
+                 initial_num_lines_per_side,
+                 num_hidden_layers=2,
+                 num_hidden=32,
+                 ignore_mask=True,
+                 symmetric=True):
+        super(SimpleMLP, self).__init__()
+        self.initial_num_lines_per_side = initial_num_lines_per_side
+        self.ignore_mask = ignore_mask
+        self.symmetric = symmetric
+        self.num_inputs = budget if self.ignore_mask else self.image_width
+        num_actions = image_width - 2 * initial_num_lines_per_side
+        self.linear1 = nn.Sequential(nn.Linear(self.num_inputs, num_hidden), nn.ReLU())
+        hidden_layers = []
+        for i in range(num_hidden_layers):
+            hidden_layers.append(nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU()))
+        self.hidden = nn.Sequential(*hidden_layers)
+        self.output = nn.Linear(num_hidden, num_actions)
+        self.model = nn.Sequential(self.linear1, self.hidden, self.output)
+
+    def forward(self, x):
+        previous_actions = x[:, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
+        if self.ignore_mask:
+            input_tensor = torch.zeros(x.shape[0], self.num_inputs).to(x.device)
+            time_steps = previous_actions.sum(1).unsqueeze(1)
+            if self.symmetric:
+                time_steps //= 2
+            # We allow the model to receive observations that are over budget during test
+            # Code below randomizes the input to the model for these observations
+            index_over_budget = (time_steps >= self.num_inputs).squeeze()
+            time_steps = time_steps.clamp(0, self.num_inputs - 1)
+            input_tensor.scatter_(1, time_steps.long(), 1)
+            input_tensor[index_over_budget] = torch.randn_like(input_tensor[index_over_budget])
+        else:
+            input_tensor = x
+        value = self.model(input_tensor)
+        value = value - 1e10 * previous_actions
+        return {'qvalue': value, 'value': None, 'advantage': None}
+
+
 class EvaluatorBasedValueNetwork(nn.Module):
 
     def __init__(self, image_width, initial_num_lines_per_side, mask_embed_dim, use_dueling=False):
@@ -114,6 +158,10 @@ class BasicValueNetwork(nn.Module):
 
 
 def get_model(num_actions, options):
+    if options.dqn_model_type == 'simple_mlp':
+        if options.use_dueling_dqn:
+            raise NotImplementedError('Dueling DQN only implemented with dqn_model_type=evaluator.')
+        return SimpleMLP(options.budget, options.image_width, options.initial_num_lines_per_side)
     if options.dqn_model_type == 'basic':
         if options.use_dueling_dqn:
             raise NotImplementedError('Dueling DQN only implemented with dqn_model_type=evaluator.')
@@ -143,10 +191,14 @@ class DDQN(nn.Module):
 
     def _get_action_no_replacement(self, observation, eps_threshold):
         sample = random.random()
-        # See comment in DQNTrainer._train_dqn_policy for observation format,
-        # Index -2 recovers the mask associated to this observation
-        previous_actions = np.nonzero(observation[0, -2, self.opts.initial_num_lines_per_side:
-                                                  -self.opts.initial_num_lines_per_side])[0]
+        if self.opts.obs_type == 'only_mask':
+            previous_actions = np.nonzero(observation[self.opts.initial_num_lines_per_side:
+                                                      -self.opts.initial_num_lines_per_side])[0]
+        else:
+            # See comment in DQNTrainer._train_dqn_policy for observation format,
+            # Index -2 recovers the mask associated to this observation
+            previous_actions = np.nonzero(observation[0, -2, self.opts.initial_num_lines_per_side:
+                                                      -self.opts.initial_num_lines_per_side])[0]
         if sample < eps_threshold:
             return random.choice([x for x in range(self.num_actions) if x not in previous_actions])
         with torch.no_grad():
@@ -427,11 +479,14 @@ class DQNTrainer:
             while not done:
                 epsilon = get_epsilon(self.steps, self.options)
                 action = self.policy.get_action(obs, epsilon, None)
-                # Format of observation is [bs, img_height + 2, img_width], where first
-                # img_height rows are reconstruction, next line is the mask, and final line is
-                # the mask embedding
-                is_repeated_action = bool(
-                    obs[0, -2, action + self.options.initial_num_lines_per_side])
+                if self.options.obs_type == 'only_mask':
+                    is_repeated_action = bool(obs[action + self.options.initial_num_lines_per_side])
+                else:
+                    # Format of observation is [bs, img_height + 2, img_width], where first
+                    # img_height rows are reconstruction, next line is the mask, and final line is
+                    # the mask embedding
+                    is_repeated_action = bool(
+                        obs[0, -2, action + self.options.initial_num_lines_per_side])
 
                 assert not (self.options.no_replacement_policy and is_repeated_action)
 

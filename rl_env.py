@@ -135,8 +135,11 @@ class ReconstructionEnv:
 
         self.observation_space = None  # The observation is a dict unless `obs_to_numpy` is used
         if self.options.obs_to_numpy:
-            # The extra rows represents the current mask and the mask embedding
-            obs_shape = (2, self.image_height + 2, self.image_width)
+            if self.options.obs_type == 'only_mask':
+                obs_shape = (self.image_width,)
+            else:
+                # The extra rows represents the current mask and the mask embedding
+                obs_shape = (2, self.image_height + 2, self.image_width)
             self.observation_space = gym.spaces.Box(low=-50000, high=50000, shape=obs_shape)
 
         self.metadata = {'mask_embed_dim': reconstructor_checkpoint['options'].mask_embed_dim}
@@ -299,6 +302,12 @@ class ReconstructionEnv:
                 self._get_current_reconstruction_and_mask_embedding()
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth,
                                                      self.options.dataroot == 'KNEE_RAW')
+
+            if self.options.obs_type == 'only_mask':
+                observation = {'mask': self._current_mask}
+                if self.options.obs_to_numpy:
+                    observation = self._current_mask.squeeze().cpu().numpy()
+                return observation, score
 
             if self.options.obs_type == 'fourier_space':
                 reconstruction = models.fft_utils.fft(reconstruction)
