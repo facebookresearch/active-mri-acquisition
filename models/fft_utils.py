@@ -123,7 +123,8 @@ class GANLossKspace(nn.Module):
                         1, keepdim=True).sum(
                             2, keepdim=True).squeeze() / (2 * w)
                 energy = torch.exp(-ks_row_mse * self.gamma)
-
+                # energy = torch.exp(-ks_row_mse)
+                # import pdb; pdb.set_trace()
                 target_tensor[:] = energy
             # force observed part to always
             for i in range(mask.shape[0]):

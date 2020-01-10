@@ -9,14 +9,15 @@ mkdir -p ${LOGS_DIR}/stderr
 
 queue=learnfair
 
-INIT_LINES=16
-BASELINES_SUFFIX=init.num.lines.${INIT_LINES}_301
+INIT_LINES=15
+BASELINES_SUFFIX=init.num.lines.${INIT_LINES}_new3
 
 
 
 for NAME in "basic_rnl"; do
     CHECKPOINT_DIR=/checkpoint/${USER}/active_acq/all_reconstructors_raw_padding_fix/${NAME}_data_aug_no_mask_emb
     for policy in "random" "lowfirst" "evaluator_net"; do
+    # for policy in "evaluator_net"; do
         obs_type=image_space
         job_name=active_acq_baselines_${NAME}_${policy}
 
@@ -37,15 +38,16 @@ for NAME in "basic_rnl"; do
 
         echo "cd /private/home/mdrozdzal/code/Active_Acquisition" >> ${SLURM}
 
-        echo srun python acquire_rl.py --dataroot KNEE_RAW \
+        echo export HDF5_USE_FILE_LOCKING=FALSE >> ${SLURM}
+
+        echo srun python acquire_rl.py --dataroot KNEE_RAW --mask_type ${NAME} \
         --reconstructor_dir ${CHECKPOINT_DIR} \
-        --evaluator_dir ${CHECKPOINT_DIR}_beta=10_new_loss_4/evaluator \
-        --checkpoints_dir ${CHECKPOINT_DIR}_beta=10_new_loss_4/all_baselines.${BASELINES_SUFFIX} \
-        --seed 0 --batchSize 10 --gpu_ids 0 --policy ${policy} \
+        --evaluator_dir ${CHECKPOINT_DIR}_beta=10_post_refactor_gamma_3000/evaluator \
+        --checkpoints_dir ${CHECKPOINT_DIR}_beta=10_post_refactor_gamma_3000/all_baselines.${BASELINES_SUFFIX} \
+        --seed 0 --gpu_ids 0 --policy ${policy} \
         --num_train_steps 0 --num_train_images 0 \
         --obs_type ${obs_type} \
-        --greedymc_num_samples 60 --greedymc_horizon 1 \
-        --sequential_images \
+        --add_mask_eval \
         --initial_num_lines_per_side ${INIT_LINES} \
         --budget 1000 \
         --num_test_images 1000 \

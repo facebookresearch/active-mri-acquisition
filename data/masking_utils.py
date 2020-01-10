@@ -62,7 +62,7 @@ class MaskFunc:
             self.min_lowf_lines = 10 if which_dataset != 'KNEE_RAW' else 30
             self.max_lowf_lines = 12 if which_dataset != 'KNEE_RAW' else 32
             self.highf_beta_alpha = 1
-            self.highf_beta_beta = 5 if which_dataset != 'KNEE_RAW' else 10
+            self.highf_beta_beta = 5 if which_dataset != 'KNEE_RAW' else 5
         else:
             params = [int(x) for x in rnl_params.split(',')]
             assert len(params) == 4

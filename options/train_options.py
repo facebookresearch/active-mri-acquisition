@@ -129,6 +129,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--use_submitit', dest='use_submitit', action='store_true')
         parser.add_argument('--submitit_logs_dir', type=str, default=None)
 
+
         # Hyperband Options
         parser.add_argument(
             '--R', type=int, default=10, help='Hyperband resource usage limit (default: 10)')
@@ -171,6 +172,7 @@ class TrainOptions(BaseOptions):
             help='GAN criterion computes adversarial loss signal at provided k-space lines')
         parser.add_argument(
             '--lambda_gan', type=float, default=0.01, help='weight for reconstruction loss')
+        parser.add_argument('--gamma', type=int, default=100)
 
         parser.add_argument('--only_evaluator', dest='only_evaluator', action='store_true')
 

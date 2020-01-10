@@ -30,11 +30,11 @@ if __name__ == '__main__':
     executor = submitit.SlurmExecutor(submitit_logs_dir, max_num_timeout=3)
     executor.update_parameters(
         num_gpus=1,
-        partition='priority',
+        partition='dev',
         cpus_per_task=2,
         mem=256000,
         time=4320,
         job_name=options_.job_name,
         signal_delay_s=3600,
-        comment='only one gpu/cpu job. awkward to handle preemption in this job')
+        comment='')
     executor.submit(trainer_)
