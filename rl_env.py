@@ -483,7 +483,9 @@ class ReconstructionEnv:
         # `reconstructor_trainer` will perform updates on its own `DataParallel` copy of the
         # reconstructor, and update the env's reconstructor every time a best validation score
         # is achieved (by calling `ReconstructionEnv.update_reconstructor_from_alt_opt()`)
-        self.reconstructor_trainer(self._start_epoch_for_alt_opt, self.mask_dict, logger, writer)
+        epochs_performed = self.reconstructor_trainer(self._start_epoch_for_alt_opt, self.mask_dict,
+                                                      logger, writer)
+        self._start_epoch_for_alt_opt += epochs_performed
         self._reconstructor.to(device)
         self._initial_mask = self._initial_mask.to(device)
 

@@ -40,7 +40,7 @@ class DatasetFromActiveAcq(torch.utils.data.Dataset):
         self.dataroot = dataroot
 
     def __getitem__(self, index):
-        if self.rng.random_sample() < 0.01:
+        if self.rng.random_sample() < 0.05:
             # With small probability return a random image/mask pair from original dataset
             # as a form of regularization
             return self.original_dataset.__getitem__(self.rng.choice(len(self.original_dataset)))
@@ -75,6 +75,7 @@ class ReconstructorRLTrainer:
         self.optimizer = optim.Adam(
             self.reconstructor.parameters(), lr=self.options.reconstructor_lr)
         self.reconstructor_checkpoint_callback = reconstructor_checkpoint_callback
+        self.patience = 10
 
     def do_validation_loop(self, epoch: int, data_loader_validation: torch.utils.data.DataLoader,
                            logger: logging.Logger, writer: tensorboardX.SummaryWriter):
@@ -100,7 +101,7 @@ class ReconstructorRLTrainer:
         return total_loss_valid
 
     def __call__(self, start_epoch_for_logs: int, masks_dict: Dict[int, np.ndarray],
-                 logger: logging.Logger, writer: tensorboardX.SummaryWriter):
+                 logger: logging.Logger, writer: tensorboardX.SummaryWriter) -> int:
         epoch = start_epoch_for_logs
         self.reconstructor.to(torch.device('cuda'))
         num_workers = 2 * len(self.reconstructor.device_ids)
@@ -132,9 +133,12 @@ class ReconstructorRLTrainer:
 
         best_validation_score = self.do_validation_loop(epoch, data_loader_validation, logger,
                                                         writer)
-        for i in range(self.options.num_epochs_train_reconstructor):
+        last_epoch_idx_with_improvement = 0
+        idx = 0
+        while idx < self.options.num_epochs_train_reconstructor:
+            idx += 1
             epoch += 1
-            logger.info(f'Starting epoch {i + 1}/{self.options.num_epochs_train_reconstructor}')
+            logger.info(f'Starting epoch {idx + 1}/{self.options.num_epochs_train_reconstructor}')
             total_loss = 0
             self.reconstructor.train()
             for batch in data_loader_train:
@@ -164,5 +168,10 @@ class ReconstructorRLTrainer:
                 logger.info(f'Found a model with a better validation score of {validation_score}.')
                 best_validation_score = validation_score
                 self.reconstructor_checkpoint_callback(self.reconstructor, epoch)
+                last_epoch_idx_with_improvement = idx
+            elif (idx - last_epoch_idx_with_improvement) > self.patience:
+                break
 
         self.reconstructor.to('cpu')
+        logging.info(f'Finished training reconstructor. A total of {idx} epochs performed.')
+        return idx
