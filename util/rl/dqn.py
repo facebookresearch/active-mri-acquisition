@@ -353,6 +353,15 @@ class DQNTrainer:
         fh.setFormatter(formatter)
         self.logger.addHandler(fh)
 
+        # Logging information about the options used
+        self.logger.info('Creating RL acquisition run with the following options:')
+        for key, value in vars(self.options).items():
+            if key == 'device':
+                value = value.type
+            elif key == 'gpu_ids':
+                value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
+            self.logger.info(f"    {key:>25}: {'None' if value is None else value:<30}")
+
         # Initialize environment
         self.env = rl_env.ReconstructionEnv(self.options)
         self.options.mask_embedding_dim = self.env.metadata['mask_embed_dim']

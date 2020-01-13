@@ -3,6 +3,7 @@ import logging
 
 import numpy as np
 import tensorboardX
+import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
 
@@ -30,7 +31,7 @@ class DatasetFromActiveAcq(torch.utils.data.Dataset):
     # will be sampled from.
 
     def __init__(self, original_dataset: torch.utils.data.Dataset,
-                 masks_dict: Dict[int, np.ndarray], dataroot: str):
+                 masks_dict: Dict[int, np.ndarray], dataroot: str, seed_per_image: bool):
         # masks_dict is [image_index, matrix of N * W columns of masks for each image]
         super(DatasetFromActiveAcq, self).__init__()
         self.original_dataset = original_dataset
@@ -38,8 +39,11 @@ class DatasetFromActiveAcq(torch.utils.data.Dataset):
         self.image_indices = [int(x) for x in masks_dict.keys()]
         self.rng = np.random.RandomState()
         self.dataroot = dataroot
+        self.seed_per_image = seed_per_image
 
     def __getitem__(self, index):
+        if self.seed_per_image:
+            self.rng.seed(index)
         if self.rng.random_sample() < 0.05:
             # With small probability return a random image/mask pair from original dataset
             # as a form of regularization
@@ -70,7 +74,8 @@ class ReconstructorRLTrainer:
         self.original_train_dataset = original_train_dataset
         # Use all GPUs except the last one, which is used for DQN
         self.reconstructor = torch.nn.DataParallel(reconstructor,
-                                                   list(range(torch.cuda.device_count() - 1)))
+                                                   list(range(torch.cuda.device_count() - 1))
+                                                   if torch.cuda.device_count() > 1 else [0])
         self.options = options
         self.optimizer = optim.Adam(
             self.reconstructor.parameters(), lr=self.options.reconstructor_lr)
@@ -80,7 +85,8 @@ class ReconstructorRLTrainer:
     def do_validation_loop(self, epoch: int, data_loader_validation: torch.utils.data.DataLoader,
                            logger: logging.Logger, writer: tensorboardX.SummaryWriter):
         self.reconstructor.eval()
-        total_loss_valid = 0
+        mean_loss_valid = 0
+        mean_mse_valid = 0
         for batch in data_loader_validation:
             with torch.no_grad():
                 zero_filled_image, target, mask = models.fft_utils.preprocess_inputs(
@@ -90,15 +96,23 @@ class ReconstructorRLTrainer:
                 reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
                     zero_filled_image, mask)
 
-                loss = models.fft_utils.gaussian_nll_loss(reconstructed_image, target,
-                                                          uncertainty_map, self.options).mean()
+                mean_loss_per_image = models.fft_utils.gaussian_nll_loss(
+                    reconstructed_image, target, uncertainty_map, self.options).mean(dim=[1, 2, 3])
 
-                total_loss_valid += loss.item()
+                mean_mse_per_image = F.mse_loss(
+                    reconstructed_image, target, reduction='none').mean(dim=[1, 2, 3])
 
-        logger.info(f'Reconstructor loss validation: {total_loss_valid}')
-        writer.add_scalar('valid/reconstructor_loss', total_loss_valid, epoch)
+                mean_loss_valid += (
+                    mean_loss_per_image.sum().item() / len(data_loader_validation.dataset))
+                mean_mse_valid += (
+                    mean_mse_per_image.sum().item() / len(data_loader_validation.dataset))
 
-        return total_loss_valid
+        logger.info(f'Reconstructor loss validation: {mean_loss_valid}')
+        logger.info(f'Reconstructor MSE validation: {mean_mse_valid}')
+        writer.add_scalar('valid/reconstructor_loss', mean_loss_valid, epoch)
+        writer.add_scalar('valid/reconstructor_mse', mean_loss_valid, epoch)
+
+        return -mean_mse_valid
 
     def __call__(self, start_epoch_for_logs: int, masks_dict: Dict[int, np.ndarray],
                  logger: logging.Logger, writer: tensorboardX.SummaryWriter) -> int:
@@ -107,14 +121,12 @@ class ReconstructorRLTrainer:
         num_workers = 2 * len(self.reconstructor.device_ids)
 
         logger.info(f'Training reconstructor with device IDS: {self.reconstructor.device_ids}')
-        masks_dict_train, masks_dict_valid = split_masks_dict_train_val(masks_dict, ratio=0.1)
-        logger.info(masks_dict_train.keys())
-        logger.info(masks_dict_valid.keys())
+        masks_dict_train, masks_dict_valid = split_masks_dict_train_val(masks_dict, ratio=0.4)
 
         # masks_dict is [image_index, matrix of N * W columns of masks for each image]
         # Only image indices appearing in this dictionary will be considered
         dataset_train = DatasetFromActiveAcq(self.original_train_dataset, masks_dict_train,
-                                             self.options.dataroot)
+                                             self.options.dataroot, False)
         logger.info(f'Created train dataset of len {len(dataset_train)}.')
         data_loader_train = torch.utils.data.DataLoader(
             dataset_train,
@@ -123,8 +135,8 @@ class ReconstructorRLTrainer:
         logger.info(f'Created dataloader for this with {len(data_loader_train)} batches.')
 
         dataset_valid = DatasetFromActiveAcq(self.original_train_dataset, masks_dict_valid,
-                                             self.options.dataroot)
-        logger.info(f'Created validation dataset of len {len(dataset_train)}.')
+                                             self.options.dataroot, True)
+        logger.info(f'Created validation dataset of len {len(dataset_valid)}.')
         data_loader_validation = torch.utils.data.DataLoader(
             dataset_valid,
             batch_size=self.options.alternate_opt_batch_size,
@@ -138,8 +150,8 @@ class ReconstructorRLTrainer:
         while idx < self.options.num_epochs_train_reconstructor:
             idx += 1
             epoch += 1
-            logger.info(f'Starting epoch {idx + 1}/{self.options.num_epochs_train_reconstructor}')
-            total_loss = 0
+            logger.info(f'Starting epoch {idx}/{self.options.num_epochs_train_reconstructor}')
+            mean_loss = 0
             self.reconstructor.train()
             for batch in data_loader_train:
                 self.optimizer.zero_grad()
@@ -151,15 +163,16 @@ class ReconstructorRLTrainer:
                 reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
                     zero_filled_image, mask)
 
-                loss = models.fft_utils.gaussian_nll_loss(reconstructed_image, target,
-                                                          uncertainty_map, self.options).mean()
-                loss.backward()
+                loss_unreduced = models.fft_utils.gaussian_nll_loss(reconstructed_image, target,
+                                                                    uncertainty_map, self.options)
+                loss_unreduced.mean().backward()
                 self.optimizer.step()
 
-                total_loss += loss.item()
+                mean_loss += (loss_unreduced.detach().mean(dim=[1, 2, 3]).sum().item() / len(
+                    data_loader_train.dataset))
 
-            logger.info(f'Reconstructor loss: {total_loss}')
-            writer.add_scalar('train/reconstructor_loss', total_loss, epoch)
+            logger.info(f'Reconstructor loss: {mean_loss}')
+            writer.add_scalar('train/reconstructor_loss', mean_loss, epoch)
 
             validation_score = self.do_validation_loop(epoch, data_loader_validation, logger,
                                                        writer)

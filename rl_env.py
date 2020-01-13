@@ -83,7 +83,6 @@ class ReconstructionEnv:
         self.num_test_images = min(self.options.num_test_images, len(self._dataset_test))
         self.latest_train_images = []
 
-        # For the training data the
         self.rng = np.random.RandomState(options.seed)
         rng_train = np.random.RandomState() if options.rl_env_train_no_seed else self.rng
         self._train_order = rng_train.permutation(len(self._dataset_train))
@@ -182,12 +181,9 @@ class ReconstructionEnv:
         self.mask_dict = {}
         self.epoch_count_callback = None
         self.epoch_frequency_callback = None
-        if torch.cuda.device_count() < 2:
-            self.reconstructor_trainer = None
-        else:
-            self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
-                self._reconstructor, self._dataset_train, self.options,
-                self.update_reconstructor_from_alt_opt)
+        self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
+            self._reconstructor, self._dataset_train, self.options,
+            self.update_reconstructor_from_alt_opt)
 
         # Pre-compute reward normalization if necessary
         if options.normalize_rewards_on_val:
