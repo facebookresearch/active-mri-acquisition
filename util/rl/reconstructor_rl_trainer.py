@@ -56,6 +56,7 @@ class DatasetFromActiveAcq(torch.utils.data.Dataset):
             return mask.view(1, 1, -1), masK_image_raw[1]
         elif self.dataroot == 'KNEE_RAW':
             mask_index = int(self.rng.beta(1, 10) * self.masks_dict[image_index].shape[0])
+            logging.info(mask_index)
             mask = torch.from_numpy(self.masks_dict[image_index][mask_index])
             return mask.view(1, 1, -1), masK_image_raw[1], masK_image_raw[2]
         else:
@@ -110,7 +111,7 @@ class ReconstructorRLTrainer:
         logger.info(f'Reconstructor loss validation: {mean_loss_valid}')
         logger.info(f'Reconstructor MSE validation: {mean_mse_valid}')
         writer.add_scalar('valid/reconstructor_loss', mean_loss_valid, epoch)
-        writer.add_scalar('valid/reconstructor_mse', mean_loss_valid, epoch)
+        writer.add_scalar('valid/reconstructor_mse', mean_mse_valid, epoch)
 
         return -mean_mse_valid
 
@@ -121,7 +122,7 @@ class ReconstructorRLTrainer:
         num_workers = 2 * len(self.reconstructor.device_ids)
 
         logger.info(f'Training reconstructor with device IDS: {self.reconstructor.device_ids}')
-        masks_dict_train, masks_dict_valid = split_masks_dict_train_val(masks_dict, ratio=0.4)
+        masks_dict_train, masks_dict_valid = split_masks_dict_train_val(masks_dict, ratio=0.1)
 
         # masks_dict is [image_index, matrix of N * W columns of masks for each image]
         # Only image indices appearing in this dictionary will be considered
