@@ -414,8 +414,7 @@ class DQNTrainer:
                 self.load(policy_path)
                 self.logger.info(f'Loaded DQN policy found at {policy_path}. Steps was set to '
                                  f'{self.steps}. Episodes set to {self.episode}.')
-                if not self.options.dqn_alternate_opt_per_epoch:
-                    self.env._image_idx_train = self.episode + 1
+                self.env._image_idx_train = self.episode
             else:
                 self.logger.info(f'No policy found at {policy_path}, continue without checkpoint.')
             if self.load_replay_mem:
