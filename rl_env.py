@@ -83,7 +83,6 @@ class ReconstructionEnv:
         self.num_test_images = min(self.options.num_test_images, len(self._dataset_test))
         self.latest_train_images = []
 
-        # For the training data the
         self.rng = np.random.RandomState(options.seed)
         rng_train = np.random.RandomState() if options.rl_env_train_no_seed else self.rng
         self._train_order = rng_train.permutation(len(self._dataset_train))
@@ -110,7 +109,17 @@ class ReconstructionEnv:
         })
         self._reconstructor.eval()
         self._reconstructor.to(device)
-        logging.info('Loaded reconstructor from checkpoint.')
+        logging.info('Loaded reconstructor and original options from checkpoint.')
+        logging.info('Checking if new weights are available from alternate optimization steps.')
+        reconstructor_alt_opt_checkpoint = load_checkpoint(self.options.checkpoints_dir,
+                                                           'best_alt_opt_reconstructor.pt')
+        self._start_epoch_for_alt_opt = 0
+        if reconstructor_alt_opt_checkpoint is not None:
+            logging.info('Found a more recent reconstructor from alternate optimization.')
+            self._reconstructor.load_state_dict((reconstructor_alt_opt_checkpoint['state_dict']))
+            self._start_epoch_for_alt_opt = reconstructor_alt_opt_checkpoint['epoch']
+            logging.info(
+                f'Start epoch for alternate optimization set to {self._start_epoch_for_alt_opt}.')
 
         self._evaluator = None
         evaluator_checkpoint = None
@@ -172,12 +181,9 @@ class ReconstructionEnv:
         self.mask_dict = {}
         self.epoch_count_callback = None
         self.epoch_frequency_callback = None
-        if torch.cuda.device_count() < 2:
-            self.reconstructor_trainer = None
-        else:
-            self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
-                self._reconstructor, self._dataset_train, self._dataset_test,
-                self._test_order[:self.num_test_images], self.options)
+        self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
+            self._reconstructor, self._dataset_train, self.options,
+            self.update_reconstructor_from_alt_opt)
 
         # Pre-compute reward normalization if necessary
         if options.normalize_rewards_on_val:
@@ -467,20 +473,31 @@ class ReconstructionEnv:
             f'Training reconstructor for {self.options.num_epochs_train_reconstructor} epochs')
         del self._current_mask
         del self._ground_truth
-        self._initial_mask.to('cpu')
+        self._initial_mask = self._initial_mask.to('cpu')
         self._reconstructor.to(torch.device('cpu'))
         torch.cuda.empty_cache()
-        trained_reconstructor = self.reconstructor_trainer(self.mask_dict, logger, writer)
+        # `reconstructor_trainer` will perform updates on its own `DataParallel` copy of the
+        # reconstructor, and update the env's reconstructor every time a best validation score
+        # is achieved (by calling `ReconstructionEnv.update_reconstructor_from_alt_opt()`)
+        epochs_performed = self.reconstructor_trainer(self._start_epoch_for_alt_opt, self.mask_dict,
+                                                      logger, writer)
+        self._start_epoch_for_alt_opt += epochs_performed
+        self._reconstructor.to(device)
+        self._initial_mask = self._initial_mask.to(device)
+
+        logger.info('Done training reconstructor')
+        self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
+
+    def update_reconstructor_from_alt_opt(
+            self, trained_reconstructor: models.reconstruction.ReconstructorNetwork, epoch: int):
         self._reconstructor.load_state_dict({
             key.replace('module.', ''): val
             for key, val in trained_reconstructor.state_dict().items()
         })
-        trained_reconstructor.to(torch.device('cpu'))
-        self._reconstructor.to(device)
-        self._initial_mask.to(device)
-
-        logger.info('Done training reconstructor')
-        self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
+        torch.save({
+            'state_dict': self._reconstructor.state_dict(),
+            'epoch': epoch
+        }, os.path.join(self.options.checkpoints_dir, 'best_alt_opt_reconstructor.pt'))
 
     def _reset_saved_masks_dict(self):
         self.mask_dict.clear()

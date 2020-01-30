@@ -319,7 +319,7 @@ class DQNTrainer:
             self.logger.info('Created replay buffer.')
 
             if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-                device = torch.device('cuda:1')
+                device = torch.device(f'cuda:{torch.cuda.device_count() - 1}')
             else:
                 device = rl_env.device
             self.policy = DDQN(self.env.action_space.n, device, self.replay_memory,
@@ -352,6 +352,15 @@ class DQNTrainer:
         formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
         fh.setFormatter(formatter)
         self.logger.addHandler(fh)
+
+        # Logging information about the options used
+        self.logger.info('Creating RL acquisition run with the following options:')
+        for key, value in vars(self.options).items():
+            if key == 'device':
+                value = value.type
+            elif key == 'gpu_ids':
+                value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
+            self.logger.info(f"    {key:>25}: {'None' if value is None else value:<30}")
 
         # Initialize environment
         self.env = rl_env.ReconstructionEnv(self.options)
@@ -400,12 +409,12 @@ class DQNTrainer:
 
         elif self.options.dqn_resume:
             policy_path = os.path.join(self.options.checkpoints_dir, 'policy_checkpoint.pt')
+            self.logger.info(f'Checking for DQN policy at {policy_path}.')
             if os.path.isfile(policy_path):
                 self.load(policy_path)
                 self.logger.info(f'Loaded DQN policy found at {policy_path}. Steps was set to '
                                  f'{self.steps}. Episodes set to {self.episode}.')
-                if not self.options.dqn_alternate_opt_per_epoch:
-                    self.env._image_idx_train = self.episode + 1
+                self.env._image_idx_train = self.episode % self.env.num_train_images
             else:
                 self.logger.info(f'No policy found at {policy_path}, continue without checkpoint.')
             if self.load_replay_mem:
@@ -435,6 +444,7 @@ class DQNTrainer:
         """ Trains the DQN policy. """
         self.logger.info(f'Starting training at step {self.steps}/{self.options.num_train_steps}. '
                          f'Best score so far is {self.best_test_score}.')
+        steps_epsilon = self.steps
         while self.steps < self.options.num_train_steps:
             self.logger.info('Episode {}'.format(self.episode + 1))
 
@@ -477,7 +487,7 @@ class DQNTrainer:
             auc_score = self.env.compute_score(
                 True, use_current_score=True)[0][self.options.reward_metric]
             while not done:
-                epsilon = get_epsilon(self.steps, self.options)
+                epsilon = get_epsilon(steps_epsilon, self.options)
                 action = self.policy.get_action(obs, epsilon, None)
                 if self.options.obs_type == 'only_mask':
                     is_repeated_action = bool(obs[action + self.options.initial_num_lines_per_side])
@@ -493,11 +503,17 @@ class DQNTrainer:
                 next_obs, reward, done, _ = self.env.step(action)
                 self.steps += 1
                 self.policy.add_experience(obs, action, next_obs, reward, done)
-                update_results = self.policy.update_parameters(self.target_net)
 
-                if self.steps % self.options.target_net_update_freq == 0:
-                    self.logger.info('Updating target network.')
-                    self.target_net.load_state_dict(self.policy.state_dict())
+                update_results = None
+                if self.steps >= self.options.num_steps_with_fixed_dqn_params:
+                    if self.steps == self.options.num_steps_with_fixed_dqn_params:
+                        self.logger.info(f'Started updating DQN weights at step {self.steps}')
+                    update_results = self.policy.update_parameters(self.target_net)
+
+                    if self.steps % self.options.target_net_update_freq == 0:
+                        self.logger.info('Updating target network.')
+                        self.target_net.load_state_dict(self.policy.state_dict())
+                    steps_epsilon += 1
 
                 # Adding per-step tensorboard logs
                 if self.steps % 250 == 0:
@@ -572,9 +588,6 @@ class DQNTrainer:
 
     # noinspection PyProtectedMember
     def save(self, path):
-        reconstructor = None
-        if self.options.dqn_alternate_opt_per_epoch:
-            reconstructor = self.env._reconstructor.state_dict()
         torch.save({
             'dqn_weights': self.policy.state_dict(),
             'target_weights': self.target_net.state_dict(),
@@ -582,8 +595,7 @@ class DQNTrainer:
             'steps': self.steps,
             'best_test_score': self.best_test_score,
             'reward_images_in_window': self.reward_images_in_window,
-            'current_score_auc_window': self.current_score_auc_window,
-            'reconstructor': reconstructor
+            'current_score_auc_window': self.current_score_auc_window
         }, path)
 
     # noinspection PyProtectedMember
@@ -596,5 +608,3 @@ class DQNTrainer:
         self.best_test_score = checkpoint['best_test_score']
         self.reward_images_in_window = checkpoint['reward_images_in_window']
         self.current_score_auc_window = checkpoint['current_score_auc_window']
-        if checkpoint['reconstructor'] is not None:
-            self.env._reconstructor.load_state_dict(checkpoint['reconstructor'])
