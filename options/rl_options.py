@@ -22,6 +22,8 @@ class RLOptions(BaseOptions):
         parser.add_argument('--budget', type=int, default=5)
         parser.add_argument('--num_test_images', type=int, default=200)
         parser.add_argument('--num_train_images', type=int, default=10000000)
+        parser.add_argument('--test_set_offset', type=int, default=0,
+                            help='Used in raw data to set aside a test set from validation set.')
         parser.add_argument(
             '--no_use_reconstructions', dest='use_reconstructions', action='store_false')
         parser.add_argument(
