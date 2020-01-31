@@ -48,7 +48,13 @@ def roll(x, shift, dim):
 
 class RawSliceData(Dataset):
 
-    def __init__(self, root, transform, num_cols=None, num_volumes=None, num_rand_slices=None):
+    def __init__(self,
+                 root,
+                 transform,
+                 num_cols=None,
+                 num_volumes=None,
+                 num_rand_slices=None,
+                 custom_split=None):
         self.transform = transform
         self.examples = []
 
@@ -61,6 +67,13 @@ class RawSliceData(Dataset):
             if num_cols is not None and data['kspace'].shape[2] != num_cols:
                 continue
             files.append(fname)
+
+        if custom_split is not None:
+            split_info = []
+            with open(f'data/splits/raw_{custom_split}.txt') as f:
+                for line in f:
+                    split_info.append(line.rsplit('\n')[0])
+            files = [f for f in files if f.name in split_info]
 
         if num_volumes is not None:
             self.rng.shuffle(files)

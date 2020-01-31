@@ -57,7 +57,11 @@ def get_train_valid_loader(batch_size,
             num_volumes=None)
         data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         valid_data = RawSliceData(
-            raw_root + '/singlecoil_val', transform=data_transform, num_cols=368, num_volumes=None)
+            raw_root + '/singlecoil_val',
+            transform=data_transform,
+            num_cols=368,
+            num_volumes=None,
+            custom_split='val')
     else:
         raise ValueError
 
@@ -125,7 +129,10 @@ def get_test_loader(batch_size,
             raise ImportError(raw_root + ' not exists. Change to the right path.')
         data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         test_data = RawSliceData(
-            raw_root + '/singlecoil_val', transform=data_transform, num_cols=368)
+            raw_root + '/singlecoil_val',
+            transform=data_transform,
+            num_cols=368,
+            custom_split='test')
 
         def init_fun(_):
             return np.random.seed()
