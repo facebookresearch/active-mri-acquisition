@@ -12,7 +12,9 @@ class RLOptions(BaseOptions):
             default=None,
             help='Directory where reconstructor is stored.')
         parser.add_argument(
-            '--obs_type', choices=['fourier_space', 'image_space'], default='image_space')
+            '--obs_type',
+            choices=['fourier_space', 'image_space', 'only_mask'],
+            default='image_space')
         parser.add_argument('--obs_to_numpy', action='store_true')
         parser.add_argument(
             '--policy',
@@ -85,8 +87,9 @@ class RLOptions(BaseOptions):
             help='Summation of mask to observation in evaluator')
 
         # Reinforcement learning options
-        parser.add_argument('--dqn_model_type', choices=['basic', 'evaluator'], default='evaluator')
-        parser.add_argument('--dqn_resume', dest='dqn_resume', action='store_true')
+        parser.add_argument(
+            '--dqn_model_type', choices=['basic', 'evaluator', 'simple_mlp'], default='evaluator')
+        parser.add_argument('--no_dqn_resume', dest='dqn_resume', action='store_false')
         parser.add_argument('--dqn_normalize', dest='dqn_normalize', action='store_true')
         parser.add_argument(
             '--dqn_only_test',
@@ -130,6 +133,13 @@ class RLOptions(BaseOptions):
         parser.add_argument('--num_epochs_train_reconstructor', type=int, default=10)
         parser.add_argument('--frequency_train_reconstructor', type=int, default=5000)
         parser.add_argument('--reconstructor_lr', type=float, default=0.00002)
+        parser.add_argument('--alternate_opt_batch_size', type=int, default=40)
+        parser.add_argument(
+            '--num_steps_with_fixed_dqn_params',
+            type=int,
+            default=0,
+            help='If the number of steps is less than this number, then DQN parameters are not '
+            'updated. The exploration epsilon is also held constant during this time')
 
         self.isTrain = False
         return parser

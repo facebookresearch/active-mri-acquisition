@@ -86,6 +86,7 @@ class Trainer:
         criterion_gan = GANLossKspace(
             use_mse_as_energy=options.use_mse_as_disc_energy,
             grad_ctx=options.grad_ctx,
+            gamma=options.gamma,
             options=self.options).to(options.device)
 
         self.losses = {'GAN': criterion_gan, 'NLL': gaussian_nll_loss}

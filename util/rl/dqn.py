@@ -28,6 +28,50 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
+class SimpleMLP(nn.Module):
+
+    def __init__(self,
+                 budget,
+                 image_width,
+                 initial_num_lines_per_side,
+                 num_hidden_layers=2,
+                 num_hidden=32,
+                 ignore_mask=True,
+                 symmetric=True):
+        super(SimpleMLP, self).__init__()
+        self.initial_num_lines_per_side = initial_num_lines_per_side
+        self.ignore_mask = ignore_mask
+        self.symmetric = symmetric
+        self.num_inputs = budget if self.ignore_mask else self.image_width
+        num_actions = image_width - 2 * initial_num_lines_per_side
+        self.linear1 = nn.Sequential(nn.Linear(self.num_inputs, num_hidden), nn.ReLU())
+        hidden_layers = []
+        for i in range(num_hidden_layers):
+            hidden_layers.append(nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU()))
+        self.hidden = nn.Sequential(*hidden_layers)
+        self.output = nn.Linear(num_hidden, num_actions)
+        self.model = nn.Sequential(self.linear1, self.hidden, self.output)
+
+    def forward(self, x):
+        previous_actions = x[:, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
+        if self.ignore_mask:
+            input_tensor = torch.zeros(x.shape[0], self.num_inputs).to(x.device)
+            time_steps = previous_actions.sum(1).unsqueeze(1)
+            if self.symmetric:
+                time_steps //= 2
+            # We allow the model to receive observations that are over budget during test
+            # Code below randomizes the input to the model for these observations
+            index_over_budget = (time_steps >= self.num_inputs).squeeze()
+            time_steps = time_steps.clamp(0, self.num_inputs - 1)
+            input_tensor.scatter_(1, time_steps.long(), 1)
+            input_tensor[index_over_budget] = torch.randn_like(input_tensor[index_over_budget])
+        else:
+            input_tensor = x
+        value = self.model(input_tensor)
+        value = value - 1e10 * previous_actions
+        return {'qvalue': value, 'value': None, 'advantage': None}
+
+
 class EvaluatorBasedValueNetwork(nn.Module):
 
     def __init__(self, image_width, initial_num_lines_per_side, mask_embed_dim, use_dueling=False):
@@ -54,16 +98,17 @@ class EvaluatorBasedValueNetwork(nn.Module):
 
     def forward(self, x):
         reconstruction = x[..., :-2, :]
-        mask = x[:, 0, -2, self.initial_num_lines_per_side:-self.initial_num_lines_per_side]
         bs = x.shape[0]
         if torch.isnan(x[0, 0, -1, 0]).item() == 1:
             assert self.mask_embed_dim == 0
             mask_embedding = None
+            mask = None
         else:
             mask_embedding = x[:, 0, -1, :self.mask_embed_dim].view(bs, -1, 1, 1)
-            mask = x[:, 0, -2, :].contiguous().view(bs, 1, 1, -1)
             mask_embedding = mask_embedding.repeat(1, 1, reconstruction.shape[2],
                                                    reconstruction.shape[3])
+            mask = x[:, 0, -2, :]
+            mask = mask.contiguous().view(bs, 1, 1, -1)
 
         value = None
         advantage = None
@@ -73,9 +118,11 @@ class EvaluatorBasedValueNetwork(nn.Module):
             advantage = self.advantage_stream(features)
             qvalue = value + (advantage - advantage.mean(dim=1).unsqueeze(1))
         else:
-            qvalue = self.evaluator(reconstruction, mask_embedding)
+            qvalue = self.evaluator(reconstruction, mask_embedding, mask)
         # This makes the DQN max over the target values consider only non repeated actions
-        qvalue = qvalue - 1e10 * mask
+        filtered_mask = x[:, 0, -2, self.initial_num_lines_per_side:
+                          -self.initial_num_lines_per_side]
+        qvalue = qvalue - 1e10 * filtered_mask
         return {'qvalue': qvalue, 'value': value, 'advantage': advantage}
 
 
@@ -111,6 +158,10 @@ class BasicValueNetwork(nn.Module):
 
 
 def get_model(num_actions, options):
+    if options.dqn_model_type == 'simple_mlp':
+        if options.use_dueling_dqn:
+            raise NotImplementedError('Dueling DQN only implemented with dqn_model_type=evaluator.')
+        return SimpleMLP(options.budget, options.image_width, options.initial_num_lines_per_side)
     if options.dqn_model_type == 'basic':
         if options.use_dueling_dqn:
             raise NotImplementedError('Dueling DQN only implemented with dqn_model_type=evaluator.')
@@ -140,10 +191,14 @@ class DDQN(nn.Module):
 
     def _get_action_no_replacement(self, observation, eps_threshold):
         sample = random.random()
-        # See comment in DQNTrainer._train_dqn_policy for observation format,
-        # Index -2 recovers the mask associated to this observation
-        previous_actions = np.nonzero(observation[0, -2, self.opts.initial_num_lines_per_side:
-                                                  -self.opts.initial_num_lines_per_side])[0]
+        if self.opts.obs_type == 'only_mask':
+            previous_actions = np.nonzero(observation[self.opts.initial_num_lines_per_side:
+                                                      -self.opts.initial_num_lines_per_side])[0]
+        else:
+            # See comment in DQNTrainer._train_dqn_policy for observation format,
+            # Index -2 recovers the mask associated to this observation
+            previous_actions = np.nonzero(observation[0, -2, self.opts.initial_num_lines_per_side:
+                                                      -self.opts.initial_num_lines_per_side])[0]
         if sample < eps_threshold:
             return random.choice([x for x in range(self.num_actions) if x not in previous_actions])
         with torch.no_grad():
@@ -263,10 +318,13 @@ class DQNTrainer:
                 use_normalization=options_.dqn_normalize)
             self.logger.info('Created replay buffer.')
 
-            self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
-                               options_).to(rl_env.device)
-            self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, options_).to(
-                rl_env.device)
+            if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+                device = torch.device(f'cuda:{torch.cuda.device_count() - 1}')
+            else:
+                device = rl_env.device
+            self.policy = DDQN(self.env.action_space.n, device, self.replay_memory,
+                               options_).to(device)
+            self.target_net = DDQN(self.env.action_space.n, device, None, options_).to(device)
             self.target_net.eval()
             self.logger.info(f'Created neural networks with {self.env.action_space.n} outputs.')
 
@@ -295,6 +353,15 @@ class DQNTrainer:
         fh.setFormatter(formatter)
         self.logger.addHandler(fh)
 
+        # Logging information about the options used
+        self.logger.info('Creating RL acquisition run with the following options:')
+        for key, value in vars(self.options).items():
+            if key == 'device':
+                value = value.type
+            elif key == 'gpu_ids':
+                value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
+            self.logger.info(f"    {key:>25}: {'None' if value is None else value:<30}")
+
         # Initialize environment
         self.env = rl_env.ReconstructionEnv(self.options)
         self.options.mask_embedding_dim = self.env.metadata['mask_embed_dim']
@@ -313,10 +380,14 @@ class DQNTrainer:
             use_normalization=self.options.dqn_normalize)
 
         # Initialize policy
-        self.policy = DDQN(self.env.action_space.n, rl_env.device, self.replay_memory,
-                           self.options).to(rl_env.device)
-        self.target_net = DDQN(self.env.action_space.n, rl_env.device, None, self.options).to(
-            rl_env.device)
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+            device = torch.device(f'cuda:{torch.cuda.device_count() - 1}')
+        else:
+            device = rl_env.device
+
+        self.policy = DDQN(self.env.action_space.n, device, self.replay_memory,
+                           self.options).to(device)
+        self.target_net = DDQN(self.env.action_space.n, device, None, self.options).to(device)
 
         self.window_size = min(self.options.num_train_images, 5000)
         self.reward_images_in_window = np.zeros(self.window_size)
@@ -338,12 +409,12 @@ class DQNTrainer:
 
         elif self.options.dqn_resume:
             policy_path = os.path.join(self.options.checkpoints_dir, 'policy_checkpoint.pt')
+            self.logger.info(f'Checking for DQN policy at {policy_path}.')
             if os.path.isfile(policy_path):
                 self.load(policy_path)
                 self.logger.info(f'Loaded DQN policy found at {policy_path}. Steps was set to '
                                  f'{self.steps}. Episodes set to {self.episode}.')
-                if not self.options.dqn_alternate_opt_per_epoch:
-                    self.env._image_idx_train = self.episode + 1
+                self.env._image_idx_train = self.episode % self.env.num_train_images
             else:
                 self.logger.info(f'No policy found at {policy_path}, continue without checkpoint.')
             if self.load_replay_mem:
@@ -373,6 +444,7 @@ class DQNTrainer:
         """ Trains the DQN policy. """
         self.logger.info(f'Starting training at step {self.steps}/{self.options.num_train_steps}. '
                          f'Best score so far is {self.best_test_score}.')
+        steps_epsilon = self.steps
         while self.steps < self.options.num_train_steps:
             self.logger.info('Episode {}'.format(self.episode + 1))
 
@@ -415,24 +487,33 @@ class DQNTrainer:
             auc_score = self.env.compute_score(
                 True, use_current_score=True)[0][self.options.reward_metric]
             while not done:
-                epsilon = get_epsilon(self.steps, self.options)
+                epsilon = get_epsilon(steps_epsilon, self.options)
                 action = self.policy.get_action(obs, epsilon, None)
-                # Format of observation is [bs, img_height + 2, img_width], where first
-                # img_height rows are reconstruction, next line is the mask, and final line is
-                # the mask embedding
-                is_repeated_action = bool(
-                    obs[0, -2, action + self.options.initial_num_lines_per_side])
+                if self.options.obs_type == 'only_mask':
+                    is_repeated_action = bool(obs[action + self.options.initial_num_lines_per_side])
+                else:
+                    # Format of observation is [bs, img_height + 2, img_width], where first
+                    # img_height rows are reconstruction, next line is the mask, and final line is
+                    # the mask embedding
+                    is_repeated_action = bool(
+                        obs[0, -2, action + self.options.initial_num_lines_per_side])
 
                 assert not (self.options.no_replacement_policy and is_repeated_action)
 
                 next_obs, reward, done, _ = self.env.step(action)
                 self.steps += 1
                 self.policy.add_experience(obs, action, next_obs, reward, done)
-                update_results = self.policy.update_parameters(self.target_net)
 
-                if self.steps % self.options.target_net_update_freq == 0:
-                    self.logger.info('Updating target network.')
-                    self.target_net.load_state_dict(self.policy.state_dict())
+                update_results = None
+                if self.steps >= self.options.num_steps_with_fixed_dqn_params:
+                    if self.steps == self.options.num_steps_with_fixed_dqn_params:
+                        self.logger.info(f'Started updating DQN weights at step {self.steps}')
+                    update_results = self.policy.update_parameters(self.target_net)
+
+                    if self.steps % self.options.target_net_update_freq == 0:
+                        self.logger.info('Updating target network.')
+                        self.target_net.load_state_dict(self.policy.state_dict())
+                    steps_epsilon += 1
 
                 # Adding per-step tensorboard logs
                 if self.steps % 250 == 0:
@@ -507,9 +588,6 @@ class DQNTrainer:
 
     # noinspection PyProtectedMember
     def save(self, path):
-        reconstructor = None
-        if self.options.dqn_alternate_opt_per_epoch:
-            reconstructor = self.env._reconstructor.state_dict()
         torch.save({
             'dqn_weights': self.policy.state_dict(),
             'target_weights': self.target_net.state_dict(),
@@ -517,8 +595,7 @@ class DQNTrainer:
             'steps': self.steps,
             'best_test_score': self.best_test_score,
             'reward_images_in_window': self.reward_images_in_window,
-            'current_score_auc_window': self.current_score_auc_window,
-            'reconstructor': reconstructor
+            'current_score_auc_window': self.current_score_auc_window
         }, path)
 
     # noinspection PyProtectedMember
@@ -531,5 +608,3 @@ class DQNTrainer:
         self.best_test_score = checkpoint['best_test_score']
         self.reward_images_in_window = checkpoint['reward_images_in_window']
         self.current_score_auc_window = checkpoint['current_score_auc_window']
-        if checkpoint['reconstructor'] is not None:
-            self.env._reconstructor.load_state_dict(checkpoint['reconstructor'])

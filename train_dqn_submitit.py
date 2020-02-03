@@ -27,14 +27,16 @@ if __name__ == '__main__':
 
     print(f'Submitit logs dir will be stored at: {submitit_logs_dir}')
 
+    constraint = 'volta32gb' if options_.dqn_alternate_opt_per_epoch else ''
     executor = submitit.SlurmExecutor(submitit_logs_dir, max_num_timeout=3)
     executor.update_parameters(
-        num_gpus=1,
+        num_gpus=len(options_.gpu_ids),
         partition='priority',
-        cpus_per_task=2,
+        cpus_per_task=8,
         mem=256000,
         time=4320,
+        constraint=constraint,
         job_name=options_.job_name,
         signal_delay_s=3600,
-        comment='only one gpu/cpu job. awkward to handle preemption in this job')
+        comment='MIDL 01/30')
     executor.submit(trainer_)
