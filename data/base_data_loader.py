@@ -46,7 +46,7 @@ def get_train_valid_loader(batch_size,
 
     elif which_dataset == 'KNEE_RAW':
         mask_func = get_mask_func(mask_type, which_dataset, rnl_params=rnl_params)
-        raw_root = '/datasets01_101/fastMRI/112718'
+        raw_root = '/datasets01/fastMRI/112718'
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + ' not exists. Change to the right path.')
         data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=False)
@@ -124,7 +124,7 @@ def get_test_loader(batch_size,
             drop_last=True)
     elif which_dataset == 'KNEE_RAW':
         mask_func = get_mask_func(mask_type, which_dataset, rnl_params=rnl_params)
-        raw_root = '/datasets01_101/fastMRI/112718'
+        raw_root = '/datasets01/fastMRI/112718'
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + ' not exists. Change to the right path.')
         data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
