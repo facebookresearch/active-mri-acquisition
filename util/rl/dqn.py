@@ -450,14 +450,8 @@ class DQNTrainer:
 
             # Evaluate the current policy
             if self.episode % self.options.dqn_test_episode_freq == 0:
-                test_score, _ = util.rl.utils.test_policy(
-                    self.env,
-                    self.policy,
-                    self.writer,
-                    self.logger,
-                    self.episode,
-                    self.options,
-                    test_with_full_budget=self.options.test_with_full_budget)
+                test_score, _ = util.rl.utils.test_policy(self.env, self.policy, self.writer,
+                                                          self.logger, self.episode, self.options)
                 if test_score > self.best_test_score:
                     policy_path = os.path.join(self.options.checkpoints_dir, 'policy_best.pt')
                     self.save(policy_path)
@@ -475,8 +469,7 @@ class DQNTrainer:
                     self.logger,
                     self.episode,
                     self.options,
-                    test_on_train=True,
-                    test_with_full_budget=self.options.test_with_full_budget)
+                    test_on_train=True)
 
             # Run an episode and update model
             obs, _ = self.env.reset(
