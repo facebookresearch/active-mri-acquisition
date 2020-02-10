@@ -46,6 +46,9 @@ def get_policy(env, writer, logger, options_):
         policy = util.rl.simple_baselines.RandomPolicy(valid_actions)
     elif 'lowfirst' in options_.policy:
         policy = util.rl.simple_baselines.NextIndexPolicy(valid_actions, not env.conjugate_symmetry)
+    elif options_.policy == 'one_step_greedy':
+        policy = util.rl.simple_baselines.OneStepGreedy(
+            env, options_.reward_metric, max_actions_to_eval=options_.greedy_max_num_actions)
     elif 'evaluator_net' in options_.policy:
         assert options_.obs_type == 'image_space'
         # At the moment, Evaluator gets valid actions in a mask - preprocess data function.
