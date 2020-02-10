@@ -86,7 +86,7 @@ def test_policy(env,
             obs = next_obs
             episode_step += 1
             reconstruction_results = env.compute_score(
-                use_current_score=True, use_zz_score=options_.eval_with_zz_score)[0]
+                use_current_score=True, use_cvpr19_score=options_.eval_with_cvpr19_score)[0]
             reconstruction_results['rewards'] = reward
             update_statistics(reconstruction_results, episode_step, statistics)
         all_actions.append(actions)

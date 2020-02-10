@@ -270,7 +270,7 @@ class ReconstructionEnv:
                       mask_to_use: Optional[torch.Tensor] = None,
                       k_space: Optional[torch.Tensor] = None,
                       use_current_score: bool = False,
-                      use_zz_score: bool = False) -> List[Dict[str, torch.Tensor]]:
+                      use_cvpr19_score: bool = False) -> List[Dict[str, torch.Tensor]]:
         """ Computes the score (MSE or SSIM) of current state with respect to current ground truth.
 
             This method takes the current ground truth, masks it with the current mask and creates
@@ -289,8 +289,8 @@ class ReconstructionEnv:
             @:param `k_space`: specifies if the score has to be computed with an alternate k-space.
             @:param `use_current_score`: If true, the method returns the saved current score.
         """
-        if use_zz_score and self._last_action is not None:
-            return self._compute_zz_score()
+        if use_cvpr19_score and self._last_action is not None:
+            return self._compute_cvpr19_score()
         if use_current_score and use_reconstruction:
             return [self._current_score]
         with torch.no_grad():
@@ -310,7 +310,7 @@ class ReconstructionEnv:
             for img in image
         ]
 
-    def _compute_zz_score(self) -> List[Dict[str, torch.Tensor]]:
+    def _compute_cvpr19_score(self) -> List[Dict[str, torch.Tensor]]:
         """ Evaluates the score they way it was done for CVPR'19. """
         with torch.no_grad():
             # This method uses the reconstruction at the point just before the action was taken,
