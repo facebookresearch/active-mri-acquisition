@@ -85,7 +85,8 @@ def test_policy(env,
             total_reward_episode += reward
             obs = next_obs
             episode_step += 1
-            reconstruction_results = env.compute_score(use_current_score=True)[0]
+            reconstruction_results = env.compute_score(
+                use_current_score=True, use_zz_score=options_.eval_with_zz_score)[0]
             reconstruction_results['rewards'] = reward
             update_statistics(reconstruction_results, episode_step, statistics)
         all_actions.append(actions)

@@ -176,6 +176,7 @@ class ReconstructionEnv:
         self._scans_left = None
         self._reference_mean_for_reward = None
         self._reference_std_for_reward = None
+        self._last_action = None
 
         # Variables used when alternate optimization is active
         self.mask_dict = {}
@@ -244,19 +245,23 @@ class ReconstructionEnv:
 
         return score
 
-    def compute_new_mask(self, old_mask: torch.Tensor, action: int) -> Tuple[torch.Tensor, bool]:
+    def compute_new_mask(self, old_mask: torch.Tensor, action: int,
+                         reverse=False) -> Tuple[torch.Tensor, bool]:
         """ Computes a new mask by adding the action to the given old mask.
 
             Note that action is relative to the set of valid k-space lines that can be scanned.
             That is, action = 0 represents the lowest index of k-space lines that are not part of
             the initial mask.
+
+            If `reverse` is True, then the action is removed rather than added.
         """
         line_to_scan = self.options.initial_num_lines_per_side + action
         new_mask = old_mask.clone().squeeze()
         had_already_been_scanned = bool(new_mask[line_to_scan])
-        new_mask[line_to_scan] = 1
+        bool_value = 0 if reverse else 1
+        new_mask[line_to_scan] = bool_value
         if self.conjugate_symmetry:
-            new_mask[-(line_to_scan + 1)] = 1
+            new_mask[-(line_to_scan + 1)] = bool_value
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
     def compute_score(self,
@@ -264,7 +269,8 @@ class ReconstructionEnv:
                       ground_truth: Optional[torch.Tensor] = None,
                       mask_to_use: Optional[torch.Tensor] = None,
                       k_space: Optional[torch.Tensor] = None,
-                      use_current_score: bool = False) -> List[Dict[str, torch.Tensor]]:
+                      use_current_score: bool = False,
+                      use_zz_score: bool = False) -> List[Dict[str, torch.Tensor]]:
         """ Computes the score (MSE or SSIM) of current state with respect to current ground truth.
 
             This method takes the current ground truth, masks it with the current mask and creates
@@ -283,6 +289,8 @@ class ReconstructionEnv:
             @:param `k_space`: specifies if the score has to be computed with an alternate k-space.
             @:param `use_current_score`: If true, the method returns the saved current score.
         """
+        if use_zz_score and self._last_action is not None:
+            return self._compute_zz_score()
         if use_current_score and use_reconstruction:
             return [self._current_score]
         with torch.no_grad():
@@ -301,6 +309,30 @@ class ReconstructionEnv:
                 img.unsqueeze(0), ground_truth, self.options.dataroot == 'KNEE_RAW')
             for img in image
         ]
+
+    def _compute_zz_score(self) -> List[Dict[str, torch.Tensor]]:
+        """ Evaluates the score they way it was done for CVPR'19. """
+        with torch.no_grad():
+            # This method uses the reconstruction at the point just before the action was taken,
+            # which is computed below
+            mask_before_action, _ = self.compute_new_mask(
+                self._current_mask, self._last_action, reverse=True)
+            zero_filled_image, _, mask_to_use = models.fft_utils.preprocess_inputs(
+                (mask_before_action, self._ground_truth, self._k_space), self.options.dataroot,
+                device)
+            reconstruction_before_action, _, _ = self._reconstructor(zero_filled_image, mask_to_use)
+            ft_reconstruction = models.fft_utils.fft(reconstruction_before_action)
+            ft_gt = models.fft_utils.fft(self._ground_truth)
+
+            # Now we need the effect of adding the gt scan, so we use the mask as it was before
+            # removing the action (i.e., `self.current_mask`)
+            reconstr_plus_gt_col = models.fft_utils.ifft(
+                torch.where(self._current_mask.byte(), ft_gt, ft_reconstruction))
+            return [
+                ReconstructionEnv._compute_score(
+                    img.unsqueeze(0), self._ground_truth, self.options.dataroot == 'KNEE_RAW')
+                for img in reconstr_plus_gt_col
+            ]
 
     def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
@@ -345,6 +377,7 @@ class ReconstructionEnv:
             `self._{train/test}_order`.
         """
         info = {}
+        self._last_action = None
         if self.data_mode == ReconstructionEnv.DataMode.TEST:
             if self._image_idx_test == min(self.num_test_images, len(self._dataset_test)):
                 return None, info  # Returns None to signal that testing is done
@@ -405,6 +438,7 @@ class ReconstructionEnv:
             current ground truth).
         """
         assert self._scans_left > 0
+        self._last_action = action
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action)
         if self.data_mode == ReconstructionEnv.DataMode.TRAIN:
