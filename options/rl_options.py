@@ -34,7 +34,8 @@ class RLOptions(BaseOptions):
             action='store_true',
             help='If true, the reward is the score (e.g., MSE, SSIM). Otherwise, the reward is the '
             'decrease in score with respect to previous step.')
-        parser.add_argument('--eval_with_zz_score', dest='eval_with_zz_score', action='store_true')
+        parser.add_argument(
+            '--eval_with_cvpr19_score', dest='eval_with_cvpr19_score', action='store_true')
         parser.add_argument('--reward_metric', choices=['mse', 'ssim'], default='mse')
         parser.add_argument('--debug', dest='debug', action='store_true')
         parser.add_argument('--job_name', type=str, default='active_acq')

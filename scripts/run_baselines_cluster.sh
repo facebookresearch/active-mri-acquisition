@@ -24,7 +24,7 @@ INIT_LINES=5
 BASELINES_SUFFIX=init.num.lines.${INIT_LINES}_2
 EXP_SUBSTR=ZZ_SCORE
 
-EXTRA_OPTIONS="--eval_with_zz_score"
+EXTRA_OPTIONS="--eval_with_cvpr19_score"
 
 for NAME in "symmetric_basic_rnl"; do
     RECONSTRUCTOR_DIR=/checkpoint/mdrozdzal/active_acq/all_reconstructors_raw_padding_fix/${NAME}_DICOM_2
