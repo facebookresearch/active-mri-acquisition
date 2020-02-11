@@ -117,20 +117,19 @@ class GreedyMC:
 
 # noinspection PyProtectedMember
 class OneStepGreedy:
-    """ This policy takes the current reconstruction as if it was "ground truth",
-        and attempts to find the set of `num_steps` actions that decreases MSE the most with
-        respected to the masked reconstruction. It uses exhaustive search of actions rather than
-        Monte Carlo sampling.
+    """ This policy finds the action that optimizes the score with respect to the ground truth.
 
-        If `use_ground_truth` is True, the actual true image is used (rather than the
-        reconstruction).
+        If `use_ground_truth` is set to false, the policy uses the current reconstruction as if
+        it was ground truth (i.e., greedy wrt to "most likely" state).
+
+        A maximum number of actions can be specified, in which case Monte Carlo sampling is used.
     """
 
     def __init__(self,
                  env,
                  reward_metric,
                  max_actions_to_eval=None,
-                 use_ground_truth=False,
+                 use_ground_truth=True,
                  use_reconstructions=True):
         self.env = env
         self.reward_metric = reward_metric
