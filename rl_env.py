@@ -304,15 +304,17 @@ class ReconstructionEnv:
 
     def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
+            # Note that `mask` is a processed version of `self._current_mask` that also includes
+            # the padding for RAW data
             reconstruction, mask_embedding, mask = \
                 self._get_current_reconstruction_and_mask_embedding()
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth,
                                                      self.options.dataroot == 'KNEE_RAW')
 
             if self.options.obs_type == 'only_mask':
-                observation = {'mask': self._current_mask}
+                observation = {'mask': mask}
                 if self.options.obs_to_numpy:
-                    observation = self._current_mask.squeeze().cpu().numpy()
+                    observation = mask.squeeze().cpu().numpy()
                 return observation, score
 
             if self.options.obs_type == 'fourier_space':

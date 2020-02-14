@@ -133,7 +133,7 @@ class OneStepGreedy:
                  use_reconstructions=True):
         self.env = env
         self.reward_metric = reward_metric
-        self.actions = list(range(env.action_space.n))
+        self.actions = env.valid_actions
         self._valid_actions = list(self.actions)
         self.use_ground_truth = use_ground_truth
         self.policy = []
