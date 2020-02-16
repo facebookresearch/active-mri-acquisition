@@ -27,6 +27,12 @@ class RLOptions(BaseOptions):
         parser.add_argument('--num_test_images', type=int, default=200)
         parser.add_argument('--num_train_images', type=int, default=10000000)
         parser.add_argument(
+            '--test_set_shift',
+            type=int,
+            default=None,
+            help='If given, the indices in the test set are rotated. '
+            'This is useful to parallelize test runs (each job starts at a different index).')
+        parser.add_argument(
             '--no_use_reconstructions', dest='use_reconstructions', action='store_false')
         parser.add_argument(
             '--use_score_as_reward',

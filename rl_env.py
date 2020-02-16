@@ -87,6 +87,9 @@ class ReconstructionEnv:
         rng_train = np.random.RandomState() if options.rl_env_train_no_seed else self.rng
         self._train_order = rng_train.permutation(len(self._dataset_train))
         self._test_order = self.rng.permutation(len(self._dataset_test))
+        if self.options.test_set_shift is not None:
+            assert self.options.test_set_shift < (len(self._dataset_test) - 1)
+            self._test_order = np.roll(self._test_order, -self.options.test_set_shift)
         self._image_idx_test = 0
         self._image_idx_train = 0
         self.data_mode = ReconstructionEnv.DataMode.TRAIN
