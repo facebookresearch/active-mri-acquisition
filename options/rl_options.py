@@ -18,12 +18,20 @@ class RLOptions(BaseOptions):
         parser.add_argument('--obs_to_numpy', action='store_true')
         parser.add_argument(
             '--policy',
-            choices=['dqn', 'random', 'lowfirst', 'evaluator_net', 'evaluator++'],
+            choices=[
+                'dqn', 'random', 'lowfirst', 'one_step_greedy', 'evaluator_net', 'evaluator++'
+            ],
             default='random')
         parser.add_argument('--initial_num_lines_per_side', type=int, default=10)
         parser.add_argument('--budget', type=int, default=5)
         parser.add_argument('--num_test_images', type=int, default=200)
         parser.add_argument('--num_train_images', type=int, default=10000000)
+        parser.add_argument(
+            '--test_set_shift',
+            type=int,
+            default=None,
+            help='If given, the indices in the test set are rotated. '
+            'This is useful to parallelize test runs (each job starts at a different index).')
         parser.add_argument(
             '--no_use_reconstructions', dest='use_reconstructions', action='store_false')
         parser.add_argument(
@@ -70,8 +78,7 @@ class RLOptions(BaseOptions):
             '--normalize_rewards_on_val', dest='normalize_rewards_on_val', action='store_true')
 
         # Options for the simple baselines
-        parser.add_argument('--greedymc_num_samples', type=int, default=10)
-        parser.add_argument('--greedymc_horizon', type=int, default=1)
+        parser.add_argument('--greedy_max_num_actions', type=int, default=None)
         parser.add_argument(
             '--evaluator_dir', type=str, default=None, help='Directory where evaluator is stored.')
 

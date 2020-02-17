@@ -116,39 +116,44 @@ class GreedyMC:
 
 
 # noinspection PyProtectedMember
-class FullGreedy:
-    """ This policy takes the current reconstruction as if it was "ground truth",
-        and attempts to find the set of `num_steps` actions that decreases MSE the most with
-        respected to the masked reconstruction. It uses exhaustive search of actions rather than
-        Monte Carlo sampling.
+class OneStepGreedy:
+    """ This policy finds the action that optimizes the score with respect to the ground truth.
 
-        If `use_ground_truth` is True, the actual true image is used (rather than the
-        reconstruction).
+        If `use_ground_truth` is set to false, the policy uses the current reconstruction as if
+        it was ground truth (i.e., greedy wrt to "most likely" state).
+
+        A maximum number of actions can be specified, in which case Monte Carlo sampling is used.
     """
 
-    def __init__(self, env, num_steps=1, use_ground_truth=False, use_reconstructions=True):
-        if num_steps > 1:
-            raise NotImplementedError
-
+    def __init__(self,
+                 env,
+                 reward_metric,
+                 max_actions_to_eval=None,
+                 use_ground_truth=True,
+                 use_reconstructions=True):
         self.env = env
-        self.actions = list(range(env.action_space.n))
+        self.reward_metric = reward_metric
+        self.actions = env.valid_actions
         self._valid_actions = list(self.actions)
         self.use_ground_truth = use_ground_truth
         self.policy = []
         self.actions_used = []
         self.use_reconstructions = use_reconstructions
         self.batch_size = 64
-        self.num_steps = num_steps
-        raise NotImplementedError(
-            "Not implemented! Need to fix to account for new observation types")
+        self.max_actions_to_eval = max_actions_to_eval
+        self.cmp_func = min if reward_metric == 'mse' else max
 
     def get_action(self, obs, _, __):
         # This expects observation to be a tensor of size [C, H, W], where the first channel
         # is the observed reconstruction
         original_obs_tensor = self.env._ground_truth if self.use_ground_truth \
-            else torch.tensor(obs[:1, :, :]).to(rl_env.device).unsqueeze(0)
+            else obs['reconstruction'].to(rl_env.device)
         all_masks = []
-        for idx_action, action in enumerate(self._valid_actions):
+        actions_to_eval = self._valid_actions if self.max_actions_to_eval is None else \
+            np.random.choice(self._valid_actions,
+                             min(self.max_actions_to_eval, len(self._valid_actions)),
+                             replace=False)
+        for idx_action, action in enumerate(actions_to_eval):
             new_mask = self.env.compute_new_mask(self.env._current_mask, action)[0]
             all_masks.append(new_mask)
 
@@ -157,14 +162,13 @@ class FullGreedy:
             masks_to_try = torch.cat(all_masks[i:min(i + self.batch_size, len(all_masks))])
             scores = self.env.compute_score(
                 use_reconstruction=self.use_reconstructions,
-                kind='mse',
                 ground_truth=original_obs_tensor,
                 mask_to_use=masks_to_try)
-            all_scores.extend(scores)
+            all_scores.extend([score[self.reward_metric] for score in scores])
 
-        best_action_index = min(range(len(all_masks)), key=lambda x: all_scores[x])
-        action = self._valid_actions[best_action_index]
-        del self._valid_actions[best_action_index]
+        best_action_index = self.cmp_func(range(len(all_masks)), key=lambda x: all_scores[x])
+        action = actions_to_eval[best_action_index]
+        del self._valid_actions[self._valid_actions.index(action)]
         return action
 
     def init_episode(self):

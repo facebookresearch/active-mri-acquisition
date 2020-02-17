@@ -87,6 +87,9 @@ class ReconstructionEnv:
         rng_train = np.random.RandomState() if options.rl_env_train_no_seed else self.rng
         self._train_order = rng_train.permutation(len(self._dataset_train))
         self._test_order = self.rng.permutation(len(self._dataset_test))
+        if self.options.test_set_shift is not None:
+            assert self.options.test_set_shift < (len(self._dataset_test) - 1)
+            self._test_order = np.roll(self._test_order, -self.options.test_set_shift)
         self._image_idx_test = 0
         self._image_idx_train = 0
         self.data_mode = ReconstructionEnv.DataMode.TRAIN
@@ -304,15 +307,17 @@ class ReconstructionEnv:
 
     def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
+            # Note that `mask` is a processed version of `self._current_mask` that also includes
+            # the padding for RAW data
             reconstruction, mask_embedding, mask = \
                 self._get_current_reconstruction_and_mask_embedding()
             score = ReconstructionEnv._compute_score(reconstruction, self._ground_truth,
                                                      self.options.dataroot == 'KNEE_RAW')
 
             if self.options.obs_type == 'only_mask':
-                observation = {'mask': self._current_mask}
+                observation = {'mask': mask}
                 if self.options.obs_to_numpy:
-                    observation = self._current_mask.squeeze().cpu().numpy()
+                    observation = mask.squeeze().cpu().numpy()
                 return observation, score
 
             if self.options.obs_type == 'fourier_space':
