@@ -56,8 +56,8 @@ def gaussian_nll_loss(reconstruction, target, logvar, options):
         target = center_crop(target, [320, 320])
         logvar = center_crop(logvar, [320, 320])
     l2 = F.mse_loss(reconstruction, target, reduce=False)
-    # Clip logvar to make variance in [0.01, 5], for numerical stability
-    logvar = logvar.clamp(-4.605, 1.609)
+    # Clip logvar to make variance in [0.0001, 5], for numerical stability
+    logvar = logvar.clamp(-9.2, 1.609)
     one_over_var = torch.exp(-logvar)
 
     assert len(l2) == len(logvar)
