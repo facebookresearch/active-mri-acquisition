@@ -23,7 +23,7 @@ def compute_ssims(xs, ys):
 def compute_psnrs(xs, ys):
     psnrs = []
     for i in range(xs.shape[0]):
-        psnr = compare_psnr(xs[i, 0].cpu().numpy(), ys[i, 0].cpu().numpy(), data_range=1)
+        psnr = compare_psnr(xs[i, 0].cpu().numpy(), ys[i, 0].cpu().numpy(), data_range=ys[i, 0].cpu().numpy().max())
         psnrs.append(psnr)
     return np.array(psnrs).mean()
 
@@ -104,7 +104,7 @@ def create_grid_from_tensor(tensor_of_images, num_rows=4):
 
     """
     #take norm over real-imaginary dimension
-    tensor_of_images = tensor_of_images.norm(dim=1, keepdim=True)
+    # tensor_of_images = tensor_of_images.norm(dim=1, keepdim=True)
 
     #make image grid
     tensor_grid = tvutil.make_grid(
