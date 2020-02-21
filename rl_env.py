@@ -428,7 +428,7 @@ class ReconstructionEnv:
             reward_ = new_score[metric] - self._initial_score_episode[metric]
         else:
             reward_ = new_score[metric] - self._current_score[metric]
-        factor = 1
+        factor = self.options.reward_scaling
         if self.options.reward_metric == 'mse' or self.options.reward_metric == 'nmse':
             factor *= -1  # We try to minimize MSE, but DQN maximizes
         reward = -1.0 if has_already_been_scanned else reward_.item() * factor
