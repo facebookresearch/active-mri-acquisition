@@ -1,12 +1,12 @@
 import argparse
 import logging
 import os
+import warnings
 
 import ignite.contrib.handlers
 import ignite.engine
 import ignite.metrics
 import torch
-import torch.nn.functional as F
 
 from data import create_data_loaders
 from models.fft_utils import preprocess_inputs
@@ -25,10 +25,12 @@ def inference(batch, reconstructor, options):
         reconstructed_image, uncertainty_map, mask_embedding = reconstructor(
             zero_filled_reconstruction, mask)
 
-        mse = F.mse_loss(reconstructed_image, target, reduction='none')
-        ssim = util.ssim_metric(reconstructed_image, target, size_average=False)
+        mse = util.compute_mse(reconstructed_image, target)
+        ssim = util.compute_ssims(reconstructed_image, target)
 
-        mse = mse.mean([1, 2, 3])
+        warnings.warn("The code to compute metrics has changed and this code hasn't been tested.",
+                      UserWarning)
+
         return {
             'MSE': mse,
             'SSIM': ssim,

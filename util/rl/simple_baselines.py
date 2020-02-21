@@ -141,7 +141,7 @@ class OneStepGreedy:
         self.use_reconstructions = use_reconstructions
         self.batch_size = 64
         self.max_actions_to_eval = max_actions_to_eval
-        self.cmp_func = min if reward_metric == 'mse' else max
+        self.cmp_func = min if (reward_metric == 'mse' or reward_metric == 'nmse') else max
 
     def get_action(self, obs, _, __):
         # This expects observation to be a tensor of size [C, H, W], where the first channel
