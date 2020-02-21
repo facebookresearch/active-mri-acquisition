@@ -40,7 +40,9 @@ class RLOptions(BaseOptions):
             action='store_true',
             help='If true, the reward is the score (e.g., MSE, SSIM). Otherwise, the reward is the '
             'decrease in score with respect to previous step.')
-        parser.add_argument('--reward_metric', choices=['mse', 'ssim'], default='mse')
+        parser.add_argument(
+            '--reward_metric', choices=['mse', 'nmse', 'ssim', 'psnr'], default='mse')
+        parser.add_argument('--reward_scaling', type=float, default=100)
         parser.add_argument('--debug', dest='debug', action='store_true')
         parser.add_argument('--job_name', type=str, default='active_acq')
         parser.add_argument('--seed', type=int, default=0)

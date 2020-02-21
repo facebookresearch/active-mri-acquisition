@@ -239,11 +239,12 @@ class ReconstructionEnv:
             reconstruction = models.fft_utils.center_crop(reconstruction, [320, 320])
             ground_truth = models.fft_utils.center_crop(ground_truth, [320, 320])
 
-        mse = F.mse_loss(reconstruction, ground_truth).cpu()
-        ssim = util.util.ssim_metric(reconstruction, ground_truth)
-        psnr = util.util.psnr_metric(reconstruction, ground_truth)
+        mse = util.util.compute_mse(reconstruction, ground_truth)
+        nmse = util.util.compute_nmse(reconstruction, ground_truth)
+        ssim = util.util.compute_ssims(reconstruction, ground_truth)
+        psnr = util.util.compute_psnrs(reconstruction, ground_truth)
 
-        score = {'mse': mse, 'ssim': ssim, 'psnr': psnr}
+        score = {'mse': mse, 'nmse': nmse, 'ssim': ssim, 'psnr': psnr}
 
         return score
 
@@ -427,8 +428,8 @@ class ReconstructionEnv:
             reward_ = new_score[metric] - self._initial_score_episode[metric]
         else:
             reward_ = new_score[metric] - self._current_score[metric]
-        factor = 100
-        if self.options.reward_metric == 'mse':
+        factor = self.options.reward_scaling
+        if self.options.reward_metric == 'mse' or self.options.reward_metric == 'nmse':
             factor *= -1  # We try to minimize MSE, but DQN maximizes
         reward = -1.0 if has_already_been_scanned else reward_.item() * factor
 
@@ -453,10 +454,6 @@ class ReconstructionEnv:
             k_space_scores = self._evaluator(obs['reconstruction'].to(device), mask_embedding,
                                              obs['mask'] if self.options.add_mask_eval else None)
             k_space_scores.masked_fill_(obs['mask'].to(device).squeeze().byte(), 100000)
-            # if self.options.dataroot == 'KNEE_RAW':
-            #     tmp = torch.zeros(obs['mask'].shape)
-            #     tmp[0, 0, 0, 166:202] = 1
-            #     k_space_scores.masked_fill_(tmp.to(device).squeeze().byte(), 100000)
             return torch.argmin(k_space_scores).item() - self.options.initial_num_lines_per_side
 
     def set_reference_point_for_rewards(self, statistics: Dict[str, Dict]):
