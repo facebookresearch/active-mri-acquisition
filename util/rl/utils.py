@@ -35,6 +35,9 @@ def save_statistics_and_actions(statistics, all_actions, episode, logger, option
         os.path.join(options_.checkpoints_dir, 'test_stats_mse_{}'.format(episode)),
         statistics['mse'])
     np.save(
+        os.path.join(options_.checkpoints_dir, 'test_stats_nmse_{}'.format(episode)),
+        statistics['nmse'])
+    np.save(
         os.path.join(options_.checkpoints_dir, 'test_stats_ssim_{}'.format(episode)),
         statistics['ssim'])
     np.save(
@@ -58,7 +61,7 @@ def test_policy(env,
         else options_.test_budget
     logger.info(f'Starting test iterations. Test budget set to {env.options.budget}.')
     episode = 0
-    statistics = {'mse': {}, 'ssim': {}, 'psnr': {}, 'rewards': {}}
+    statistics = {'mse': {}, 'nmse': {}, 'ssim': {}, 'psnr': {}, 'rewards': {}}
     import time
     start = time.time()
     all_actions = []
@@ -104,7 +107,8 @@ def test_policy(env,
     env.set_training()
     env.options.budget = old_budget
 
-    if options_.reward_metric == 'mse':  # DQN maximizes but we want to minimize MSE
+    # DQN maximizes but we want to minimize MSE
+    if options_.reward_metric == 'mse' or options_.reward == 'nmse':
         test_score = -test_score
 
     logger.info(f'Completed test iterations. Test budget set back to {env.options.budget}.')

@@ -12,10 +12,7 @@ def compute_ssims(xs, ys):
     ssims = []
     for i in range(xs.shape[0]):
         ssim = compare_ssim(
-            xs[i, 0].cpu().numpy(),
-            ys[i, 0].cpu().numpy(),
-            win_size=11,
-            data_range=ys[i, 0].cpu().numpy().max())
+            xs[i, 0].cpu().numpy(), ys[i, 0].cpu().numpy(), data_range=ys[i, 0].cpu().numpy().max())
         ssims.append(ssim)
     return np.array(ssims).mean()
 
@@ -23,17 +20,19 @@ def compute_ssims(xs, ys):
 def compute_psnrs(xs, ys):
     psnrs = []
     for i in range(xs.shape[0]):
-        psnr = compare_psnr(xs[i, 0].cpu().numpy(), ys[i, 0].cpu().numpy(), data_range=1)
+        psnr = compare_psnr(
+            xs[i, 0].cpu().numpy(), ys[i, 0].cpu().numpy(), data_range=ys[i, 0].cpu().numpy().max())
         psnrs.append(psnr)
     return np.array(psnrs).mean()
 
 
-def ssim_metric(src, tar, full=False, size_average=True):
-    return compute_ssims(src, tar)
+def compute_mse(xs, ys):
+    return np.mean((ys.cpu().numpy() - xs.cpu().numpy())**2)
 
 
-def psnr_metric(src, tar):
-    return compute_psnrs(src, tar)
+def compute_nmse(xs, ys):
+    ys_numpy = ys.cpu().numpy()
+    return np.linalg.norm(ys_numpy - xs.cpu().numpy())**2 / np.linalg.norm(ys_numpy)**2
 
 
 def sum_axes(input, axes=[], keepdim=False):
