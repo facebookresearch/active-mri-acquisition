@@ -292,10 +292,13 @@ class DDQN(nn.Module):
         pass
 
 
+def get_folder_lock(path):
+    return filelock.FileLock(path, timeout=-1)
+
+
 class DQNTester:
 
     def __init__(self, training_dir):
-        # self.options = options
         self.writer = None
         self.logger = None
         self.env = None
@@ -304,8 +307,7 @@ class DQNTester:
         self.training_dir = training_dir
         self.evaluation_dir = os.path.join(training_dir, 'evaluation')
 
-        self.folder_lock = filelock.FileLock(
-            DQNTrainer.get_lock_filename(self.training_dir), timeout=-1)
+        self.folder_lock_path = DQNTrainer.get_lock_filename(training_dir)
 
         self.latest_policy_path = DQNTrainer.get_name_latest_checkpoint(self.training_dir)
         self.best_test_score = -np.inf
@@ -330,7 +332,7 @@ class DQNTester:
 
         # Read the options used for training
         while True:
-            with self.folder_lock:
+            with get_folder_lock(self.folder_lock_path):
                 options_filename = DQNTrainer.get_options_filename(self.training_dir)
                 if os.path.isfile(options_filename):
                     self.logger.info(f'Options file found at {options_filename}.')
@@ -338,8 +340,8 @@ class DQNTester:
                         self.options = pickle.load(f)
                     break
                 else:
-                    self.logger.info(f'No options file found at {options_filename}. '
-                                     f'I will wait for five minutes before trying again.')
+                    self.logger.info(f'No options file found at {options_filename}.')
+                    self.logger.info('I will wait for five minutes before trying again.')
                     time.sleep(300)
         # This change is needed so that util.test_policy writes results to correct directory
         self.options.checkpoints_dir = self.evaluation_dir
@@ -378,7 +380,7 @@ class DQNTester:
                 continue
 
             self.logger.info(f'Found a new checkpoint with timestamp {timestamp}, '
-                             f'will start evaluation now.')
+                             f'I will start evaluation now.')
             test_score, _ = util.rl.utils.test_policy(self.env, self.policy, self.writer,
                                                       self.logger, checkpoint_episode, self.options)
             self.logger.info(f'The test score for the model was {test_score}.')
@@ -393,7 +395,7 @@ class DQNTester:
                     f'corresponding to episode {checkpoint_episode}.')
 
     def check_if_train_done(self):
-        with self.folder_lock:
+        with get_folder_lock(self.folder_lock_path):
             return os.path.isfile(DQNTrainer.get_done_filename(self.training_dir))
 
     def checkpoint(self):
@@ -423,7 +425,7 @@ class DQNTester:
     # noinspection PyProtectedMember
     def load_latest_policy(self):
         """ Loads the latest checkpoint and returns the training episode at which it was saved. """
-        with self.folder_lock:
+        with get_folder_lock(self.folder_lock_path):
             if not os.path.isfile(self.latest_policy_path):
                 return None, None
             timestamp = os.path.getmtime(self.latest_policy_path)
@@ -486,10 +488,9 @@ class DQNTrainer:
                 self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
                                                      self.options.frequency_train_reconstructor)
 
-            self.folder_lock = filelock.FileLock(
-                DQNTrainer.get_lock_filename(self.options.checkpoints_dir), timeout=-1)
+            self.folder_lock_path = DQNTrainer.get_lock_filename(self.options.checkpoints_dir)
 
-            with self.folder_lock:
+            with get_folder_lock(self.folder_lock_path):
                 with open(DQNTrainer.get_options_filename(self.options.checkpoints_dir), 'wb') as f:
                     pickle.dump(self.options, f)
 
@@ -570,10 +571,7 @@ class DQNTrainer:
             self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
                                                  self.options.frequency_train_reconstructor)
 
-        self.folder_lock = filelock.FileLock(
-            DQNTrainer.get_lock_filename(self.options.checkpoints_dir), timeout=-1)
-
-        with self.folder_lock:
+        with get_folder_lock(self.folder_lock_path):
             with open(DQNTrainer.get_options_filename(self.options.checkpoints_dir), 'wb') as f:
                 pickle.dump(self.options, f)
 
@@ -732,7 +730,7 @@ class DQNTrainer:
 
         self.checkpoint(submit_job=False)
 
-        with self.folder_lock:
+        with get_folder_lock(self.folder_lock_path):
             with open(DQNTrainer.get_done_filename(self.options.checkpoints_dir), 'w') as f:
                 f.write(str(self.best_test_score))
         return self.best_test_score
@@ -766,7 +764,7 @@ class DQNTrainer:
             return submitit.helpers.DelayedSubmission(trainer)
 
     def save(self, path):
-        with self.folder_lock:
+        with get_folder_lock(self.folder_lock_path):
             torch.save({
                 'dqn_weights': self.policy.state_dict(),
                 'target_weights': self.target_net.state_dict(),
