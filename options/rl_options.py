@@ -124,13 +124,13 @@ class RLOptions(BaseOptions):
             type=int,
             default=200,
             help='Before this many steps nothing will be sampled from the replay buffer.')
-        parser.add_argument('--dqn_test_episode_freq', type=int, default=500)
-        parser.add_argument('--dqn_eval_train_set_episode_freq', type=int, default=5000)
+        parser.add_argument('--dqn_test_episode_freq', type=int, default=None)
+        parser.add_argument('--dqn_eval_train_set_episode_freq', type=int, default=None)
         parser.add_argument('--target_net_update_freq', type=int, default=5000)
         parser.add_argument('--gamma', type=float, default=0.5)
         parser.add_argument(
             '--allow_replace_actions', dest='no_replacement_policy', action='store_false')
-        parser.add_argument('--freq_dqn_checkpoint_save', type=int, default=10000)
+        parser.add_argument('--freq_dqn_checkpoint_save', type=int, default=200)
         parser.add_argument('--use_dueling_dqn', dest='use_dueling_dqn', action='store_true')
 
         # Alternate optimization options
