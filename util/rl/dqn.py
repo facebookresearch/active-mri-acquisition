@@ -353,7 +353,6 @@ class DQNTester:
         self.options.image_width = self.env.image_width
         self.logger.info(f'Created environment with {self.env.action_space.n} actions')
 
-        # This is here so that it appears in SLURM stdout logs
         self.logger.info(f'Checkpoint dir for this job is {self.evaluation_dir}')
         self.logger.info(f'Evaluation will be done for model saved at {self.training_dir}')
 
