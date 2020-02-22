@@ -450,6 +450,8 @@ class DQNTrainer:
 
         self.load_replay_mem = options.dqn_resume and load_replay_mem
 
+        self.folder_lock_path = DQNTrainer.get_lock_filename(self.options.checkpoints_dir)
+
         if self.env is not None:
             self.env = env
             self.writer = writer
@@ -486,8 +488,6 @@ class DQNTrainer:
             if self.options.dqn_alternate_opt_per_epoch:
                 self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
                                                      self.options.frequency_train_reconstructor)
-
-            self.folder_lock_path = DQNTrainer.get_lock_filename(self.options.checkpoints_dir)
 
             with get_folder_lock(self.folder_lock_path):
                 with open(DQNTrainer.get_options_filename(self.options.checkpoints_dir), 'wb') as f:
