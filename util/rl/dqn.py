@@ -331,18 +331,19 @@ class DQNTester:
         self.logger.addHandler(fh)
 
         # Read the options used for training
-        while True:
+        options_file_found = False
+        while not options_file_found:
+            options_filename = DQNTrainer.get_options_filename(self.training_dir)
             with get_folder_lock(self.folder_lock_path):
-                options_filename = DQNTrainer.get_options_filename(self.training_dir)
                 if os.path.isfile(options_filename):
                     self.logger.info(f'Options file found at {options_filename}.')
                     with open(options_filename, 'rb') as f:
                         self.options = pickle.load(f)
-                    break
-                else:
-                    self.logger.info(f'No options file found at {options_filename}.')
-                    self.logger.info('I will wait for five minutes before trying again.')
-                    time.sleep(300)
+                    options_file_found = True
+            if not options_file_found:
+                self.logger.info(f'No options file found at {options_filename}.')
+                self.logger.info('I will wait for five minutes before trying again.')
+                time.sleep(300)
         # This change is needed so that util.test_policy writes results to correct directory
         self.options.checkpoints_dir = self.evaluation_dir
         os.makedirs(self.evaluation_dir, exist_ok=True)
