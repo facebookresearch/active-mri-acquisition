@@ -307,7 +307,7 @@ class DQNTester:
         self.folder_lock = filelock.FileLock(
             DQNTrainer.get_lock_filename(self.training_dir), timeout=-1)
 
-        self.latest_policy_path = DQNTrainer.get_name_latest_checkpont(self.training_dir)
+        self.latest_policy_path = DQNTrainer.get_name_latest_checkpoint(self.training_dir)
         self.best_test_score = -np.inf
         self.last_time_stamp = -np.inf
 
@@ -506,7 +506,7 @@ class DQNTrainer:
         return os.path.join(path, 'options.pickle')
 
     @staticmethod
-    def get_name_latest_checkpont(path):
+    def get_name_latest_checkpoint(path):
         return os.path.join(path, 'policy_checkpoint.pth')
 
     def _max_replay_buffer_size(self):
@@ -588,7 +588,7 @@ class DQNTrainer:
                 raise FileNotFoundError
 
         elif self.options.dqn_resume:
-            policy_path = DQNTrainer.get_name_latest_checkpont(self.options.checkpoints_dir)
+            policy_path = DQNTrainer.get_name_latest_checkpoint(self.options.checkpoints_dir)
             self.logger.info(f'Checking for DQN policy at {policy_path}.')
             if os.path.isfile(policy_path):
                 self.load(policy_path)
@@ -754,7 +754,7 @@ class DQNTrainer:
 
     def checkpoint(self, submit_job=True, save_memory=True):
         self.logger.info('Received preemption signal.')
-        policy_path = DQNTrainer.get_name_latest_checkpont(self.options.checkpoints_dir)
+        policy_path = DQNTrainer.get_name_latest_checkpoint(self.options.checkpoints_dir)
         self.save(policy_path)
         self.logger.info(f'Saved DQN checkpoint to {policy_path}')
         if save_memory:
