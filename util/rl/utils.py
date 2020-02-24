@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import sklearn.metrics
 import torch
 
 
@@ -46,6 +47,14 @@ def save_statistics_and_actions(statistics, all_actions, episode, logger, option
     np.save(os.path.join(options_.checkpoints_dir, 'all_actions'), np.array(all_actions))
 
 
+def compute_acceleration(num_cols, dataroot):
+    if dataroot == 'KNEE':
+        return 128 / num_cols
+    if dataroot == 'KNEE_RAW':
+        return 332 / num_cols
+    raise ValueError('Dataset type not understood.')
+
+
 def test_policy(env,
                 policy,
                 writer,
@@ -65,6 +74,7 @@ def test_policy(env,
     import time
     start = time.time()
     all_actions = []
+    all_auc = []
     while True:  # Will loop over the complete test set (indicated when env.reset() returns None)
         obs, _ = env.reset(start_with_initial_mask=True)
         policy.init_episode()
@@ -75,15 +85,20 @@ def test_policy(env,
         episode += 1
         done = False
         total_reward_episode = 0
-        actions = []
+        episode_actions = []
+        episode_accelerations = []
+        episode_scores = []
         episode_step = 0
         reconstruction_results = env.compute_score(
             options_.use_reconstructions, use_current_score=True)[0]
+        episode_accelerations.append(
+            compute_acceleration(env.get_num_active_columns_in_obs(obs), options_.dataroot))
+        episode_scores.append(reconstruction_results[options_.reward_metric])
         reconstruction_results['rewards'] = 0
         update_statistics(reconstruction_results, episode_step, statistics)
         while not done:
-            action = policy.get_action(obs, 0., actions)
-            actions.append(action)
+            action = policy.get_action(obs, 0., episode_actions)
+            episode_actions.append(action)
             next_obs, reward, done, _ = env.step(action)
             done = done or (env.get_num_active_columns_in_obs(obs) > cols_cutoff)
             total_reward_episode += reward
@@ -91,17 +106,21 @@ def test_policy(env,
             episode_step += 1
             reconstruction_results = env.compute_score(use_current_score=True)[0]
             reconstruction_results['rewards'] = reward
+            episode_accelerations.append(
+                compute_acceleration(env.get_num_active_columns_in_obs(obs), options_.dataroot))
+            episode_scores.append(reconstruction_results[options_.reward_metric])
             update_statistics(reconstruction_results, episode_step, statistics)
-        all_actions.append(actions)
+        all_actions.append(episode_actions)
+        all_auc.append(sklearn.metrics.auc(episode_accelerations, episode_scores))
         if not leave_no_trace:
-            logger.debug('Actions and reward: {}, {}'.format(actions, total_reward_episode))
+            logger.debug('Actions and reward: {}, {}'.format(episode_actions, total_reward_episode))
         if not test_on_train and not leave_no_trace \
                 and (episode % options_.freq_save_test_stats == 0):
             save_statistics_and_actions(statistics, all_actions, episode, logger, options_)
     end = time.time()
     if not leave_no_trace:
         logger.debug('Test run lasted {} seconds.'.format(end - start))
-    test_score = compute_test_score_from_stats(statistics[options_.reward_metric])
+    test_score = np.mean(all_auc)
     split = 'train' if test_on_train else 'test'
     if not leave_no_trace:
         writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc', test_score, step)
