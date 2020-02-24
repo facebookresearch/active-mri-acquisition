@@ -264,10 +264,11 @@ class ReconstructionEnv:
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
     def get_num_active_columns_in_obs(self, obs):
+        """ Returns the number of active columns in the given (single) observation's mask. """
         if self.options.obs_to_numpy:
-            num_active_cols = obs[:, self.image_height, :].astype(np.int8).sum()
+            num_active_cols = len(obs[0, self.image_height, :].nonzero()[0])
         else:
-            num_active_cols = obs['mask'].int().sum().item()
+            num_active_cols = len(obs['mask'].nonzero())
         if self.options.dataroot == 'KNEE_RAW':
             num_active_cols -= 36  # remove count of padding cols
         return num_active_cols

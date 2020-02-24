@@ -100,7 +100,6 @@ def test_policy(env,
             action = policy.get_action(obs, 0., episode_actions)
             episode_actions.append(action)
             next_obs, reward, done, _ = env.step(action)
-            done = done or (env.get_num_active_columns_in_obs(obs) > cols_cutoff)
             total_reward_episode += reward
             obs = next_obs
             episode_step += 1
@@ -110,6 +109,7 @@ def test_policy(env,
                 compute_acceleration(env.get_num_active_columns_in_obs(obs), options_.dataroot))
             episode_scores.append(reconstruction_results[options_.reward_metric])
             update_statistics(reconstruction_results, episode_step, statistics)
+            done = done or (env.get_num_active_columns_in_obs(obs) >= cols_cutoff)
         all_actions.append(episode_actions)
         all_auc.append(sklearn.metrics.auc(episode_accelerations, episode_scores))
         if not leave_no_trace:
