@@ -155,6 +155,8 @@ class RLOptions(BaseOptions):
             help='If the number of steps is less than this number, then DQN parameters are not '
             'updated. The exploration epsilon is also held constant during this time')
 
+        parser.add_argument('--partition', type=str, default='learnfair')
+
         self.isTrain = False
         return parser
 

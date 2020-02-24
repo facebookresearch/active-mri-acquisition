@@ -25,7 +25,7 @@ if __name__ == '__main__':
     executor = submitit.SlurmExecutor(submitit_logs_dir, max_num_timeout=3)
     executor.update_parameters(
         num_gpus=len(options_.gpu_ids),
-        partition='learnfair',
+        partition=options_.partition,
         cpus_per_task=8,
         mem=256000,
         time=4320,
