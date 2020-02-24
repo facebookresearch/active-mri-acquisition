@@ -1,8 +1,12 @@
 import logging
 import math
 import os
+import pickle
 import random
+import sys
+import time
 
+import filelock
 import numpy as np
 import submitit
 import tensorboardX
@@ -288,16 +292,166 @@ class DDQN(nn.Module):
         pass
 
 
+def get_folder_lock(path):
+    return filelock.FileLock(path, timeout=-1)
+
+
+class DQNTester:
+
+    def __init__(self, training_dir):
+        self.writer = None
+        self.logger = None
+        self.env = None
+        self.policy = None
+
+        self.training_dir = training_dir
+        self.evaluation_dir = os.path.join(training_dir, 'evaluation')
+
+        self.folder_lock_path = DQNTrainer.get_lock_filename(training_dir)
+
+        self.latest_policy_path = DQNTrainer.get_name_latest_checkpoint(self.training_dir)
+        self.best_test_score = -np.inf
+        self.last_time_stamp = -np.inf
+
+        self.options = None
+
+    def init_all(self):
+        # Initialize writer and logger
+        self.writer = tensorboardX.SummaryWriter(os.path.join(self.evaluation_dir))
+        self.logger = logging.getLogger()
+        self.logger.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
+        ch = logging.StreamHandler(sys.stdout)
+        ch.setFormatter(formatter)
+        self.logger.addHandler(ch)
+        ch.setLevel(logging.DEBUG)
+        fh = logging.FileHandler(os.path.join(self.evaluation_dir, 'evaluation.log'))
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+
+        # Read the options used for training
+        options_file_found = False
+        while not options_file_found:
+            options_filename = DQNTrainer.get_options_filename(self.training_dir)
+            with get_folder_lock(self.folder_lock_path):
+                if os.path.isfile(options_filename):
+                    self.logger.info(f'Options file found at {options_filename}.')
+                    with open(options_filename, 'rb') as f:
+                        self.options = pickle.load(f)
+                    options_file_found = True
+            if not options_file_found:
+                self.logger.info(f'No options file found at {options_filename}.')
+                self.logger.info('I will wait for five minutes before trying again.')
+                time.sleep(300)
+        # This change is needed so that util.test_policy writes results to correct directory
+        self.options.checkpoints_dir = self.evaluation_dir
+        os.makedirs(self.evaluation_dir, exist_ok=True)
+
+        # Initialize environment
+        self.env = rl_env.ReconstructionEnv(self.options)
+        self.options.mask_embedding_dim = self.env.metadata['mask_embed_dim']
+        self.options.image_width = self.env.image_width
+        self.logger.info(f'Created environment with {self.env.action_space.n} actions')
+
+        self.logger.info(f'Checkpoint dir for this job is {self.evaluation_dir}')
+        self.logger.info(f'Evaluation will be done for model saved at {self.training_dir}')
+
+        # Initialize policy
+        self.policy = DDQN(self.env.action_space.n, rl_env.device, None, self.options).to(
+            rl_env.device)
+
+        # Load info about best checkpoint tested and timestamp
+        self.load_tester_checkpoint_if_present()
+
+    def __call__(self):
+        self.init_all()
+        training_done = False
+        while not training_done:
+            training_done = self.check_if_train_done()
+            self.logger.info(f'Is training done? {training_done}.')
+            checkpoint_episode, timestamp = self.load_latest_policy()
+
+            if timestamp is None or timestamp <= self.last_time_stamp:
+                # No new policy checkpoint to evaluate
+                self.logger.info('No new policy to evaluate. '
+                                 'I will wait for 10 minutes before trying again.')
+                time.sleep(600)
+                continue
+
+            self.logger.info(f'Found a new checkpoint with timestamp {timestamp}, '
+                             f'I will start evaluation now.')
+            test_score, _ = util.rl.utils.test_policy(self.env, self.policy, self.writer,
+                                                      self.logger, checkpoint_episode, self.options)
+            self.logger.info(f'The test score for the model was {test_score}.')
+            self.last_time_stamp = timestamp
+            if test_score > self.best_test_score:
+                self.save_tester_checkpoint()
+                policy_path = os.path.join(self.evaluation_dir, 'policy_best.pt')
+                self.save_policy(policy_path, checkpoint_episode)
+                self.best_test_score = test_score
+                self.logger.info(
+                    f'Saved DQN model with score {self.best_test_score} to {policy_path}, '
+                    f'corresponding to episode {checkpoint_episode}.')
+
+    def check_if_train_done(self):
+        with get_folder_lock(self.folder_lock_path):
+            return os.path.isfile(DQNTrainer.get_done_filename(self.training_dir))
+
+    def checkpoint(self):
+        self.logger.info('Received preemption signal.')
+        self.save_tester_checkpoint()
+        return submitit.helpers.DelayedSubmission(DQNTester(self.options))
+
+    def save_tester_checkpoint(self):
+        path = os.path.join(self.evaluation_dir, 'tester_checkpoint.pickle')
+        with open(path, 'wb') as f:
+            pickle.dump({
+                'best_test_score': self.best_test_score,
+                'last_time_stamp': self.last_time_stamp
+            }, f)
+
+    def load_tester_checkpoint_if_present(self):
+        path = os.path.join(self.evaluation_dir, 'tester_checkpoint.pickle')
+        if os.path.isfile(path):
+            with open(path, 'rb') as f:
+                checkpoint = pickle.load(f)
+                self.best_test_score = checkpoint['best_test_score']
+                self.last_time_stamp = checkpoint['last_time_stamp']
+                self.logger.info(f'Found checkpoint from previous evaluation run. '
+                                 f'Best Score set to {self.best_test_score}. '
+                                 f'Last Time Stamp set to {self.last_time_stamp}')
+
+    # noinspection PyProtectedMember
+    def load_latest_policy(self):
+        """ Loads the latest checkpoint and returns the training episode at which it was saved. """
+        with get_folder_lock(self.folder_lock_path):
+            if not os.path.isfile(self.latest_policy_path):
+                return None, None
+            timestamp = os.path.getmtime(self.latest_policy_path)
+            checkpoint = torch.load(self.latest_policy_path, map_location=rl_env.device)
+        self.policy.load_state_dict(checkpoint['dqn_weights'])
+        return checkpoint['episode'], timestamp
+
+    def save_policy(self, path, episode):
+        torch.save({
+            'dqn_weights': self.policy.state_dict(),
+            'episode': episode,
+        }, path)
+
+
 class DQNTrainer:
 
-    def __init__(self, options_, env=None, writer=None, logger=None, load_replay_mem=True):
-        self.options = options_
+    def __init__(self, options, env=None, writer=None, logger=None, load_replay_mem=True):
+        self.options = options
         self.env = env
         self.steps = 0
         self.episode = 0
         self.best_test_score = -np.inf
 
-        self.load_replay_mem = options_.dqn_resume and load_replay_mem
+        self.load_replay_mem = options.dqn_resume and load_replay_mem
+
+        self.folder_lock_path = DQNTrainer.get_lock_filename(self.options.checkpoints_dir)
 
         if self.env is not None:
             self.env = env
@@ -307,15 +461,15 @@ class DQNTrainer:
             self.logger.info('Creating DDQN model.')
 
             # If replay will be loaded set capacity to zero (defer allocation to `__call__()`)
-            mem_capacity = 0 if self.load_replay_mem or options_.dqn_only_test \
+            mem_capacity = 0 if self.load_replay_mem or options.dqn_only_test \
                 else self._max_replay_buffer_size()
             self.logger.info(f'Creating replay buffer with capacity {mem_capacity}.')
             self.replay_memory = util.rl.replay_buffer.ReplayMemory(
                 mem_capacity,
                 self.env.observation_space.shape,
-                options_.rl_batch_size,
-                options_.dqn_burn_in,
-                use_normalization=options_.dqn_normalize)
+                options.rl_batch_size,
+                options.dqn_burn_in,
+                use_normalization=options.dqn_normalize)
             self.logger.info('Created replay buffer.')
 
             if torch.cuda.is_available() and torch.cuda.device_count() > 1:
@@ -323,8 +477,8 @@ class DQNTrainer:
             else:
                 device = rl_env.device
             self.policy = DDQN(self.env.action_space.n, device, self.replay_memory,
-                               options_).to(device)
-            self.target_net = DDQN(self.env.action_space.n, device, None, options_).to(device)
+                               options).to(device)
+            self.target_net = DDQN(self.env.action_space.n, device, None, options).to(device)
             self.target_net.eval()
             self.logger.info(f'Created neural networks with {self.env.action_space.n} outputs.')
 
@@ -335,6 +489,26 @@ class DQNTrainer:
             if self.options.dqn_alternate_opt_per_epoch:
                 self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
                                                      self.options.frequency_train_reconstructor)
+
+            with get_folder_lock(self.folder_lock_path):
+                with open(DQNTrainer.get_options_filename(self.options.checkpoints_dir), 'wb') as f:
+                    pickle.dump(self.options, f)
+
+    @staticmethod
+    def get_done_filename(path):
+        return os.path.join(path, 'DONE')
+
+    @staticmethod
+    def get_lock_filename(path):
+        return os.path.join(path, '.LOCK')
+
+    @staticmethod
+    def get_options_filename(path):
+        return os.path.join(path, 'options.pickle')
+
+    @staticmethod
+    def get_name_latest_checkpoint(path):
+        return os.path.join(path, 'policy_checkpoint.pth')
 
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
@@ -397,6 +571,10 @@ class DQNTrainer:
             self.env.set_epoch_finished_callback(self.update_reconstructor_and_buffer,
                                                  self.options.frequency_train_reconstructor)
 
+        with get_folder_lock(self.folder_lock_path):
+            with open(DQNTrainer.get_options_filename(self.options.checkpoints_dir), 'wb') as f:
+                pickle.dump(self.options, f)
+
     def load_checkpoint_if_needed(self):
         if self.options.dqn_only_test:
             policy_path = os.path.join(self.options.dqn_weights_dir, 'policy_best.pt')
@@ -408,7 +586,7 @@ class DQNTrainer:
                 raise FileNotFoundError
 
         elif self.options.dqn_resume:
-            policy_path = os.path.join(self.options.checkpoints_dir, 'policy_checkpoint.pt')
+            policy_path = DQNTrainer.get_name_latest_checkpoint(self.options.checkpoints_dir)
             self.logger.info(f'Checking for DQN policy at {policy_path}.')
             if os.path.isfile(policy_path):
                 self.load(policy_path)
@@ -449,7 +627,8 @@ class DQNTrainer:
             self.logger.info('Episode {}'.format(self.episode + 1))
 
             # Evaluate the current policy
-            if self.episode % self.options.dqn_test_episode_freq == 0:
+            if self.options.dqn_test_episode_freq is not None and (
+                    self.episode % self.options.dqn_test_episode_freq == 0):
                 test_score, _ = util.rl.utils.test_policy(self.env, self.policy, self.writer,
                                                           self.logger, self.episode, self.options)
                 if test_score > self.best_test_score:
@@ -460,8 +639,9 @@ class DQNTrainer:
                         f'Saved DQN model with score {self.best_test_score} to {policy_path}.')
 
             # Evaluate the current policy on training set
-            if self.episode % self.options.dqn_eval_train_set_episode_freq == 0 \
-                    and self.options.num_train_images <= 1000:
+            if self.options.dqn_eval_train_set_episode_freq is not None and (
+                    self.episode % self.options.dqn_eval_train_set_episode_freq == 0) and (
+                        self.options.num_train_images <= 1000):
                 util.rl.utils.test_policy(
                     self.env,
                     self.policy,
@@ -546,9 +726,13 @@ class DQNTrainer:
             self.episode += 1
 
             if self.episode % self.options.freq_dqn_checkpoint_save == 0:
-                self.checkpoint(submit_job=False)
+                self.checkpoint(submit_job=False, save_memory=False)
 
         self.checkpoint(submit_job=False)
+
+        with get_folder_lock(self.folder_lock_path):
+            with open(DQNTrainer.get_done_filename(self.options.checkpoints_dir), 'w') as f:
+                f.write(str(self.best_test_score))
         return self.best_test_score
 
     def update_reconstructor_and_buffer(self):
@@ -568,7 +752,7 @@ class DQNTrainer:
 
     def checkpoint(self, submit_job=True, save_memory=True):
         self.logger.info('Received preemption signal.')
-        policy_path = os.path.join(self.options.checkpoints_dir, 'policy_checkpoint.pt')
+        policy_path = DQNTrainer.get_name_latest_checkpoint(self.options.checkpoints_dir)
         self.save(policy_path)
         self.logger.info(f'Saved DQN checkpoint to {policy_path}')
         if save_memory:
@@ -579,19 +763,18 @@ class DQNTrainer:
             trainer = DQNTrainer(self.options, load_replay_mem=True)
             return submitit.helpers.DelayedSubmission(trainer)
 
-    # noinspection PyProtectedMember
     def save(self, path):
-        torch.save({
-            'dqn_weights': self.policy.state_dict(),
-            'target_weights': self.target_net.state_dict(),
-            'episode': self.episode,
-            'steps': self.steps,
-            'best_test_score': self.best_test_score,
-            'reward_images_in_window': self.reward_images_in_window,
-            'current_score_auc_window': self.current_score_auc_window
-        }, path)
+        with get_folder_lock(self.folder_lock_path):
+            torch.save({
+                'dqn_weights': self.policy.state_dict(),
+                'target_weights': self.target_net.state_dict(),
+                'episode': self.episode,
+                'steps': self.steps,
+                'best_test_score': self.best_test_score,
+                'reward_images_in_window': self.reward_images_in_window,
+                'current_score_auc_window': self.current_score_auc_window
+            }, path)
 
-    # noinspection PyProtectedMember
     def load(self, path):
         checkpoint = torch.load(path)
         self.policy.load_state_dict(checkpoint['dqn_weights'])
