@@ -55,9 +55,6 @@ def main(options_):
 if __name__ == '__main__':
     # Reading options
     opts = options.rl_options.RLOptions().parse()
-    opts.batchSize = 1
-    opts.mask_type = 'grid'  # This is ignored, only here for compatibility with loader
-    opts.masks_dir = None
 
     # For random search this is 8 hyperparameters with 20 resource units used
     opts.R = 20

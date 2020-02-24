@@ -10,9 +10,6 @@ import util.rl.dqn
 
 if __name__ == '__main__':
     options_ = options.rl_options.RLOptions().parse()
-    options_.batchSize = 1
-    options_.masks_dir = None
-    options_.dqn_resume = True
 
     options_.device = torch.device('cuda:{}'.format(
         options_.gpu_ids[0])) if options_.gpu_ids else torch.device('cpu')
