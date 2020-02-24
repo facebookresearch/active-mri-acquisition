@@ -124,7 +124,7 @@ class RLOptions(BaseOptions):
             default=None,
             help='Specifies a cutoff point for test (and validation). '
             'Once an image reaches this number of scanned columns, '
-            'the test episode will stop.')
+            'the test episode will stop. Default (None) indicates full budget.')
         parser.add_argument(
             '--dqn_burn_in',
             type=int,
