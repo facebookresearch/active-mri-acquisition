@@ -83,8 +83,6 @@ def main(options_, logger):
 if __name__ == '__main__':
     # Reading options
     opts = options.rl_options.RLOptions().parse()
-    opts.batchSize = 1
-    opts.masks_dir = None  # Ignored, only here for compatibility with loader
 
     random.seed(opts.seed)
     np.random.seed(opts.seed)

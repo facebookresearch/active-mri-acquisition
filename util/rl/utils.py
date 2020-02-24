@@ -56,10 +56,10 @@ def test_policy(env,
                 leave_no_trace=False):
     """ Evaluates a given policy for the environment on the test set. """
     env.set_testing(use_training_set=test_on_train)
-    old_budget = env.options.budget
-    env.options.budget = env.action_space.n if options_.test_budget is None \
-        else options_.test_budget
-    logger.info(f'Starting test iterations. Test budget set to {env.options.budget}.')
+    cols_cutoff = env.options.test_num_cols_cutoff
+    if cols_cutoff is None:
+        cols_cutoff = env.actions_space.n
+    logger.info(f'Starting test iterations. Max. num lines for test set ' f'to {cols_cutoff}.')
     episode = 0
     statistics = {'mse': {}, 'nmse': {}, 'ssim': {}, 'psnr': {}, 'rewards': {}}
     import time
@@ -85,6 +85,7 @@ def test_policy(env,
             action = policy.get_action(obs, 0., actions)
             actions.append(action)
             next_obs, reward, done, _ = env.step(action)
+            done = done or (env.get_num_active_columns_in_obs(obs) > cols_cutoff)
             total_reward_episode += reward
             obs = next_obs
             episode_step += 1
@@ -105,7 +106,6 @@ def test_policy(env,
     if not leave_no_trace:
         writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc', test_score, step)
     env.set_training()
-    env.options.budget = old_budget
 
     # DQN maximizes but we want to minimize MSE
     if options_.reward_metric == 'mse' or options_.reward == 'nmse':

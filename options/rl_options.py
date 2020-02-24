@@ -118,7 +118,13 @@ class RLOptions(BaseOptions):
         parser.add_argument('--num_train_steps', type=int, default=5000000)
         parser.add_argument('--rl_batch_size', type=int, default=16)
         parser.add_argument('--test_set', choices=['train', 'val', 'test'], default='test')
-        parser.add_argument('--test_budget', type=int, default=None)
+        parser.add_argument(
+            '--test_num_cols_cutoff',
+            type=int,
+            default=None,
+            help='Specifies a cutoff point for test (and validation). '
+            'Once an image reaches this number of scanned columns, '
+            'the test episode will stop.')
         parser.add_argument(
             '--dqn_burn_in',
             type=int,
@@ -151,3 +157,9 @@ class RLOptions(BaseOptions):
 
         self.isTrain = False
         return parser
+
+    def parse(self):
+        options = super(RLOptions, self).parse()
+        options.batchSize = 1
+        options.masks_dir = None  # Ignored, only here for compatibility with loader
+        return options

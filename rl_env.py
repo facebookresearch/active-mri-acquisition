@@ -263,6 +263,12 @@ class ReconstructionEnv:
             new_mask[-(line_to_scan + 1)] = 1
         return new_mask.view(1, 1, 1, -1), had_already_been_scanned
 
+    def get_num_active_columns_in_obs(self, obs):
+        if self.options.obs_to_numpy:
+            return obs[:, self.image_height, :].astype(np.int8).sum()
+        else:
+            return obs['mask'].int().sum().item()
+
     def compute_score(self,
                       use_reconstruction: bool = True,
                       ground_truth: Optional[torch.Tensor] = None,
