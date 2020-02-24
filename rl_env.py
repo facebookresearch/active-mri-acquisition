@@ -265,9 +265,12 @@ class ReconstructionEnv:
 
     def get_num_active_columns_in_obs(self, obs):
         if self.options.obs_to_numpy:
-            return obs[:, self.image_height, :].astype(np.int8).sum()
+            num_active_cols = obs[:, self.image_height, :].astype(np.int8).sum()
         else:
-            return obs['mask'].int().sum().item()
+            num_active_cols = obs['mask'].int().sum().item()
+        if self.options.dataroot == 'KNEE_RAW':
+            num_active_cols -= 36  # remove count of padding cols
+        return num_active_cols
 
     def compute_score(self,
                       use_reconstruction: bool = True,
