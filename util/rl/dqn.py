@@ -454,7 +454,9 @@ class DQNTrainer:
         self.folder_lock_path = DQNTrainer.get_lock_filename(self.options.checkpoints_dir)
 
         with get_folder_lock(self.folder_lock_path):
-            os.remove(DQNTrainer.get_done_filename(self.options.checkpoints_dir))
+            done_file = DQNTrainer.get_done_filename(self.options.checkpoints_dir)
+            if os.path.isfile(done_file):
+                os.remove(done_file)
 
         if self.env is not None:
             self.env = env
