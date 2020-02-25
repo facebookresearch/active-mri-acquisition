@@ -127,7 +127,7 @@ def test_policy(env,
     env.set_training()
 
     # DQN maximizes but we want to minimize MSE
-    if options_.reward_metric == 'mse' or options_.reward == 'nmse':
+    if options_.reward_metric == 'mse' or options_.reward_metric == 'nmse':
         test_score = -test_score
 
     logger.info(f'Completed test iterations. Test budget set back to {env.options.budget}.')
