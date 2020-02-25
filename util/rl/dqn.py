@@ -246,15 +246,18 @@ class DDQN(nn.Module):
         q_values = all_q_values_cur.gather(1, actions.unsqueeze(1))
 
         # Compute target values using the best action found
-        with torch.no_grad():
-            all_q_values_next = self.forward(next_observations)['qvalue']
-            target_values = torch.zeros(observations.shape[0], device=self.device)
-            if not_done_mask.any().item() != 0:
-                best_actions = all_q_values_next.detach().max(1)[1]
-                target_values[not_done_mask] = target_net.forward(next_observations)['qvalue'] \
-                    .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
+        if self.opts.gamma == 0.0:
+            target_values = rewards
+        else:
+            with torch.no_grad():
+                all_q_values_next = self.forward(next_observations)['qvalue']
+                target_values = torch.zeros(observations.shape[0], device=self.device)
+                if not_done_mask.any().item() != 0:
+                    best_actions = all_q_values_next.detach().max(1)[1]
+                    target_values[not_done_mask] = target_net.forward(next_observations)['qvalue'] \
+                        .gather(1, best_actions.unsqueeze(1))[not_done_mask].squeeze().detach()
 
-            target_values = self.opts.gamma * target_values + rewards
+                target_values = self.opts.gamma * target_values + rewards
 
         # loss = F.mse_loss(q_values, target_values.unsqueeze(1))
         loss = F.smooth_l1_loss(q_values, target_values.unsqueeze(1))
