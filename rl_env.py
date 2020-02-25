@@ -179,6 +179,7 @@ class ReconstructionEnv:
         self._scans_left = None
         self._reference_mean_for_reward = None
         self._reference_std_for_reward = None
+        self._max_cols_cutoff = None
 
         # Variables used when alternate optimization is active
         self.mask_dict = {}
@@ -192,7 +193,6 @@ class ReconstructionEnv:
         if options.normalize_rewards_on_val:
             logging.info('Running random policy to get reference point for reward.')
             random_policy = util.rl.simple_baselines.RandomPolicy(range(self.action_space.n))
-            self.set_testing()
             _, statistics = util.rl.utils.test_policy(
                 self, random_policy, None, None, 0, self.options, leave_no_trace=True)
             logging.info('Done computing reference.')
@@ -223,11 +223,13 @@ class ReconstructionEnv:
             else ReconstructionEnv.DataMode.TEST
         if reset_index:
             self._image_idx_test = 0
+        self._max_cols_cutoff = self.options.test_num_cols_cutoff
 
     def set_training(self, reset_index=False):
         self.data_mode = ReconstructionEnv.DataMode.TRAIN
         if reset_index:
             self._image_idx_train = 0
+        self._max_cols_cutoff = None
 
     @staticmethod
     def _compute_score(reconstruction: torch.Tensor, ground_truth: torch.Tensor,
@@ -420,7 +422,6 @@ class ReconstructionEnv:
             resulting observation and reward (drop in MSE after reconstructing with respect to the
             current ground truth).
         """
-        assert self._scans_left > 0
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action)
         if self.data_mode == ReconstructionEnv.DataMode.TRAIN:
@@ -451,7 +452,12 @@ class ReconstructionEnv:
         self._current_score = new_score
 
         self._scans_left -= 1
-        done = (self._scans_left == 0) or (self._current_mask.byte().all() == 1)
+
+        if self._max_cols_cutoff is None:
+            assert self._scans_left >= 0
+            done = (self._scans_left == 0) or (self._current_mask.byte().all() == 1)
+        else:
+            done = (self.get_num_active_columns_in_obs(observation) >= self._max_cols_cutoff)
 
         return observation, reward, done, {}
 

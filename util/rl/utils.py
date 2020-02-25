@@ -109,7 +109,6 @@ def test_policy(env,
                 compute_acceleration(env.get_num_active_columns_in_obs(obs), options_.dataroot))
             episode_scores.append(reconstruction_results[options_.reward_metric])
             update_statistics(reconstruction_results, episode_step, statistics)
-            done = done or (env.get_num_active_columns_in_obs(obs) >= cols_cutoff)
         all_actions.append(episode_actions)
         all_auc.append(sklearn.metrics.auc(episode_accelerations, episode_scores))
         if not leave_no_trace:
@@ -124,11 +123,12 @@ def test_policy(env,
     split = 'train' if test_on_train else 'test'
     if not leave_no_trace:
         writer.add_scalar(f'eval/{split}_score__{options_.reward_metric}_auc', test_score, step)
-    env.set_training()
 
     # DQN maximizes but we want to minimize MSE
     if options_.reward_metric == 'mse' or options_.reward_metric == 'nmse':
         test_score = -test_score
 
     logger.info(f'Completed test iterations. Test budget set back to {env.options.budget}.')
+
+    env.set_training()
     return test_score, statistics
