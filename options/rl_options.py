@@ -130,7 +130,13 @@ class RLOptions(BaseOptions):
             type=int,
             default=200,
             help='Before this many steps nothing will be sampled from the replay buffer.')
-        parser.add_argument('--dqn_test_episode_freq', type=int, default=None)
+        parser.add_argument(
+            '--dqn_test_episode_freq',
+            type=int,
+            default=None,
+            help='Specifies the frequency (in terms of training episodes) for '
+            'running DQN evaluation. `None` indicates that training will '
+            'run uninterrupted by evaluation episodes.')
         parser.add_argument('--dqn_eval_train_set_episode_freq', type=int, default=None)
         parser.add_argument('--target_net_update_freq', type=int, default=5000)
         parser.add_argument('--gamma', type=float, default=0.5)

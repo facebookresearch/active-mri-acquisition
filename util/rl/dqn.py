@@ -419,11 +419,11 @@ class DQNTester:
         if os.path.isfile(path):
             with open(path, 'rb') as f:
                 checkpoint = pickle.load(f)
-                self.best_test_score = checkpoint['best_test_score']
-                self.last_time_stamp = checkpoint['last_time_stamp']
-                self.logger.info(f'Found checkpoint from previous evaluation run. '
-                                 f'Best Score set to {self.best_test_score}. '
-                                 f'Last Time Stamp set to {self.last_time_stamp}')
+            self.best_test_score = checkpoint['best_test_score']
+            self.last_time_stamp = checkpoint['last_time_stamp']
+            self.logger.info(f'Found checkpoint from previous evaluation run. '
+                             f'Best Score set to {self.best_test_score}. '
+                             f'Last Time Stamp set to {self.last_time_stamp}')
 
     # noinspection PyProtectedMember
     def load_latest_policy(self):
@@ -443,6 +443,7 @@ class DQNTester:
         }, path)
 
 
+# TODO Clean up initialization
 class DQNTrainer:
 
     def __init__(self, options, env=None, writer=None, logger=None, load_replay_mem=True):
