@@ -404,7 +404,7 @@ class DQNTester:
     def checkpoint(self):
         self.logger.info('Received preemption signal.')
         self.save_tester_checkpoint()
-        return submitit.helpers.DelayedSubmission(DQNTester(self.options))
+        return submitit.helpers.DelayedSubmission(DQNTester(self.training_dir))
 
     def save_tester_checkpoint(self):
         path = os.path.join(self.evaluation_dir, 'tester_checkpoint.pickle')
