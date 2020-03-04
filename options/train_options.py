@@ -129,7 +129,6 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--use_submitit', dest='use_submitit', action='store_true')
         parser.add_argument('--submitit_logs_dir', type=str, default=None)
 
-
         # Hyperband Options
         parser.add_argument(
             '--R', type=int, default=10, help='Hyperband resource usage limit (default: 10)')
@@ -207,7 +206,5 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--num_steps', type=int, default=2048)
         parser.add_argument('--use_linear_lr_decay', type=bool, default=True)
         parser.add_argument('--num_env_steps', type=int, default=1000000)
-
-        self.isTrain = True
 
         return parser
