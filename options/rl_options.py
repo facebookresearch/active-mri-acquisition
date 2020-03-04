@@ -18,9 +18,7 @@ class RLOptions(BaseOptions):
         parser.add_argument('--obs_to_numpy', action='store_true')
         parser.add_argument(
             '--policy',
-            choices=[
-                'dqn', 'random', 'lowfirst', 'one_step_greedy', 'evaluator_net', 'evaluator++'
-            ],
+            choices=['dqn', 'random', 'lowfirst', 'one_step_greedy', 'evaluator_net'],
             default='random')
         parser.add_argument('--initial_num_lines_per_side', type=int, default=10)
         parser.add_argument('--budget', type=int, default=5)
