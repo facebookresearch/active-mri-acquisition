@@ -12,20 +12,18 @@ EXTRA_OPTIONS=${3:-""}
 
 if [[ "${DATASET}" = "dicom" ]]
 then
-    echo foo1
     DATAROOT=KNEE
     MASK=symmetric_basic_rnl
     IW=128
     BS=1
 elif [[ "${DATASET}" = "raw" ]]
 then
-    echo foo2
     DATAROOT=KNEE_RAW
     MASK=basic_rnl
     IW=368
     BS=40
 else
-    echo "Usage ./train_only_reconstructor [dicom|raw] [checkpoint_dir...] [\"extra_options...\"]"
+    echo "Usage ./train_reconstructor [dicom|raw] [checkpoint_dir...] [\"extra_options...\"]"
     exit
 fi
 
