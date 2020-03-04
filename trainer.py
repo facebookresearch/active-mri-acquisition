@@ -22,6 +22,7 @@ from options.train_options import TrainOptions
 from util import util
 
 
+# TODO: Set image width option automatically according to dataset
 def run_validation_and_update_best_checkpoint(
         engine: ignite.engine.Engine,
         val_engine: ignite.engine.Engine = None,
