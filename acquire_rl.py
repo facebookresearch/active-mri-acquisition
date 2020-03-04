@@ -29,9 +29,6 @@ def get_experiment_str(options_):
                 f'metric{options_.reward_metric}.usescoasrew{int(options_.use_score_as_reward)}'
     else:
         policy_str = options_.policy
-        if 'greedymc' in options_.policy:
-            policy_str = '{}.nsam{}.hor{}_'.format(policy_str, options_.greedymc_num_samples,
-                                                   options_.greedymc_horizon)
     return f'{policy_str}_bu{options_.budget}_seed{options_.seed}_neptest{options_.num_test_images}'
 
 
@@ -56,9 +53,6 @@ def get_policy(env, writer, logger, options_):
         # At the moment, Evaluator gets valid actions in a mask - preprocess data function.
         # So, no need to pass `valid_actions`
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
-    elif 'evaluator++' in options_.policy:
-        policy = util.rl.evaluator_plus_plus.EvaluatorPlusPlusPolicy(
-            options_.options.evaluator_pp_path, options_.initial_num_lines_per_side, rl_env.device)
     elif 'dqn' in options_.policy:
         assert options_.obs_to_numpy
         dqn_trainer = util.rl.dqn.DQNTrainer(options_, env, writer, logger)
