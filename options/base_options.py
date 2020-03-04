@@ -2,13 +2,12 @@ import argparse
 
 import torch
 
-import data
-
 
 class BaseOptions():
 
     def __init__(self):
         self.initialized = False
+        self.parser = None
 
     def initialize(self, parser):
         parser.add_argument(
@@ -86,6 +85,7 @@ class BaseOptions():
 
     def gather_options(self):
         # initialize parser with basic options
+        parser = None
         if not self.initialized:
             parser = argparse.ArgumentParser(
                 formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
@@ -93,11 +93,6 @@ class BaseOptions():
 
         # get the basic options
         opt, _ = parser.parse_known_args()
-
-        # modify dataset-related parser options
-        dataset_name = opt.dataset_mode
-        dataset_option_setter = data.get_option_setter(dataset_name)
-        parser = dataset_option_setter(parser, self.isTrain)
 
         self.parser = parser
 
@@ -118,7 +113,6 @@ class BaseOptions():
     def parse(self):
 
         opt = self.gather_options()
-        opt.isTrain = self.isTrain  # train or test
 
         # process opt.suffix
         if opt.suffix:
@@ -139,9 +133,6 @@ class BaseOptions():
             print(f'Use multiple GPUs, batchSize are increased by {len(opt.gpu_ids)} '
                   f'times to {opt.batchSize}')
 
-        if opt.isTrain:
-            self.print_options(opt)
+        self.print_options(opt)
 
-        self.opt = opt
-
-        return self.opt
+        return opt

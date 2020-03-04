@@ -50,8 +50,3 @@ def find_dataset_using_name(dataset_name):
         exit(0)
 
     return dataset
-
-
-def get_option_setter(dataset_name):
-    dataset_class = find_dataset_using_name(dataset_name)
-    return dataset_class.modify_commandline_options

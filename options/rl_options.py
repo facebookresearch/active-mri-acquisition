@@ -164,7 +164,6 @@ class RLOptions(BaseOptions):
 
         parser.add_argument('--partition', type=str, default='learnfair')
 
-        self.isTrain = False
         return parser
 
     def parse(self):
