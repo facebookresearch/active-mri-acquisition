@@ -4,7 +4,31 @@ import torch
 # this function returns two channels where the first one (real part) is in image space
 from torch import nn as nn
 from torch.nn import functional as F
-from data.ft_data_loader.ft_util_vaes import ifftshift, fftshift
+
+
+def roll(x, shift, dim):
+    if isinstance(shift, (tuple, list)):
+        assert len(shift) == len(dim)
+        for s, d in zip(shift, dim):
+            x = roll(x, s, d)
+        return x
+    shift = shift % x.size(dim)
+    if shift == 0:
+        return x
+    left = x.narrow(dim, 0, x.size(dim) - shift)
+    right = x.narrow(dim, x.size(dim) - shift, shift)
+    return torch.cat((right, left), dim=dim)
+
+
+def ifftshift(x, dim=None):
+    if dim is None:
+        dim = tuple(range(x.dim()))
+        shift = [(dim + 1) // 2 for dim in x.shape]
+    elif isinstance(dim, int):
+        shift = (x.shape[dim] + 1) // 2
+    else:
+        shift = [(x.shape[i] + 1) // 2 for i in dim]
+    return roll(x, shift, dim)
 
 
 def ifft(x, normalized=False, ifft_shift=False):
@@ -70,7 +94,9 @@ def preprocess_inputs(batch, dataroot, device):
     if dataroot == 'KNEE_RAW':
         k_space = batch[2].permute(0, 3, 1, 2).to(device)
         # alter mask to always include the highest frequencies that include padding
-        mask = torch.where(to_magnitude(k_space).sum(2).unsqueeze(2)==0., torch.tensor(1.).to(device), mask)
+        mask = torch.where(
+            to_magnitude(k_space).sum(2).unsqueeze(2) == 0.,
+            torch.tensor(1.).to(device), mask)
         masked_true_k_space = torch.where(mask.byte(), k_space, torch.tensor(0.).to(device))
         zero_filled_reconstruction = ifft(masked_true_k_space, ifft_shift=True)
         target = target.permute(0, 3, 1, 2)
@@ -84,7 +110,12 @@ def preprocess_inputs(batch, dataroot, device):
 
 class GANLossKspace(nn.Module):
 
-    def __init__(self, use_lsgan=True, use_mse_as_energy=False, grad_ctx=False, gamma=100, options=None):
+    def __init__(self,
+                 use_lsgan=True,
+                 use_mse_as_energy=False,
+                 grad_ctx=False,
+                 gamma=100,
+                 options=None):
         super(GANLossKspace, self).__init__()
         # self.register_buffer('real_label', torch.ones(imSize, imSize))
         # self.register_buffer('fake_label', torch.zeros(imSize, imSize))
