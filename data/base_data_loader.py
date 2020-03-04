@@ -54,13 +54,13 @@ def get_train_valid_loader(batch_size,
             raw_root + '/singlecoil_train',
             transform=data_transform,
             num_cols=368,
-            num_volumes=None)
+            num_volumes=num_volumes_train)
         data_transform = RawDataTransform(mask_func, fixed_seed=None, seed_per_image=True)
         valid_data = RawSliceData(
             raw_root + '/singlecoil_val',
             transform=data_transform,
             num_cols=368,
-            num_volumes=None,
+            num_volumes=num_volumes_val,
             custom_split='val')
     else:
         raise ValueError
