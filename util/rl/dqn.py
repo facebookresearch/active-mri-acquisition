@@ -8,7 +8,6 @@ import time
 
 import filelock
 import numpy as np
-import submitit
 import tensorboardX
 import torch
 import torch.nn as nn
@@ -404,7 +403,6 @@ class DQNTester:
     def checkpoint(self):
         self.logger.info('Received preemption signal.')
         self.save_tester_checkpoint()
-        return submitit.helpers.DelayedSubmission(DQNTester(self.training_dir))
 
     def save_tester_checkpoint(self):
         path = os.path.join(self.evaluation_dir, 'tester_checkpoint.pickle')
@@ -736,9 +734,9 @@ class DQNTrainer:
             self.episode += 1
 
             if self.episode % self.options.freq_dqn_checkpoint_save == 0:
-                self.checkpoint(submit_job=False, save_memory=False)
+                self.checkpoint(save_memory=False)
 
-        self.checkpoint(submit_job=False)
+        self.checkpoint()
 
         with get_folder_lock(self.folder_lock_path):
             with open(DQNTrainer.get_done_filename(self.options.checkpoints_dir), 'w') as f:
@@ -749,7 +747,7 @@ class DQNTrainer:
         self.env.retrain_reconstructor(self.logger, self.writer)
         self.replay_memory.count_seen = 0
         self.replay_memory.position = 0
-        self.checkpoint(save_memory=False, submit_job=False)
+        self.checkpoint(save_memory=False)
 
     def __call__(self):
         if self.env is None:
@@ -760,7 +758,7 @@ class DQNTrainer:
 
         return self._train_dqn_policy()
 
-    def checkpoint(self, submit_job=True, save_memory=True):
+    def checkpoint(self, save_memory=True):
         self.logger.info('Received preemption signal.')
         policy_path = DQNTrainer.get_name_latest_checkpoint(self.options.checkpoints_dir)
         self.save(policy_path)
@@ -769,9 +767,6 @@ class DQNTrainer:
             self.logger.info('Now saving replay memory.')
             memory_path = self.replay_memory.save(self.options.checkpoints_dir, 'replay_buffer.pt')
             self.logger.info(f'Saved replay buffer to {memory_path}.')
-        if submit_job:
-            trainer = DQNTrainer(self.options, load_replay_mem=True)
-            return submitit.helpers.DelayedSubmission(trainer)
 
     def save(self, path):
         with get_folder_lock(self.folder_lock_path):

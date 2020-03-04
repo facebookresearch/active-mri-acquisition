@@ -126,8 +126,6 @@ class TrainOptions(BaseOptions):
         parser.add_argument(
             '--max_epochs', type=int, default=100, help='number of epochs to train (default: 5)')
         parser.add_argument('--save_freq', type=int, default=200)
-        parser.add_argument('--use_submitit', dest='use_submitit', action='store_true')
-        parser.add_argument('--submitit_logs_dir', type=str, default=None)
 
         # Hyperband Options
         parser.add_argument(
