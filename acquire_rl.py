@@ -88,8 +88,11 @@ if __name__ == '__main__':
     np.random.seed(opts.seed)
     torch.manual_seed(opts.seed)
 
-    experiment_str = get_experiment_str(opts)
-    opts.checkpoints_dir = os.path.join(opts.checkpoints_dir, experiment_str)
+    if opts.policy == 'dqn' and opts.dqn_only_test:
+        opts.checkpoints_dir = os.path.join(opts.checkpoints_dir, 'test')
+    else:
+        experiment_str = get_experiment_str(opts)
+        opts.checkpoints_dir = os.path.join(opts.checkpoints_dir, experiment_str)
     if not os.path.isdir(opts.checkpoints_dir):
         os.makedirs(opts.checkpoints_dir)
 

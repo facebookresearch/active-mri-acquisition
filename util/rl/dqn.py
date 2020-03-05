@@ -788,9 +788,10 @@ class DQNTrainer:
     def load(self, path):
         checkpoint = torch.load(path)
         self.policy.load_state_dict(checkpoint['dqn_weights'])
-        self.target_net.load_state_dict(checkpoint['target_weights'])
-        self.steps = checkpoint['steps']
         self.episode = checkpoint['episode'] + 1
-        self.best_test_score = checkpoint['best_test_score']
-        self.reward_images_in_window = checkpoint['reward_images_in_window']
-        self.current_score_auc_window = checkpoint['current_score_auc_window']
+        if not self.options.dqn_only_test:
+            self.target_net.load_state_dict(checkpoint['target_weights'])
+            self.steps = checkpoint['steps']
+            self.best_test_score = checkpoint['best_test_score']
+            self.reward_images_in_window = checkpoint['reward_images_in_window']
+            self.current_score_auc_window = checkpoint['current_score_auc_window']
