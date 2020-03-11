@@ -19,7 +19,8 @@ class RLOptions(BaseOptions):
         parser.add_argument(
             '--policy',
             choices=[
-                'dqn', 'random', 'lowfirst', 'one_step_greedy', 'evaluator_net', 'evaluator++'
+                'dqn', 'random', 'lowfirst', 'cartesian', 'one_step_greedy', 'evaluator_net',
+                'evaluator++'
             ],
             default='random')
         parser.add_argument('--initial_num_lines_per_side', type=int, default=10)

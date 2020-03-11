@@ -5,6 +5,47 @@ import rl_env
 import models.fft_utils
 
 
+class CartesianMaskPolicy:
+    """
+        Based on https://github.com/facebookexternal/fast_mri/blob/vaes/experimental/vae_uncertainty/data_util/ft_util.py  # L14-L54
+
+        Receives current mask and only sampled from non-active columns
+
+    """
+
+    def __init__(self, acc=3):
+        self.acc = acc
+
+    def get_action(self, obs, *_):
+        mask = obs['mask'].squeeze().cpu().numpy()
+        new_mask = self._cartesian_mask(mask)
+        action = (new_mask - mask).argmax()
+        return action
+
+    def init_episode(self):
+        pass
+
+    @staticmethod
+    def _normal_pdf(length, sensitivity):
+        return np.exp(-sensitivity * (np.arange(length) - length / 2)**2)
+
+    def _cartesian_mask(self, current_mask):
+        image_width = current_mask.size
+        pdf_x = CartesianMaskPolicy._normal_pdf(image_width, 0.5 / (image_width / 10.)**2)
+        lmda = image_width / (2. * self.acc)
+        # add uniform distribution
+        pdf_x += lmda * 1. / image_width
+        # remove previously chosen columns
+        mask = np.fft.ifftshift(current_mask)  # pdf designed for centred masks
+        pdf_x = pdf_x * np.logical_not(mask)
+        # normalize probabilities and choose accordingly
+        pdf_x /= np.sum(pdf_x)
+        idx = np.random.choice(image_width, 1, False, pdf_x)
+        mask[idx] = 1
+        mask = np.fft.ifftshift(mask)  # revert back to non-centred masks
+        return mask
+
+
 class RandomPolicy:
 
     def __init__(self, actions):
