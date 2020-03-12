@@ -19,7 +19,7 @@ class RLOptions(BaseOptions):
         parser.add_argument(
             '--policy',
             choices=[
-                'dqn', 'random', 'lowfirst', 'cartesian', 'one_step_greedy', 'evaluator_net',
+                'dqn', 'random', 'lowfirst', 'random_low_bias', 'one_step_greedy', 'evaluator_net',
                 'evaluator++'
             ],
             default='random')

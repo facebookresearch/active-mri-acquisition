@@ -5,11 +5,11 @@ import rl_env
 import models.fft_utils
 
 
-class CartesianMaskPolicy:
+class RandomLowBiasPolicy:
     """
         Based on https://github.com/facebookexternal/fast_mri/blob/vaes/experimental/vae_uncertainty/data_util/ft_util.py  # L14-L54
 
-        Receives current mask and only sampled from non-active columns
+        Receives current mask and only sampled from non-active columns.
 
     """
 
@@ -41,7 +41,7 @@ class CartesianMaskPolicy:
 
     def _cartesian_mask(self, current_mask):
         image_width = current_mask.size
-        pdf_x = CartesianMaskPolicy._normal_pdf(image_width, 0.5 / (image_width / 10.)**2)
+        pdf_x = RandomLowBiasPolicy._normal_pdf(image_width, 0.5 / (image_width / 10.)**2)
         lmda = image_width / (2. * self.acc)
         # add uniform distribution
         pdf_x += lmda * 1. / image_width

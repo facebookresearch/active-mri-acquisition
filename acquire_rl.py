@@ -46,8 +46,8 @@ def get_policy(env, writer, logger, options_):
         policy = util.rl.simple_baselines.RandomPolicy(valid_actions)
     elif 'lowfirst' in options_.policy:
         policy = util.rl.simple_baselines.NextIndexPolicy(valid_actions, not env.conjugate_symmetry)
-    elif 'cartesian' in options_.policy:
-        policy = util.rl.simple_baselines.CartesianMaskPolicy(options_.initial_num_lines_per_side)
+    elif 'random_low_bias' in options_.policy:
+        policy = util.rl.simple_baselines.RandomLowBiasPolicy(options_.initial_num_lines_per_side)
     elif options_.policy == 'one_step_greedy':
         policy = util.rl.simple_baselines.OneStepGreedy(
             env, options_.reward_metric, max_actions_to_eval=options_.greedy_max_num_actions)
