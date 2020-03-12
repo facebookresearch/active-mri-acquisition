@@ -13,14 +13,24 @@ class CartesianMaskPolicy:
 
     """
 
-    def __init__(self, acc=3):
+    def __init__(self, lowf_offset, acc=3):
+        """ Creates a policy using the given acceleration as reference.
+
+            `low_offset` is used to specify the action index,
+            i.e., action = mask_index - low_offset.
+
+            This is needed because this policy uses the full mask to decide which frequency to
+            scan, but in the environment the actions start indexing after the set of initial low
+            frequencies.
+        """
         self.acc = acc
+        self.lowf_offset = lowf_offset
 
     def get_action(self, obs, *_):
         mask = obs['mask'].squeeze().cpu().numpy()
         new_mask = self._cartesian_mask(mask)
         action = (new_mask - mask).argmax()
-        return action
+        return action - self.lowf_offset
 
     def init_episode(self):
         pass
