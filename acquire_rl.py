@@ -42,11 +42,11 @@ def get_policy(env, writer, logger, options_):
     # This options affects how the score is computed by the environment
     # (whether it passes through reconstruction network or not after a new col. is scanned)
     logger.info(f'Use reconstructions is {options_.use_reconstructions}')
-    if 'random' in options_.policy:
+    if options_.policy == 'random':
         policy = util.rl.simple_baselines.RandomPolicy(valid_actions)
-    elif 'lowfirst' in options_.policy:
+    elif options_.policy == 'lowfirst':
         policy = util.rl.simple_baselines.NextIndexPolicy(valid_actions, not env.conjugate_symmetry)
-    elif 'random_low_bias' in options_.policy:
+    elif options_.policy == 'random_low_bias':
         policy = util.rl.simple_baselines.RandomLowBiasPolicy(options_.initial_num_lines_per_side)
     elif options_.policy == 'one_step_greedy':
         policy = util.rl.simple_baselines.OneStepGreedy(
