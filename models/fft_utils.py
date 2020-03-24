@@ -31,6 +31,17 @@ def ifftshift(x, dim=None):
     return roll(x, shift, dim)
 
 
+def fftshift(x, dim=None):
+    if dim is None:
+        dim = tuple(range(x.dim()))
+        shift = [dim // 2 for dim in x.shape]
+    elif isinstance(dim, int):
+        shift = x.shape[dim] // 2
+    else:
+        shift = [x.shape[i] // 2 for i in dim]
+    return roll(x, shift, dim)
+
+
 def ifft(x, normalized=False, ifft_shift=False):
     x = x.permute(0, 2, 3, 1)
     y = torch.ifft(x, 2, normalized=normalized)
@@ -46,9 +57,11 @@ def rfft(x, normalized=False):
     return y.permute(0, 3, 1, 2)
 
 
-def fft(x, normalized=False):
+def fft(x, normalized=False, shift=False):
     x = x.permute(0, 2, 3, 1)
     y = torch.fft(x, 2, normalized=normalized)
+    if shift:
+        y = fftshift(y, dim=(1, 2))
     return y.permute(0, 3, 1, 2)
 
 
@@ -100,7 +113,8 @@ def preprocess_inputs(batch, dataroot, device, prev_reconstruction=None):
         if prev_reconstruction is None:
             masked_true_k_space = torch.where(mask.byte(), k_space, torch.tensor(0.).to(device))
         else:
-            masked_true_k_space = torch.where(mask.byte(), k_space, prev_reconstruction.to(device))
+            ft_x = fft(prev_reconstruction, shift=True)
+            masked_true_k_space = torch.where(mask.byte(), k_space, ft_x)
         reconstructor_input = ifft(masked_true_k_space, ifft_shift=True)
         target = target.permute(0, 3, 1, 2)
     else:
@@ -108,8 +122,8 @@ def preprocess_inputs(batch, dataroot, device, prev_reconstruction=None):
         if prev_reconstruction is None:
             masked_true_k_space = torch.where(mask.byte(), fft_target, torch.tensor(0.).to(device))
         else:
-            masked_true_k_space = torch.where(mask.byte(), fft_target,
-                                              prev_reconstruction.to(device))
+            ft_x = fft(prev_reconstruction)
+            masked_true_k_space = torch.where(mask.byte(), fft_target, ft_x)
 
         reconstructor_input = ifft(masked_true_k_space)
 
