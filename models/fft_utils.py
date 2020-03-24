@@ -88,7 +88,7 @@ def gaussian_nll_loss(reconstruction, target, logvar, options):
     return 0.5 * (one_over_var * l2 + logvar)
 
 
-def preprocess_inputs(batch, dataroot, device):
+def preprocess_inputs(batch, dataroot, device, prev_reconstruction=None):
     mask = batch[0].to(device)
     target = batch[1].to(device)
     if dataroot == 'KNEE_RAW':
@@ -97,15 +97,23 @@ def preprocess_inputs(batch, dataroot, device):
         mask = torch.where(
             to_magnitude(k_space).sum(2).unsqueeze(2) == 0.,
             torch.tensor(1.).to(device), mask)
-        masked_true_k_space = torch.where(mask.byte(), k_space, torch.tensor(0.).to(device))
-        zero_filled_reconstruction = ifft(masked_true_k_space, ifft_shift=True)
+        if prev_reconstruction is None:
+            masked_true_k_space = torch.where(mask.byte(), k_space, torch.tensor(0.).to(device))
+        else:
+            masked_true_k_space = torch.where(mask.byte(), k_space, prev_reconstruction.to(device))
+        reconstructor_input = ifft(masked_true_k_space, ifft_shift=True)
         target = target.permute(0, 3, 1, 2)
     else:
         fft_target = fft(target)
-        masked_true_k_space = torch.where(mask.byte(), fft_target, torch.tensor(0.).to(device))
-        zero_filled_reconstruction = ifft(masked_true_k_space)
+        if prev_reconstruction is None:
+            masked_true_k_space = torch.where(mask.byte(), fft_target, torch.tensor(0.).to(device))
+        else:
+            masked_true_k_space = torch.where(mask.byte(), fft_target,
+                                              prev_reconstruction.to(device))
 
-    return zero_filled_reconstruction, target, mask
+        reconstructor_input = ifft(masked_true_k_space)
+
+    return reconstructor_input, target, mask
 
 
 class GANLossKspace(nn.Module):

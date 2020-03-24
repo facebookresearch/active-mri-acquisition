@@ -172,6 +172,7 @@ class ReconstructionEnv:
 
         self._initial_mask = self._generate_initial_lowf_mask().to(device)
         self._ground_truth = None
+        self._current_reconstruction = None
         self._k_space = None
         self._current_mask = None
         self._current_score = None
@@ -207,13 +208,16 @@ class ReconstructionEnv:
 
     def _get_current_reconstruction_and_mask_embedding(self) \
             -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        zero_filled_image, _, mask_to_use = models.fft_utils.preprocess_inputs(
-            (self._current_mask, self._ground_truth, self._k_space), self.options.dataroot, device)
+        prev_reconstruction = (self._current_reconstruction
+                               if self.options.keep_prev_reconstruction else None)
+        reconstructor_input, _, mask_to_use = models.fft_utils.preprocess_inputs(
+            (self._current_mask, self._ground_truth, self._k_space), self.options.dataroot, device,
+            prev_reconstruction)
 
         if self.options.use_reconstructions:
-            reconstruction, _, mask_embed = self._reconstructor(zero_filled_image, mask_to_use)
+            reconstruction, _, mask_embed = self._reconstructor(reconstructor_input, mask_to_use)
         else:
-            reconstruction = zero_filled_image
+            reconstruction = reconstructor_input
             mask_embed = None
 
         return reconstruction, mask_embed, mask_to_use
@@ -309,8 +313,11 @@ class ReconstructionEnv:
                 mask_to_use = self._current_mask
             if k_space is None:
                 k_space = self._k_space
+            prev_reconstruction = (self._current_reconstruction
+                                   if self.options.keep_prev_reconstruction else None)
             image, _, mask_to_use = models.fft_utils.preprocess_inputs(
-                (mask_to_use, ground_truth, k_space), self.options.dataroot, device)
+                (mask_to_use, ground_truth, k_space), self.options.dataroot, device,
+                prev_reconstruction)
             if use_reconstruction:  # pass through reconstruction network
                 image, _, _ = self._reconstructor(image, mask_to_use)
         return [
@@ -337,6 +344,7 @@ class ReconstructionEnv:
             if self.options.obs_type == 'fourier_space':
                 reconstruction = models.fft_utils.fft(reconstruction)
 
+            self._current_reconstruction = reconstruction
             observation = {
                 'reconstruction': reconstruction,
                 'mask': mask,
@@ -404,6 +412,7 @@ class ReconstructionEnv:
                       f"with image {set_order[set_idx]}")
 
         self._ground_truth = self._ground_truth.to(device).unsqueeze(0)
+        self._current_reconstruction = None
         self._current_mask = self._initial_mask if start_with_initial_mask \
             else mask_image_raw[0].to(device).unsqueeze(0)
         if self._current_mask.byte().all() == 1:
