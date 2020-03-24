@@ -33,6 +33,8 @@ class RLOptions(BaseOptions):
             help='If given, the indices in the test set are rotated. '
             'This is useful to parallelize test runs (each job starts at a different index).')
         parser.add_argument(
+            '--keep_prev_reconstruction', dest='keep_prev_reconstruction', action='store_true')
+        parser.add_argument(
             '--no_use_reconstructions', dest='use_reconstructions', action='store_false')
         parser.add_argument(
             '--use_score_as_reward',
