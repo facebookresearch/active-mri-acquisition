@@ -59,9 +59,9 @@ def rfft(x, normalized=False):
 
 def fft(x, normalized=False, shift=False):
     x = x.permute(0, 2, 3, 1)
-    y = torch.fft(x, 2, normalized=normalized)
     if shift:
-        y = fftshift(y, dim=(1, 2))
+        x = fftshift(x, dim=(1, 2))
+    y = torch.fft(x, 2, normalized=normalized)
     return y.permute(0, 3, 1, 2)
 
 
@@ -113,6 +113,11 @@ def preprocess_inputs(batch, dataroot, device, prev_reconstruction=None):
         if prev_reconstruction is None:
             masked_true_k_space = torch.where(mask.byte(), k_space, torch.tensor(0.).to(device))
         else:
+            prev_reconstruction = prev_reconstruction.clone()
+            prev_reconstruction[:, :, :160, :] = 0
+            prev_reconstruction[:, :, -160:, :] = 0
+            prev_reconstruction[:, :, :, :24] = 0
+            prev_reconstruction[:, :, :, -24:] = 0
             ft_x = fft(prev_reconstruction, shift=True)
             masked_true_k_space = torch.where(mask.byte(), k_space, ft_x)
         reconstructor_input = ifft(masked_true_k_space, ifft_shift=True)
