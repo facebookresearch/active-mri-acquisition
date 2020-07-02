@@ -1,7 +1,7 @@
 from __future__ import print_function
 import matplotlib.pyplot as plt
 import numpy as np
-from skimage.measure import compare_ssim, compare_psnr
+import skimage.measure
 import torch
 import torchvision.utils as tvutil
 
@@ -9,8 +9,11 @@ import torchvision.utils as tvutil
 def compute_ssims(xs, ys):
     ssims = []
     for i in range(xs.shape[0]):
-        ssim = compare_ssim(
-            xs[i, 0].cpu().numpy(), ys[i, 0].cpu().numpy(), data_range=ys[i, 0].cpu().numpy().max())
+        ssim = skimage.measure.compare_ssim(
+            xs[i, 0].cpu().numpy(),
+            ys[i, 0].cpu().numpy(),
+            data_range=ys[i, 0].cpu().numpy().max(),
+        )
         ssims.append(ssim)
     return np.array(ssims).mean()
 
@@ -18,19 +21,24 @@ def compute_ssims(xs, ys):
 def compute_psnrs(xs, ys):
     psnrs = []
     for i in range(xs.shape[0]):
-        psnr = compare_psnr(
-            xs[i, 0].cpu().numpy(), ys[i, 0].cpu().numpy(), data_range=ys[i, 0].cpu().numpy().max())
+        psnr = skimage.measure.compare_psnr(
+            xs[i, 0].cpu().numpy(),
+            ys[i, 0].cpu().numpy(),
+            data_range=ys[i, 0].cpu().numpy().max(),
+        )
         psnrs.append(psnr)
     return np.array(psnrs).mean()
 
 
 def compute_mse(xs, ys):
-    return np.mean((ys.cpu().numpy() - xs.cpu().numpy())**2)
+    return np.mean((ys.cpu().numpy() - xs.cpu().numpy()) ** 2)
 
 
 def compute_nmse(xs, ys):
     ys_numpy = ys.cpu().numpy()
-    return np.linalg.norm(ys_numpy - xs.cpu().numpy())**2 / np.linalg.norm(ys_numpy)**2
+    return (
+        np.linalg.norm(ys_numpy - xs.cpu().numpy()) ** 2 / np.linalg.norm(ys_numpy) ** 2
+    )
 
 
 # Converts a Tensor into an image array (numpy)
@@ -73,13 +81,14 @@ def create_grid_from_tensor(tensor_of_images, num_rows=4):
 
     # make image grid
     tensor_grid = tvutil.make_grid(
-        tensor_of_images, nrow=num_rows, normalize=True, scale_each=False)
+        tensor_of_images, nrow=num_rows, normalize=True, scale_each=False
+    )
     numpy_grid = tensor2im(tensor_grid, renormalize=False)
 
     return numpy_grid
 
 
-def gray2heatmap(grayimg, cmap='jet'):
+def gray2heatmap(grayimg, cmap="jet"):
     cmap = plt.get_cmap(cmap)
     rgba_img = cmap(grayimg)
     # rgb_img = np.delete(rgba_img, 3, 2) * 255.0

@@ -6,8 +6,8 @@ import torch
 import torch.nn as nn
 from models.fft_utils import center_crop
 
-class SimpleSequential(nn.Module):
 
+class SimpleSequential(nn.Module):
     def __init__(self, net1, net2):
         super(SimpleSequential, self).__init__()
         self.net1 = net1
@@ -19,7 +19,6 @@ class SimpleSequential(nn.Module):
 
 
 class SpectralMapDecomposition(nn.Module):
-
     def __init__(self):
         super(SpectralMapDecomposition, self).__init__()
 
@@ -52,20 +51,27 @@ class SpectralMapDecomposition(nn.Module):
 
         separate_mask = separate_mask.to(reconstructed_image.device)
 
-        masked_kspace = torch.where(separate_mask.byte(), kspace,
-                                    torch.tensor(0.).to(kspace.device))
+        masked_kspace = torch.where(
+            separate_mask.byte(), kspace, torch.tensor(0.0).to(kspace.device)
+        )
         masked_kspace = masked_kspace.view(batch_size * width, 2, height, width)
 
         # convert spectral maps to image space
         separate_images = ifft(masked_kspace)
         # result is (batch, [real_M0, img_M0, real_M1, img_M1, ...],  height, width]
-        separate_images = separate_images.contiguous().view(batch_size, 2, width, height, width)
+        separate_images = separate_images.contiguous().view(
+            batch_size, 2, width, height, width
+        )
 
         # add mask information as a summation -- might not be optimal
         if mask is not None:
-            separate_images = separate_images + mask.permute(0, 3, 1, 2).unsqueeze(1).detach()
+            separate_images = (
+                separate_images + mask.permute(0, 3, 1, 2).unsqueeze(1).detach()
+            )
 
-        separate_images = separate_images.contiguous().view(batch_size, 2 * width, height, width)
+        separate_images = separate_images.contiguous().view(
+            batch_size, 2 * width, height, width
+        )
         # concatenate mask embedding
         if mask_embedding is not None:
             spectral_map = torch.cat([separate_images, mask_embedding], dim=1)
@@ -76,17 +82,18 @@ class SpectralMapDecomposition(nn.Module):
 
 
 class EvaluatorNetwork(nn.Module):
-
-    def __init__(self,
-                 number_of_filters=256,
-                 number_of_conv_layers=4,
-                 use_sigmoid=False,
-                 width=128,
-                 height=None,
-                 mask_embed_dim=6,
-                 num_output_channels=None,
-                 magnitude=False):
-        print(f'[EvaluatorNetwork] -> n_layers = {number_of_conv_layers}')
+    def __init__(
+        self,
+        number_of_filters=256,
+        number_of_conv_layers=4,
+        use_sigmoid=False,
+        width=128,
+        height=None,
+        mask_embed_dim=6,
+        num_output_channels=None,
+        magnitude=False,
+    ):
+        print(f"[EvaluatorNetwork] -> n_layers = {number_of_conv_layers}")
         super(EvaluatorNetwork, self).__init__()
 
         self.spectral_map = SpectralMapDecomposition()
@@ -97,7 +104,9 @@ class EvaluatorNetwork(nn.Module):
 
         number_of_input_channels = 2 * width + mask_embed_dim
 
-        norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
+        norm_layer = functools.partial(
+            nn.InstanceNorm2d, affine=False, track_running_stats=False
+        )
 
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
@@ -106,8 +115,13 @@ class EvaluatorNetwork(nn.Module):
 
         sequence = [
             nn.Conv2d(
-                number_of_input_channels, number_of_filters, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2, True)
+                number_of_input_channels,
+                number_of_filters,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+            ),
+            nn.LeakyReLU(0.2, True),
         ]
 
         in_channels = number_of_filters
@@ -124,20 +138,28 @@ class EvaluatorNetwork(nn.Module):
 
             sequence += [
                 nn.Conv2d(
-                    in_channels, out_channels, kernel_size=4, stride=2, padding=1, bias=use_bias),
+                    in_channels,
+                    out_channels,
+                    kernel_size=4,
+                    stride=2,
+                    padding=1,
+                    bias=use_bias,
+                ),
                 norm_layer(out_channels),
-                nn.LeakyReLU(0.2, True)
+                nn.LeakyReLU(0.2, True),
             ]
 
             in_channels = out_channels
-        kernel_size_width = width // 2**number_of_conv_layers
-        kernel_size_height = height // 2**number_of_conv_layers
+        kernel_size_width = width // 2 ** number_of_conv_layers
+        kernel_size_height = height // 2 ** number_of_conv_layers
         sequence += [nn.AvgPool2d(kernel_size=(kernel_size_height, kernel_size_width))]
 
         if num_output_channels is None:
             num_output_channels = width
         sequence += [
-            nn.Conv2d(in_channels, num_output_channels, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(
+                in_channels, num_output_channels, kernel_size=1, stride=1, padding=0
+            )
         ]
 
         if use_sigmoid:
@@ -163,8 +185,9 @@ class EvaluatorNetwork(nn.Module):
         return self.model(spectral_map_and_mask_embedding).squeeze(3).squeeze(2)
 
 
-def test_evaluator(height, width, number_of_filters, number_of_conv_layers, use_sigmoid,
-                   mask_embed_dim):
+def test_evaluator(
+    height, width, number_of_filters, number_of_conv_layers, use_sigmoid, mask_embed_dim
+):
     batch = 4
 
     image = torch.rand(batch, 2, height, width)
@@ -181,27 +204,30 @@ def test_evaluator(height, width, number_of_filters, number_of_conv_layers, use_
         number_of_conv_layers=number_of_conv_layers,
         use_sigmoid=use_sigmoid,
         width=width,
-        mask_embed_dim=mask_embed_dim)
+        mask_embed_dim=mask_embed_dim,
+    )
     output = evaluator(image, mask_embedding)
-    print('evaluator output shape :', output.shape)
+    print("evaluator output shape :", output.shape)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
-    print('DICOM :')
+    print("DICOM :")
     test_evaluator(
         height=128,
         width=128,
         number_of_filters=256,
         number_of_conv_layers=4,
         use_sigmoid=False,
-        mask_embed_dim=6)
+        mask_embed_dim=6,
+    )
 
-    print('RAW:')
+    print("RAW:")
     test_evaluator(
         height=640,
         width=368,
         number_of_filters=64,
         number_of_conv_layers=5,
         use_sigmoid=False,
-        mask_embed_dim=0)
+        mask_embed_dim=0,
+    )

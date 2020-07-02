@@ -17,19 +17,21 @@ import util.rl.utils
 
 
 def get_experiment_str(options_):
-    if options_.policy == 'dqn':
+    if options_.policy == "dqn":
         if options_.dqn_only_test:
-            policy_str = 'eval'
+            policy_str = "eval"
         else:
-            policy_str = f'{options_.obs_type}.tupd{options_.target_net_update_freq}.' \
-                f'bs{options_.rl_batch_size}.' \
-                f'edecay{options_.epsilon_decay}.gamma{options_.gamma}.' \
-                f'lr{options_.dqn_learning_rate}.repbuf{options_.replay_buffer_size}' \
-                f'norepl{int(options_.no_replacement_policy)}.nimgtr{options_.num_train_images}.' \
-                f'metric{options_.reward_metric}.usescoasrew{int(options_.use_score_as_reward)}'
+            policy_str = (
+                f"{options_.obs_type}.tupd{options_.target_net_update_freq}."
+                f"bs{options_.rl_batch_size}."
+                f"edecay{options_.epsilon_decay}.gamma{options_.gamma}."
+                f"lr{options_.dqn_learning_rate}.repbuf{options_.replay_buffer_size}"
+                f"norepl{int(options_.no_replacement_policy)}.nimgtr{options_.num_train_images}."
+                f"metric{options_.reward_metric}.usescoasrew{int(options_.use_score_as_reward)}"
+            )
     else:
         policy_str = options_.policy
-    return f'{policy_str}_bu{options_.budget}_seed{options_.seed}_neptest{options_.num_test_images}'
+    return f"{policy_str}_bu{options_.budget}_seed{options_.seed}_neptest{options_.num_test_images}"
 
 
 # Not a great policy specification protocol, but works for now.
@@ -38,22 +40,29 @@ def get_policy(env, writer, logger, options_):
 
     # This options affects how the score is computed by the environment
     # (whether it passes through reconstruction network or not after a new col. is scanned)
-    logger.info(f'Use reconstructions is {options_.use_reconstructions}')
-    if options_.policy == 'random':
+    logger.info(f"Use reconstructions is {options_.use_reconstructions}")
+    if options_.policy == "random":
         policy = util.rl.simple_baselines.RandomPolicy(valid_actions)
-    elif options_.policy == 'lowfirst':
-        policy = util.rl.simple_baselines.NextIndexPolicy(valid_actions, not env.conjugate_symmetry)
-    elif options_.policy == 'random_low_bias':
-        policy = util.rl.simple_baselines.RandomLowBiasPolicy(options_.initial_num_lines_per_side)
-    elif options_.policy == 'one_step_greedy':
+    elif options_.policy == "lowfirst":
+        policy = util.rl.simple_baselines.NextIndexPolicy(
+            valid_actions, not env.conjugate_symmetry
+        )
+    elif options_.policy == "random_low_bias":
+        policy = util.rl.simple_baselines.RandomLowBiasPolicy(
+            options_.initial_num_lines_per_side
+        )
+    elif options_.policy == "one_step_greedy":
         policy = util.rl.simple_baselines.OneStepGreedy(
-            env, options_.reward_metric, max_actions_to_eval=options_.greedy_max_num_actions)
-    elif 'evaluator_net' in options_.policy:
-        assert options_.obs_type == 'image_space'
+            env,
+            options_.reward_metric,
+            max_actions_to_eval=options_.greedy_max_num_actions,
+        )
+    elif "evaluator_net" in options_.policy:
+        assert options_.obs_type == "image_space"
         # At the moment, Evaluator gets valid actions in a mask - preprocess data function.
         # So, no need to pass `valid_actions`
         policy = util.rl.simple_baselines.EvaluatorNetwork(env)
-    elif 'dqn' in options_.policy:
+    elif "dqn" in options_.policy:
         assert options_.obs_to_numpy
         dqn_trainer = util.rl.dqn.DQNTrainer(options_, env, writer, logger)
         dqn_trainer()
@@ -67,16 +76,16 @@ def get_policy(env, writer, logger, options_):
 def main(options_, logger):
     writer = tensorboardX.SummaryWriter(options_.checkpoints_dir, flush_secs=60)
     env = rl_env.ReconstructionEnv(options_)
-    options_.mask_embedding_dim = env.metadata['mask_embed_dim']
+    options_.mask_embedding_dim = env.metadata["mask_embed_dim"]
     options_.image_width = env.image_width
     env.set_training()
     policy = get_policy(env, writer, logger, options_)  # Trains if necessary
-    logger.info(f'Created environment with {env.action_space.n} actions')
+    logger.info(f"Created environment with {env.action_space.n} actions")
     env.set_testing()
     util.rl.utils.test_policy(env, policy, writer, logger, 0, options_)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Reading options
     opts = options.rl_options.RLOptions().parse()
 
@@ -84,8 +93,8 @@ if __name__ == '__main__':
     np.random.seed(opts.seed)
     torch.manual_seed(opts.seed)
 
-    if opts.policy == 'dqn' and opts.dqn_only_test:
-        opts.checkpoints_dir = os.path.join(opts.checkpoints_dir, 'test')
+    if opts.policy == "dqn" and opts.dqn_only_test:
+        opts.checkpoints_dir = os.path.join(opts.checkpoints_dir, "test")
     else:
         experiment_str = get_experiment_str(opts)
         opts.checkpoints_dir = os.path.join(opts.checkpoints_dir, experiment_str)
@@ -97,22 +106,24 @@ if __name__ == '__main__':
     logger_.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(os.path.join(opts.checkpoints_dir, 'train.log'))
+    fh = logging.FileHandler(os.path.join(opts.checkpoints_dir, "train.log"))
     fh.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s: %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(threadName)s - %(levelname)s: %(message)s"
+    )
     ch.setFormatter(formatter)
     fh.setFormatter(formatter)
     logger_.addHandler(ch)
     logger_.addHandler(fh)
 
-    logger_.info(f'Results will be saved at {opts.checkpoints_dir}.')
+    logger_.info(f"Results will be saved at {opts.checkpoints_dir}.")
 
-    logger_.info('Creating RL acquisition run with the following options:')
+    logger_.info("Creating RL acquisition run with the following options:")
     for key, value in vars(opts).items():
-        if key == 'device':
+        if key == "device":
             value = value.type
-        elif key == 'gpu_ids':
-            value = 'cuda : ' + str(value) if torch.cuda.is_available() else 'cpu'
+        elif key == "gpu_ids":
+            value = "cuda : " + str(value) if torch.cuda.is_available() else "cpu"
         logger_.info(f"    {key:>25}: {'None' if value is None else value:<30}")
 
     main(opts, logger_)

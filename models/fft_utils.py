@@ -77,7 +77,7 @@ def center_crop(x, shape):
 
 
 def to_magnitude(tensor):
-    tensor = (tensor[:, 0, :, :]**2 + tensor[:, 1, :, :]**2)**.5
+    tensor = (tensor[:, 0, :, :] ** 2 + tensor[:, 1, :, :] ** 2) ** 0.5
     return tensor.unsqueeze(1)
 
 
@@ -88,7 +88,7 @@ def dicom_to_0_1_range(tensor):
 def gaussian_nll_loss(reconstruction, target, logvar, options):
     reconstruction = to_magnitude(reconstruction)
     target = to_magnitude(target)
-    if options.dataroot == 'KNEE_RAW':
+    if options.dataroot == "KNEE_RAW":
         reconstruction = center_crop(reconstruction, [320, 320])
         target = center_crop(target, [320, 320])
         logvar = center_crop(logvar, [320, 320])
@@ -104,14 +104,18 @@ def gaussian_nll_loss(reconstruction, target, logvar, options):
 def preprocess_inputs(batch, dataroot, device, prev_reconstruction=None):
     mask = batch[0].to(device)
     target = batch[1].to(device)
-    if dataroot == 'KNEE_RAW':
+    if dataroot == "KNEE_RAW":
         k_space = batch[2].permute(0, 3, 1, 2).to(device)
         # alter mask to always include the highest frequencies that include padding
         mask = torch.where(
-            to_magnitude(k_space).sum(2).unsqueeze(2) == 0.,
-            torch.tensor(1.).to(device), mask)
+            to_magnitude(k_space).sum(2).unsqueeze(2) == 0.0,
+            torch.tensor(1.0).to(device),
+            mask,
+        )
         if prev_reconstruction is None:
-            masked_true_k_space = torch.where(mask.byte(), k_space, torch.tensor(0.).to(device))
+            masked_true_k_space = torch.where(
+                mask.byte(), k_space, torch.tensor(0.0).to(device)
+            )
         else:
             prev_reconstruction = prev_reconstruction.clone()
             prev_reconstruction[:, :, :160, :] = 0
@@ -125,7 +129,9 @@ def preprocess_inputs(batch, dataroot, device, prev_reconstruction=None):
     else:
         fft_target = fft(target)
         if prev_reconstruction is None:
-            masked_true_k_space = torch.where(mask.byte(), fft_target, torch.tensor(0.).to(device))
+            masked_true_k_space = torch.where(
+                mask.byte(), fft_target, torch.tensor(0.0).to(device)
+            )
         else:
             ft_x = fft(prev_reconstruction)
             masked_true_k_space = torch.where(mask.byte(), fft_target, ft_x)
@@ -136,13 +142,14 @@ def preprocess_inputs(batch, dataroot, device, prev_reconstruction=None):
 
 
 class GANLossKspace(nn.Module):
-
-    def __init__(self,
-                 use_lsgan=True,
-                 use_mse_as_energy=False,
-                 grad_ctx=False,
-                 gamma=100,
-                 options=None):
+    def __init__(
+        self,
+        use_lsgan=True,
+        use_mse_as_energy=False,
+        grad_ctx=False,
+        gamma=100,
+        options=None,
+    ):
         super(GANLossKspace, self).__init__()
         # self.register_buffer('real_label', torch.ones(imSize, imSize))
         # self.register_buffer('fake_label', torch.zeros(imSize, imSize))
@@ -170,16 +177,15 @@ class GANLossKspace(nn.Module):
                     target_tensor[:] = degree
             else:
                 pred, gt = pred_and_gt
-                if self.options.dataroot == 'KNEE_RAW':
+                if self.options.dataroot == "KNEE_RAW":
                     gt = center_crop(gt, [368, 320])
                     pred = center_crop(pred, [368, 320])
                 w = gt.shape[2]
                 ks_gt = fft(gt, normalized=True)
                 ks_input = fft(pred, normalized=True)
-                ks_row_mse = F.mse_loss(
-                    ks_input, ks_gt, reduce=False).sum(
-                        1, keepdim=True).sum(
-                            2, keepdim=True).squeeze() / (2 * w)
+                ks_row_mse = F.mse_loss(ks_input, ks_gt, reduce=False).sum(
+                    1, keepdim=True
+                ).sum(2, keepdim=True).squeeze() / (2 * w)
                 energy = torch.exp(-ks_row_mse * self.gamma)
 
                 target_tensor[:] = energy
@@ -189,18 +195,25 @@ class GANLossKspace(nn.Module):
                 target_tensor[i, idx] = 1
         return target_tensor
 
-    def __call__(self, input, target_is_real, mask, degree=1, updateG=False, pred_and_gt=None):
+    def __call__(
+        self, input, target_is_real, mask, degree=1, updateG=False, pred_and_gt=None
+    ):
         # input [B, imSize]
         # degree is the realistic degree of output
         # set updateG to True when training G.
-        target_tensor = self.get_target_tensor(input, target_is_real, degree, mask, pred_and_gt)
+        target_tensor = self.get_target_tensor(
+            input, target_is_real, degree, mask, pred_and_gt
+        )
         b, w = target_tensor.shape
         if updateG and not self.grad_ctx:
             mask_ = mask.squeeze()
             # maskout the observed part loss
-            masked_input = torch.where((1 - mask_).byte(), input, torch.tensor(0.).to(input.device))
-            masked_target = torch.where((1 - mask_).byte(), target_tensor,
-                                        torch.tensor(0.).to(input.device))
+            masked_input = torch.where(
+                (1 - mask_).byte(), input, torch.tensor(0.0).to(input.device)
+            )
+            masked_target = torch.where(
+                (1 - mask_).byte(), target_tensor, torch.tensor(0.0).to(input.device)
+            )
             return self.loss(masked_input, masked_target) / (1 - mask_).sum()
         else:
             return self.loss(input, target_tensor) / (b * w)
