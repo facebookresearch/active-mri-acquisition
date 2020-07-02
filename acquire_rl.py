@@ -10,7 +10,6 @@ import torch
 import options.rl_options
 import rl_env
 import util.rl.dqn
-import util.rl.evaluator_plus_plus
 import util.rl.replay_buffer
 import util.rl.simple_baselines
 import util.rl.utils

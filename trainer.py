@@ -27,7 +27,6 @@ from options.train_options import TrainOptions
 from util import util
 
 
-# TODO: Set image width option automatically according to dataset
 def run_validation_and_update_best_checkpoint(
     engine: ignite.engine.Engine,
     val_engine: ignite.engine.Engine = None,
@@ -35,7 +34,6 @@ def run_validation_and_update_best_checkpoint(
     val_loader: torch.utils.data.DataLoader = None,
     trainer: "Trainer" = None,
 ):
-    # TODO: take argument for which metric to use as score for checkpointing. Using MSE for now
     val_engine.run(val_loader)
     metrics = val_engine.state.metrics
     if trainer.options.use_evaluator:
