@@ -5,12 +5,11 @@ import torch.nn as nn
 from .fft_utils import ifft, fft
 
 
-# TODO: can we use this inside the model? Can we simplify this block?
-# TODO: do we need functools?
 def get_norm_layer(norm_type="instance"):
     if norm_type == "batch":
         norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
     elif norm_type == "instance":
+        # TODO what should we do about this?
         # norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=True)
         # (was in the Original) We do not need to learn it. So we can use evaluation mode for
         # testing and Dropout is appliable easily
@@ -144,7 +143,6 @@ class ReconstructorNetwork(nn.Module):
 
         # Architecture for the Cascade Blocks
         for iii in range(1, self.number_of_cascade_blocks + 1):
-            # TODO : may be clean up the local model variables
 
             # Encoder for iii_th cascade block
             encoder = [
