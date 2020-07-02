@@ -6,9 +6,9 @@ import numpy as np
 
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from .dicom_data_loader import DicomDataTransform, Slice
-from .raw_data_loader import RawDataTransform, RawSliceData
-from .masking_utils import get_mask_func
+from dicom_data_loader import DicomDataTransform, Slice
+from raw_data_loader import RawDataTransform, RawSliceData
+from masking_utils import get_mask_func
 
 
 def get_train_valid_loader(

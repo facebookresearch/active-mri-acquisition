@@ -1,12 +1,10 @@
-import importlib
-from .base_data_loader import get_train_valid_loader, get_test_loader
-from data.base_dataset import BaseDataset
+import base_data_loader
 
 
 def create_data_loaders(options, is_test=False):
 
     if not is_test:
-        train_loader, valid_loader = get_train_valid_loader(
+        train_loader, valid_loader = base_data_loader.get_train_valid_loader(
             batch_size=options.batchSize,
             num_workers=options.nThreads,
             pin_memory=True,
@@ -18,7 +16,7 @@ def create_data_loaders(options, is_test=False):
         )
         return train_loader, valid_loader
     else:
-        test_loader = get_test_loader(
+        test_loader = base_data_loader.get_test_loader(
             batch_size=options.batchSize,
             num_workers=0,
             pin_memory=True,

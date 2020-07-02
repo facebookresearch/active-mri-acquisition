@@ -113,7 +113,7 @@ class RawDataTransform:
         kspace = ifftshift(kspace, dim=(0, 1))
         image = torch.ifft(kspace, 2, normalized=False)
         image = ifftshift(image, dim=(0, 1))
-        norm = torch.sqrt(image[..., 0] ** 2 + image[..., 1] ** 2).max()
+        # norm = torch.sqrt(image[..., 0] ** 2 + image[..., 1] ** 2).max()
         # 5.637766165023095e-08, 7.072103529760345e-07, 5.471710210258607e-06
         # normalize by the mean norm of training images.
         image /= 7.072103529760345e-07
