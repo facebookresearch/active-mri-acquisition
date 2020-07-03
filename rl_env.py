@@ -1,12 +1,12 @@
 import argparse
 import logging
 import os
-from enum import Enum
 
+import gym
 import gym.spaces
 import numpy as np
 import torch
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import data
 import models.evaluator
@@ -16,6 +16,14 @@ import util.util
 import util.rl.utils
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+RAW_IMG_HEIGHT = 640
+RAW_IMG_WIDTH = 368
+DICOM_IMG_HEIGHT = 128
+DICOM_IMG_WIDTH = 128
+START_PADDING_RAW = 166
+END_PADDING_RAW = 202
+RAW_CENTER_CROP_SIZE = 320
 
 
 def load_checkpoint(
@@ -29,13 +37,8 @@ def load_checkpoint(
     return None
 
 
-class ReconstructionEnv:
+class ReconstructionEnv(gym.Env):
     """ RL environment representing the active acquisition process with reconstruction model. """
-
-    class DataMode(Enum):
-        TRAIN = 1
-        TEST = 2
-        TEST_ON_TRAIN = 3
 
     def __init__(self, options: argparse.Namespace):
         """Creates a new environment.
@@ -54,8 +57,12 @@ class ReconstructionEnv:
         """
         self.options = options
         self.options.device = device
-        self.image_height = 640 if options.dataroot == "KNEE_RAW" else 128
-        self.image_width = 368 if options.dataroot == "KNEE_RAW" else 128
+        self.image_height = (
+            RAW_IMG_HEIGHT if options.dataroot == "KNEE_RAW" else DICOM_IMG_HEIGHT
+        )
+        self.image_width = (
+            RAW_IMG_WIDTH if options.dataroot == "KNEE_RAW" else DICOM_IMG_WIDTH
+        )
         self.conjugate_symmetry = options.dataroot != "KNEE_RAW"
 
         self.options.rnl_params = (
@@ -67,11 +74,6 @@ class ReconstructionEnv:
         test_loader = data.create_data_loaders(options, is_test=True)
 
         self._dataset_train = train_loader.dataset
-        self.split_names = {
-            ReconstructionEnv.DataMode.TRAIN: "train",
-            ReconstructionEnv.DataMode.TEST: "test",
-            ReconstructionEnv.DataMode.TEST_ON_TRAIN: "test_on_train",
-        }
         if options.test_set == "train":
             self._dataset_test = train_loader.dataset
         elif options.test_set == "val":
@@ -100,7 +102,7 @@ class ReconstructionEnv:
             self._test_order = np.roll(self._test_order, -self.options.test_set_shift)
         self._image_idx_test = 0
         self._image_idx_train = 0
-        self.data_mode = ReconstructionEnv.DataMode.TRAIN
+        self.data_mode = "train"
 
         reconstructor_checkpoint = load_checkpoint(
             options.reconstructor_dir, "best_checkpoint.pth"
@@ -169,7 +171,7 @@ class ReconstructionEnv:
                 ].number_of_evaluator_convolution_layers,
                 use_sigmoid=False,
                 width=evaluator_checkpoint["options"].image_width,
-                height=640 if options.dataroot == "KNEE_RAW" else None,
+                height=RAW_IMG_HEIGHT if options.dataroot == "KNEE_RAW" else None,
                 mask_embed_dim=evaluator_checkpoint["options"].mask_embed_dim,
             )
             logging.info(f"Loaded evaluator from checkpoint.")
@@ -211,8 +213,8 @@ class ReconstructionEnv:
             # TODO: do we want to change the fixed numbers below or not?
             invalid_actions = list(
                 range(
-                    166 - self.options.initial_num_lines_per_side,
-                    202 - self.options.initial_num_lines_per_side,
+                    START_PADDING_RAW - self.options.initial_num_lines_per_side,
+                    END_PADDING_RAW - self.options.initial_num_lines_per_side,
                     1,
                 )
             )
@@ -269,17 +271,13 @@ class ReconstructionEnv:
         return reconstruction, mask_embed, mask_to_use
 
     def set_testing(self, use_training_set=False, reset_index=True):
-        self.data_mode = (
-            ReconstructionEnv.DataMode.TEST_ON_TRAIN
-            if use_training_set
-            else ReconstructionEnv.DataMode.TEST
-        )
+        self.data_mode = "test_on_train" if use_training_set else "test"
         if reset_index:
             self._image_idx_test = 0
         self._max_cols_cutoff = self.options.test_num_cols_cutoff
 
     def set_training(self, reset_index=False):
-        self.data_mode = ReconstructionEnv.DataMode.TRAIN
+        self.data_mode = "train"
         if reset_index:
             self._image_idx_train = 0
         self._max_cols_cutoff = None
@@ -292,8 +290,12 @@ class ReconstructionEnv:
         reconstruction = models.fft_utils.to_magnitude(reconstruction)
         ground_truth = models.fft_utils.to_magnitude(ground_truth)
         if is_raw:  # crop data
-            reconstruction = models.fft_utils.center_crop(reconstruction, [320, 320])
-            ground_truth = models.fft_utils.center_crop(ground_truth, [320, 320])
+            reconstruction = models.fft_utils.center_crop(
+                reconstruction, [RAW_CENTER_CROP_SIZE, RAW_CENTER_CROP_SIZE]
+            )
+            ground_truth = models.fft_utils.center_crop(
+                ground_truth, [RAW_CENTER_CROP_SIZE, RAW_CENTER_CROP_SIZE]
+            )
 
         mse = util.util.compute_mse(reconstruction, ground_truth)
         nmse = util.util.compute_nmse(reconstruction, ground_truth)
@@ -333,7 +335,9 @@ class ReconstructionEnv:
         else:
             num_active_cols = len(obs["mask"].nonzero())
         if self.options.dataroot == "KNEE_RAW":
-            num_active_cols -= 36  # remove count of padding cols
+            num_active_cols -= (
+                END_PADDING_RAW - START_PADDING_RAW
+            )  # remove count of padding cols
         return num_active_cols
 
     def compute_score(
@@ -444,7 +448,7 @@ class ReconstructionEnv:
             `self._{train/test}_order`.
         """
         info = {}
-        if self.data_mode == ReconstructionEnv.DataMode.TEST:
+        if self.data_mode == "test":
             if self._image_idx_test == min(
                 self.num_test_images, len(self._dataset_test)
             ):
@@ -456,7 +460,7 @@ class ReconstructionEnv:
         else:
             set_order = self._train_order
             dataset = self._dataset_train
-            if self.data_mode == ReconstructionEnv.DataMode.TEST_ON_TRAIN:
+            if self.data_mode == "test_on_train":
                 if self._image_idx_test == min(
                     self.num_train_images, len(self._dataset_train)
                 ):
@@ -479,7 +483,7 @@ class ReconstructionEnv:
                     self._image_idx_train + 1
                 ) % self.num_train_images
 
-        info["split"] = self.split_names[self.data_mode]
+        info["split"] = self.data_mode
         info["image_idx"] = set_order[set_idx]
         mask_image_raw = dataset.__getitem__(info["image_idx"])
 
@@ -519,7 +523,7 @@ class ReconstructionEnv:
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action
         )
-        if self.data_mode == ReconstructionEnv.DataMode.TRAIN:
+        if self.data_mode == "train":
             image_idx = self._train_order[self._image_idx_train]
             if image_idx not in self.mask_dict.keys():
                 self.mask_dict[image_idx] = np.zeros(
@@ -571,6 +575,7 @@ class ReconstructionEnv:
                 mask_embedding,
                 obs["mask"] if self.options.add_mask_eval else None,
             )
+            # Just fill chosen actions with some very large number to prevent from selecting again.
             k_space_scores.masked_fill_(obs["mask"].to(device).squeeze().byte(), 100000)
             return (
                 torch.argmin(k_space_scores).item()
@@ -579,3 +584,6 @@ class ReconstructionEnv:
 
     def _reset_saved_masks_dict(self):
         self.mask_dict.clear()
+
+    def render(self, mode="human"):
+        pass
