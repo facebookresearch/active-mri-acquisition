@@ -1,4 +1,4 @@
-import base_options
+from . import base_options
 
 
 class RLOptions(base_options.BaseOptions):
