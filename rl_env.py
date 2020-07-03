@@ -13,7 +13,6 @@ import models.evaluator
 import models.fft_utils
 import models.reconstruction
 import util.util
-import util.rl.reconstructor_rl_trainer
 import util.rl.utils
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -236,12 +235,6 @@ class ReconstructionEnv:
         self.mask_dict = {}
         self.epoch_count_callback = None
         self.epoch_frequency_callback = None
-        self.reconstructor_trainer = util.rl.reconstructor_rl_trainer.ReconstructorRLTrainer(
-            self._reconstructor,
-            self._dataset_train,
-            self.options,
-            self.update_reconstructor_from_alt_opt,
-        )
 
         # Pre-compute reward normalization if necessary
         if options.normalize_rewards_on_val:
@@ -621,48 +614,5 @@ class ReconstructionEnv:
         logging.info(f"    mean: {self._reference_mean_for_reward}")
         logging.info(f"std: {self._reference_std_for_reward}")
 
-    def retrain_reconstructor(self, logger, writer):
-        logger.info(
-            f"Training reconstructor for {self.options.num_epochs_train_reconstructor} epochs"
-        )
-        del self._current_mask
-        del self._ground_truth
-        self._initial_mask = self._initial_mask.to("cpu")
-        self._reconstructor.to(torch.device("cpu"))
-        torch.cuda.empty_cache()
-        # `reconstructor_trainer` will perform updates on its own `DataParallel` copy of the
-        # reconstructor, and update the env's reconstructor every time a best validation score
-        # is achieved (by calling `ReconstructionEnv.update_reconstructor_from_alt_opt()`)
-        epochs_performed = self.reconstructor_trainer(
-            self._start_epoch_for_alt_opt, self.mask_dict, logger, writer
-        )
-        self._start_epoch_for_alt_opt += epochs_performed
-        self._reconstructor.to(device)
-        self._initial_mask = self._initial_mask.to(device)
-
-        logger.info("Done training reconstructor")
-        self._reset_saved_masks_dict()  # Reset mask dictionary for next epoch
-
-    def update_reconstructor_from_alt_opt(
-        self,
-        trained_reconstructor: models.reconstruction.ReconstructorNetwork,
-        epoch: int,
-    ):
-        self._reconstructor.load_state_dict(
-            {
-                key.replace("module.", ""): val
-                for key, val in trained_reconstructor.state_dict().items()
-            }
-        )
-        torch.save(
-            {"state_dict": self._reconstructor.state_dict(), "epoch": epoch},
-            os.path.join(self.options.checkpoints_dir, "best_alt_opt_reconstructor.pt"),
-        )
-
     def _reset_saved_masks_dict(self):
         self.mask_dict.clear()
-
-    def set_epoch_finished_callback(self, callback: Callable, frequency: int):
-        # Every frequency number of epochs, the callback function will be called
-        self.epoch_count_callback = callback
-        self.epoch_frequency_callback = frequency

@@ -15,6 +15,7 @@ class RLOptions(base_options.BaseOptions):
             "--obs_type",
             choices=["fourier_space", "image_space", "only_mask"],
             default="image_space",
+            help="Determines the observation to pass to the agent.",
         )
         parser.add_argument("--obs_to_numpy", action="store_true")
         parser.add_argument(
@@ -60,7 +61,6 @@ class RLOptions(base_options.BaseOptions):
         )
         parser.add_argument("--reward_scaling", type=float, default=100)
         parser.add_argument("--debug", dest="debug", action="store_true")
-        parser.add_argument("--job_name", type=str, default="active_acq")
         parser.add_argument("--seed", type=int, default=0)
         parser.add_argument("--freq_save_test_stats", type=int, default=500)
         parser.add_argument(
@@ -74,6 +74,9 @@ class RLOptions(base_options.BaseOptions):
             "--train_with_fixed_initial_mask",
             dest="train_with_fixed_initial_mask",
             action="store_true",
+            help="If true, episodes start with a mask that has fixed number of low frequencies, "
+            "as indicated by --initial_num_lines_per_side. Otherwise, the initial masks are "
+            "sampled randomly. See --rnl_params for description.",
         )
         parser.add_argument(
             "--mask_type",
@@ -88,35 +91,40 @@ class RLOptions(base_options.BaseOptions):
                 "symmetric_basic_rnl",
                 "low_to_high_rnl",
             ],
-            help="The type of mask to use as initial state for episodes.",
+            help="The type of mask to use as initial state for episodes. Only useful if "
+            "--train_with_fixed_initial_mask is not set.",
         )
         parser.add_argument(
             "--rnl_params",
             type=str,
             default=None,
-            help="Format is min_lowf_lines,max_lowf_lines,highf_beta_alpha,highf_beta_beta",
+            help="Characterizes the distribution of initial masks (when these are sampled, see "
+            "--train_with_fixed_initial_mask). "
+            "Format is min_lowf_lines,max_lowf_lines,highf_beta_alpha,highf_beta_beta. "
+            "Mask have a random number of low frequency lines active, uniform between "
+            "min_lowf_lines and max_lowf_lines. The remaining number of lines is determined by "
+            "a Beta(highf_beta_alpha, highf_beta_beta) distribution, which indicates the "
+            "proportion of the remaining lines to sample.",
         )
         parser.add_argument(
             "--normalize_rewards_on_val",
             dest="normalize_rewards_on_val",
             action="store_true",
+            help="",
         )
 
         # Options for the simple baselines
-        parser.add_argument("--greedy_max_num_actions", type=int, default=None)
+        parser.add_argument(
+            "--greedy_max_num_actions",
+            type=int,
+            default=None,
+            help="When using one_step_greedy policy, how many actions to sample per step.",
+        )
         parser.add_argument(
             "--evaluator_dir",
             type=str,
             default=None,
             help="Directory where evaluator is stored.",
-        )
-
-        # Evaluator++ options
-        parser.add_argument(
-            "--evaluator_pp_path",
-            type=str,
-            default=None,
-            help="Full path to the evaluator++ model to use.",
         )
         parser.add_argument(
             "--add_mask_eval",
@@ -190,26 +198,6 @@ class RLOptions(base_options.BaseOptions):
         parser.add_argument(
             "--use_dueling_dqn", dest="use_dueling_dqn", action="store_true"
         )
-
-        # Alternate optimization options
-        parser.add_argument(
-            "--dqn_alternate_opt_per_epoch",
-            dest="dqn_alternate_opt_per_epoch",
-            action="store_true",
-        )
-        parser.add_argument("--num_epochs_train_reconstructor", type=int, default=10)
-        parser.add_argument("--frequency_train_reconstructor", type=int, default=5000)
-        parser.add_argument("--reconstructor_lr", type=float, default=0.00002)
-        parser.add_argument("--alternate_opt_batch_size", type=int, default=40)
-        parser.add_argument(
-            "--num_steps_with_fixed_dqn_params",
-            type=int,
-            default=0,
-            help="If the number of steps is less than this number, then DQN parameters are not "
-            "updated. The exploration epsilon is also held constant during this time",
-        )
-
-        parser.add_argument("--partition", type=str, default="learnfair")
 
         return parser
 
