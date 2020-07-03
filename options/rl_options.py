@@ -131,10 +131,21 @@ class RLOptions(base_options.BaseOptions):
             "--dqn_model_type",
             choices=["basic", "evaluator", "simple_mlp"],
             default="evaluator",
+            help="The architecture to use for DQN. <basic> consists of convolutional layers "
+            "followed by fully connected layers. <evaluator> is based on the evaluator "
+            "baseline. <simple_mlp> consists of a few fully connected layers.",
         )
-        parser.add_argument("--no_dqn_resume", dest="dqn_resume", action="store_false")
         parser.add_argument(
-            "--dqn_normalize", dest="dqn_normalize", action="store_true"
+            "--no_dqn_resume",
+            dest="dqn_resume",
+            action="store_false",
+            help="If passed, any existing DQN checkpoints will be ignored.",
+        )
+        parser.add_argument(
+            "--dqn_normalize",
+            dest="dqn_normalize",
+            action="store_true",
+            help="Whether observations should be normalized by the replay buffer or not.",
         )
         parser.add_argument(
             "--dqn_only_test",
@@ -188,9 +199,17 @@ class RLOptions(base_options.BaseOptions):
             dest="no_replacement_policy",
             action="store_false",
         )
-        parser.add_argument("--freq_dqn_checkpoint_save", type=int, default=200)
         parser.add_argument(
-            "--use_dueling_dqn", dest="use_dueling_dqn", action="store_true"
+            "--freq_dqn_checkpoint_save",
+            type=int,
+            default=200,
+            help="How often the DQN model will be saved (in number of episodes).",
+        )
+        parser.add_argument(
+            "--use_dueling_dqn",
+            dest="use_dueling_dqn",
+            action="store_true",
+            help="Whether to use Dueling networks or not.",
         )
 
         return parser

@@ -56,14 +56,7 @@ def save_statistics_and_actions(statistics, all_actions, episode, logger, option
 
 
 def test_policy(
-    env,
-    policy,
-    writer,
-    logger,
-    step,
-    options_,
-    test_on_train=False,
-    leave_no_trace=False,
+    env, policy, writer, logger, step, options_, test_on_train=False, silent=False,
 ):
     """ Evaluates a given policy for the environment on the test set. """
     env.set_testing(use_training_set=test_on_train)
@@ -86,7 +79,7 @@ def test_policy(
         obs, _ = env.reset(start_with_initial_mask=True)
         policy.init_episode()
         if obs is None:
-            if not leave_no_trace:
+            if not silent:
                 save_statistics_and_actions(
                     statistics, all_actions, episode, logger, options_
                 )
@@ -127,7 +120,7 @@ def test_policy(
             update_statistics(reconstruction_results, episode_step, statistics)
         all_actions.append(episode_actions)
         all_auc.append(sklearn.metrics.auc(episode_accelerations, episode_scores))
-        if not leave_no_trace:
+        if not silent:
             logger.debug(
                 "Actions and reward: {}, {}".format(
                     episode_actions, total_reward_episode
@@ -135,18 +128,18 @@ def test_policy(
             )
         if (
             not test_on_train
-            and not leave_no_trace
+            and not silent
             and (episode % options_.freq_save_test_stats == 0)
         ):
             save_statistics_and_actions(
                 statistics, all_actions, episode, logger, options_
             )
     end = time.time()
-    if not leave_no_trace:
+    if not silent:
         logger.debug("Test run lasted {} seconds.".format(end - start))
     test_score = np.mean(all_auc)
     split = "train" if test_on_train else "test"
-    if not leave_no_trace:
+    if not silent:
         writer.add_scalar(
             f"eval/{split}_score__{options_.reward_metric}_auc", test_score, step
         )
