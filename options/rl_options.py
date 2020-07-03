@@ -1,9 +1,9 @@
-from .base_options import BaseOptions
+import base_options
 
 
-class RLOptions(BaseOptions):
+class RLOptions(base_options.BaseOptions):
     def initialize(self, parser):
-        parser = BaseOptions.initialize(self, parser)
+        parser = base_options.BaseOptions.initialize(self, parser)
         # Environment options
         parser.add_argument(
             "--reconstructor_dir",

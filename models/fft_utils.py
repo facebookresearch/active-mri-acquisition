@@ -1,9 +1,6 @@
 import torch
-
-# note that for IFFT we do not use irfft
-# this function returns two channels where the first one (real part) is in image space
-from torch import nn as nn
-from torch.nn import functional as F
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 def roll(x, shift, dim):
@@ -20,6 +17,8 @@ def roll(x, shift, dim):
     return torch.cat((right, left), dim=dim)
 
 
+# note that for IFFT we do not use irfft
+# this function returns two channels where the first one (real part) is in image space
 def ifftshift(x, dim=None):
     if dim is None:
         dim = tuple(range(x.dim()))

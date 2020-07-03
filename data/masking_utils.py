@@ -1,7 +1,6 @@
 import logging
 import numpy as np
 import torch
-from torch.utils.data import RandomSampler
 
 
 def get_mask_func(mask_type, which_dataset, rnl_params=None):
@@ -52,16 +51,6 @@ def get_mask_func(mask_type, which_dataset, rnl_params=None):
             [], [], which_dataset, random_num_lines=True, rnl_params=rnl_params
         )
     raise ValueError(f"Invalid mask type: {mask_type}.")
-
-
-class FixedOrderRandomSampler(RandomSampler):
-    def __init__(self, data_source):
-        super().__init__(data_source)
-        n = len(self.data_source)
-        self.rand_order = torch.randperm(n).tolist()
-
-    def __iter__(self):
-        return iter(self.rand_order)
 
 
 class MaskFunc:

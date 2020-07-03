@@ -6,6 +6,7 @@ import tempfile
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+import torch.utils.data
 
 from ignite.contrib.handlers import ProgressBar
 from ignite.engine import Engine, Events

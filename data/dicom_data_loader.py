@@ -3,13 +3,12 @@ import os
 
 import numpy as np
 import torch
-
-from torch.utils.data import Dataset
+import torch.utils.data
 
 import models.fft_utils
 
 
-class Slice(Dataset):
+class Slice(torch.utils.data.Dataset):
     def __init__(
         self,
         transform,

@@ -1,14 +1,13 @@
 import pathlib
 import os
 
-import torch
 import numpy as np
+import torch
+import torch.utils.data
 
-from torch.utils.data.sampler import SubsetRandomSampler
-
-from dicom_data_loader import DicomDataTransform, Slice
-from raw_data_loader import RawDataTransform, RawSliceData
-from masking_utils import get_mask_func
+import dicom_data_loader
+import raw_data_loader
+import masking_utils
 
 
 def get_train_valid_loader(
@@ -23,12 +22,14 @@ def get_train_valid_loader(
 ):
 
     if which_dataset == "KNEE":
-        mask_func = get_mask_func(mask_type, which_dataset, rnl_params=rnl_params)
+        mask_func = masking_utils.get_mask_func(
+            mask_type, which_dataset, rnl_params=rnl_params
+        )
         dicom_root = pathlib.Path("/checkpoint/jzb/data/mmap")
-        data_transform = DicomDataTransform(
+        data_transform = dicom_data_loader.DicomDataTransform(
             mask_func, fixed_seed=None, seed_per_image=True
         )
-        train_data = Slice(
+        train_data = dicom_data_loader.Slice(
             data_transform,
             dicom_root,
             which="train",
@@ -37,7 +38,7 @@ def get_train_valid_loader(
             num_volumes=num_volumes_train,
             num_rand_slices=None,
         )
-        valid_data = Slice(
+        valid_data = dicom_data_loader.Slice(
             data_transform,
             dicom_root,
             which="val",
@@ -48,23 +49,25 @@ def get_train_valid_loader(
         )
 
     elif which_dataset == "KNEE_RAW":
-        mask_func = get_mask_func(mask_type, which_dataset, rnl_params=rnl_params)
+        mask_func = masking_utils.get_mask_func(
+            mask_type, which_dataset, rnl_params=rnl_params
+        )
         raw_root = "/datasets01/fastMRI/112718"
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + " not exists. Change to the right path.")
-        data_transform = RawDataTransform(
+        data_transform = raw_data_loader.RawDataTransform(
             mask_func, fixed_seed=None, seed_per_image=False
         )
-        train_data = RawSliceData(
+        train_data = raw_data_loader.RawSliceData(
             raw_root + "/singlecoil_train",
             transform=data_transform,
             num_cols=368,
             num_volumes=num_volumes_train,
         )
-        data_transform = RawDataTransform(
+        data_transform = raw_data_loader.RawDataTransform(
             mask_func, fixed_seed=None, seed_per_image=True
         )
-        valid_data = RawSliceData(
+        valid_data = raw_data_loader.RawSliceData(
             raw_root + "/singlecoil_val",
             transform=data_transform,
             num_cols=368,
@@ -111,12 +114,14 @@ def get_test_loader(
     rnl_params=None,
 ):
     if which_dataset in ("KNEE"):
-        mask_func = get_mask_func(mask_type, which_dataset, rnl_params=rnl_params)
+        mask_func = masking_utils.get_mask_func(
+            mask_type, which_dataset, rnl_params=rnl_params
+        )
         dicom_root = pathlib.Path("/checkpoint/jzb/data/mmap")
-        data_transform = DicomDataTransform(
+        data_transform = dicom_data_loader.DicomDataTransform(
             mask_func, fixed_seed=None, seed_per_image=True
         )
-        test_data = Slice(
+        test_data = dicom_data_loader.Slice(
             data_transform,
             dicom_root,
             which="public_leaderboard",
@@ -140,14 +145,16 @@ def get_test_loader(
             drop_last=True,
         )
     elif which_dataset == "KNEE_RAW":
-        mask_func = get_mask_func(mask_type, which_dataset, rnl_params=rnl_params)
+        mask_func = masking_utils.get_mask_func(
+            mask_type, which_dataset, rnl_params=rnl_params
+        )
         raw_root = "/datasets01/fastMRI/112718"
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + " not exists. Change to the right path.")
-        data_transform = RawDataTransform(
+        data_transform = raw_data_loader.RawDataTransform(
             mask_func, fixed_seed=None, seed_per_image=True
         )
-        test_data = RawSliceData(
+        test_data = raw_data_loader.RawSliceData(
             raw_root + "/singlecoil_val",
             transform=data_transform,
             num_cols=368,

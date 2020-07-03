@@ -3,8 +3,7 @@ import pathlib
 import h5py
 import numpy as np
 import torch
-
-from torch.utils.data import Dataset
+import torch.utils.data
 
 
 def ifftshift(x, dim=None):
@@ -43,7 +42,7 @@ def roll(x, shift, dim):
     return torch.cat((right, left), dim=dim)
 
 
-class RawSliceData(Dataset):
+class RawSliceData(torch.utils.data.Dataset):
     def __init__(
         self,
         root,

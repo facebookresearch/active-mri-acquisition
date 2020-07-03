@@ -1,9 +1,9 @@
-from .base_options import BaseOptions
+import base_options
 
 
-class TestOptions(BaseOptions):
+class TestOptions(base_options.BaseOptions):
     def initialize(self, parser):
-        parser = BaseOptions.initialize(self, parser)
+        parser = base_options.BaseOptions.initialize(self, parser)
         parser.add_argument(
             "--ntest", type=int, default=float("inf"), help="# of test examples."
         )

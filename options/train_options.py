@@ -1,9 +1,9 @@
-from .base_options import BaseOptions
+import base_options
 
 
-class TrainOptions(BaseOptions):
+class TrainOptions(base_options.BaseOptions):
     def initialize(self, parser):
-        parser = BaseOptions.initialize(self, parser)
+        parser = base_options.BaseOptions.initialize(self, parser)
         parser.add_argument(
             "--display_freq",
             type=int,

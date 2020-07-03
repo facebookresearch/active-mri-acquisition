@@ -2,7 +2,7 @@ import functools
 import torch
 import torch.nn as nn
 
-from .fft_utils import ifft, fft
+import fft_utils
 
 
 def get_norm_layer(norm_type="instance"):
@@ -245,9 +245,9 @@ class ReconstructorNetwork(nn.Module):
         self.apply(init_func)
 
     def data_consistency(self, x, input, mask):
-        ft_x = fft(x)
+        ft_x = fft_utils.fft(x)
         fuse = (
-            ifft(
+            fft_utils.ifft(
                 torch.where((1 - mask).byte(), ft_x, torch.tensor(0.0).to(ft_x.device))
             )
             + input
