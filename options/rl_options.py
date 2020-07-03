@@ -205,4 +205,8 @@ class RLOptions(base_options.BaseOptions):
         options = super(RLOptions, self).parse()
         options.batchSize = 1
         options.masks_dir = None  # Ignored, only here for compatibility with loader
+        if options.mask_type is None:
+            options.mask_type = (
+                "symmetric_basic_rnl" if options.dataroot == "KNEE" else "basic_rnl"
+            )
         return options
