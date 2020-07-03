@@ -19,3 +19,4 @@ experiments/*
 .idea
 *personal*
 *.orig
+*__pycache__*
