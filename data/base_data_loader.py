@@ -5,9 +5,9 @@ import numpy as np
 import torch
 import torch.utils.data
 
-import dicom_data_loader
-import raw_data_loader
-import masking_utils
+from . import dicom_data_loader
+from . import raw_data_loader
+from . import masking_utils
 
 
 def get_train_valid_loader(

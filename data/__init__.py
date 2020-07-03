@@ -1,4 +1,4 @@
-import base_data_loader
+from . import base_data_loader
 
 
 def create_data_loaders(options, is_test=False):

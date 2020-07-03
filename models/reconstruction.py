@@ -2,17 +2,13 @@ import functools
 import torch
 import torch.nn as nn
 
-import fft_utils
+from . import fft_utils
 
 
 def get_norm_layer(norm_type="instance"):
     if norm_type == "batch":
         norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
     elif norm_type == "instance":
-        # TODO what should we do about this?
-        # norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=True)
-        # (was in the Original) We do not need to learn it. So we can use evaluation mode for
-        # testing and Dropout is appliable easily
         norm_layer = functools.partial(
             nn.InstanceNorm2d, affine=False, track_running_stats=False
         )

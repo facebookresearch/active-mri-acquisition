@@ -2,8 +2,8 @@ import functools
 import torch
 import torch.nn as nn
 
-import fft_utils
-import reconstruction
+from . import fft_utils
+from . import reconstruction
 
 
 class SimpleSequential(nn.Module):

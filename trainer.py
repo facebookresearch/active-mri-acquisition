@@ -14,18 +14,12 @@ from ignite.metrics import Loss
 from tensorboardX import SummaryWriter
 from typing import Any, Dict, Tuple
 
-from data import create_data_loaders
-from models.evaluator import EvaluatorNetwork
-from models.fft_utils import (
-    preprocess_inputs,
-    gaussian_nll_loss,
-    GANLossKspace,
-    to_magnitude,
-    center_crop,
-)
-from models.reconstruction import ReconstructorNetwork
-from options.train_options import TrainOptions
-from util import util
+import data
+import models.evaluator
+import models.fft_utils
+import models.reconstruction
+import options.train_options
+import util.util
 
 
 def run_validation_and_update_best_checkpoint(
@@ -98,14 +92,14 @@ class Trainer:
         self.completed_epochs = 0
         self.updates_performed = 0
 
-        criterion_gan = GANLossKspace(
+        criterion_gan = models.fft_utils.GANLossKspace(
             use_mse_as_energy=options.use_mse_as_disc_energy,
             grad_ctx=options.grad_ctx,
             gamma=options.gamma,
             options=self.options,
         ).to(options.device)
 
-        self.losses = {"GAN": criterion_gan, "NLL": gaussian_nll_loss}
+        self.losses = {"GAN": criterion_gan, "NLL": models.fft_utils.gaussian_nll_loss}
 
         if self.options.only_evaluator:
             self.options.checkpoints_dir = os.path.join(
@@ -133,14 +127,14 @@ class Trainer:
     def get_loaders(
         self,
     ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
-        train_data_loader, val_data_loader = create_data_loaders(self.options)
+        train_data_loader, val_data_loader = data.create_data_loaders(self.options)
         return train_data_loader, val_data_loader
 
     def inference(self, batch):
         self.reconstructor.eval()
 
         with torch.no_grad():
-            zero_filled_image, ground_truth, mask = preprocess_inputs(
+            zero_filled_image, ground_truth, mask = models.fft_utils.preprocess_inputs(
                 batch, self.options.dataroot, self.options.device
             )
 
@@ -159,19 +153,27 @@ class Trainer:
                 ground_truth_eval = self.evaluator(ground_truth, mask_embedding, mask)
 
             # Compute magnitude (for val losses and plots)
-            zero_filled_image_magnitude = to_magnitude(zero_filled_image)
-            reconstructed_image_magnitude = to_magnitude(reconstructed_image)
-            ground_truth_magnitude = to_magnitude(ground_truth)
+            zero_filled_image_magnitude = models.fft_utils.to_magnitude(
+                zero_filled_image
+            )
+            reconstructed_image_magnitude = models.fft_utils.to_magnitude(
+                reconstructed_image
+            )
+            ground_truth_magnitude = models.fft_utils.to_magnitude(ground_truth)
 
             if self.options.dataroot == "KNEE_RAW":  # crop data
-                reconstructed_image_magnitude = center_crop(
+                reconstructed_image_magnitude = models.fft_utils.center_crop(
                     reconstructed_image_magnitude, [320, 320]
                 )
-                ground_truth_magnitude = center_crop(ground_truth_magnitude, [320, 320])
-                zero_filled_image_magnitude = center_crop(
+                ground_truth_magnitude = models.fft_utils.center_crop(
+                    ground_truth_magnitude, [320, 320]
+                )
+                zero_filled_image_magnitude = models.fft_utils.center_crop(
                     zero_filled_image_magnitude, [320, 320]
                 )
-                uncertainty_map = center_crop(uncertainty_map, [320, 320])
+                uncertainty_map = models.fft_utils.center_crop(
+                    uncertainty_map, [320, 320]
+                )
 
             return {
                 "ground_truth": ground_truth,
@@ -230,7 +232,7 @@ class Trainer:
         if not self.options.only_evaluator:
             self.reconstructor.train()
 
-        zero_filled_image, target, mask = preprocess_inputs(
+        zero_filled_image, target, mask = models.fft_utils.preprocess_inputs(
             batch, self.options.dataroot, self.options.device
         )
 
@@ -354,7 +356,7 @@ class Trainer:
             self.logger.info(f"    {key:>25}: {'None' if value is None else value:<30}")
 
         # Create Reconstructor Model
-        self.reconstructor = ReconstructorNetwork(
+        self.reconstructor = models.reconstruction.ReconstructorNetwork(
             number_of_cascade_blocks=self.options.number_of_cascade_blocks,
             n_downsampling=self.options.n_downsampling,
             number_of_filters=self.options.number_of_reconstructor_filters,
@@ -379,7 +381,7 @@ class Trainer:
 
         # Create Evaluator Model
         if self.options.use_evaluator:
-            self.evaluator = EvaluatorNetwork(
+            self.evaluator = models.evaluator.EvaluatorNetwork(
                 number_of_filters=self.options.number_of_evaluator_filters,
                 number_of_conv_layers=self.options.number_of_evaluator_convolution_layers,
                 use_sigmoid=False,
@@ -418,7 +420,7 @@ class Trainer:
         validation_mse.attach(val_engine, name="mse")
 
         validation_ssim = Loss(
-            loss_fn=util.compute_ssims,
+            loss_fn=util.util.compute_ssims,
             output_transform=lambda x: (
                 x["reconstructed_image_magnitude"],
                 x["ground_truth_magnitude"],
@@ -496,27 +498,27 @@ class Trainer:
             difference = torch.abs(ground_truth - reconstructed_image)
 
             # Create plots
-            ground_truth = util.create_grid_from_tensor(ground_truth)
+            ground_truth = util.util.create_grid_from_tensor(ground_truth)
             writer.add_image(
                 "validation_images/ground_truth", ground_truth, self.completed_epochs
             )
 
-            zero_filled_image = util.create_grid_from_tensor(zero_filled_image)
+            zero_filled_image = util.util.create_grid_from_tensor(zero_filled_image)
             writer.add_image(
                 "validation_images/zero_filled_image",
                 zero_filled_image,
                 self.completed_epochs,
             )
 
-            reconstructed_image = util.create_grid_from_tensor(reconstructed_image)
+            reconstructed_image = util.util.create_grid_from_tensor(reconstructed_image)
             writer.add_image(
                 "validation_images/reconstructed_image",
                 reconstructed_image,
                 self.completed_epochs,
             )
 
-            uncertainty_map = util.gray2heatmap(
-                util.create_grid_from_tensor(uncertainty_map.exp()), cmap="jet"
+            uncertainty_map = util.util.gray2heatmap(
+                util.util.create_grid_from_tensor(uncertainty_map.exp()), cmap="jet"
             )
             writer.add_image(
                 "validation_images/uncertainty_map",
@@ -524,13 +526,13 @@ class Trainer:
                 self.completed_epochs,
             )
 
-            difference = util.create_grid_from_tensor(difference)
-            difference = util.gray2heatmap(difference, cmap="gray")
+            difference = util.util.create_grid_from_tensor(difference)
+            difference = util.util.gray2heatmap(difference, cmap="gray")
             writer.add_image(
                 "validation_images/difference", difference, self.completed_epochs
             )
 
-            mask = util.create_grid_from_tensor(
+            mask = util.util.create_grid_from_tensor(
                 val_engine.state.output["mask"].repeat(
                     1, 1, val_engine.state.output["mask"].shape[3], 1
                 )
@@ -554,7 +556,9 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    options_ = TrainOptions().parse()  # TODO: need to clean up options list
+    options_ = (
+        options.train_options.TrainOptions().parse()
+    )  # TODO: need to clean up options list
     options_.device = (
         torch.device("cuda:{}".format(options_.gpu_ids[0]))
         if options_.gpu_ids
