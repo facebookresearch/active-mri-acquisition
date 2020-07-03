@@ -291,7 +291,7 @@ class ReconstructionEnv(gym.Env):
         raise ValueError("Dataset type not understood.")
 
     @staticmethod
-    def _compute_score(
+    def _compute_score_given_tensors(
         reconstruction: torch.Tensor, ground_truth: torch.Tensor, is_raw: bool
     ) -> Dict[str, torch.Tensor]:
         # Compute magnitude (for metrics)
@@ -397,7 +397,7 @@ class ReconstructionEnv(gym.Env):
             if use_reconstruction:  # pass through reconstruction network
                 image, _, _ = self._reconstructor(image, mask_to_use)
         return [
-            ReconstructionEnv._compute_score(
+            ReconstructionEnv._compute_score_given_tensors(
                 img.unsqueeze(0), ground_truth, self.options.dataroot == "KNEE_RAW"
             )
             for img in image
@@ -412,7 +412,7 @@ class ReconstructionEnv(gym.Env):
                 mask_embedding,
                 mask,
             ) = self._get_current_reconstruction_and_mask_embedding()
-            score = ReconstructionEnv._compute_score(
+            score = ReconstructionEnv._compute_score_given_tensors(
                 reconstruction, self._ground_truth, self.options.dataroot == "KNEE_RAW"
             )
 
