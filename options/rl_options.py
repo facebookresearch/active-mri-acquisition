@@ -106,12 +106,6 @@ class RLOptions(base_options.BaseOptions):
             "a Beta(highf_beta_alpha, highf_beta_beta) distribution, which indicates the "
             "proportion of the remaining lines to sample.",
         )
-        parser.add_argument(
-            "--normalize_rewards_on_val",
-            dest="normalize_rewards_on_val",
-            action="store_true",
-            help="",
-        )
 
         # Options for the simple baselines
         parser.add_argument(

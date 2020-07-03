@@ -236,18 +236,6 @@ class ReconstructionEnv:
         self.epoch_count_callback = None
         self.epoch_frequency_callback = None
 
-        # Pre-compute reward normalization if necessary
-        if options.normalize_rewards_on_val:
-            logging.info("Running random policy to get reference point for reward.")
-            random_policy = util.rl.simple_baselines.RandomPolicy(
-                range(self.action_space.n)
-            )
-            _, statistics = util.rl.utils.test_policy(
-                self, random_policy, None, None, 0, self.options, leave_no_trace=True
-            )
-            logging.info("Done computing reference.")
-            self.set_reference_point_for_rewards(statistics)
-
     def _generate_initial_lowf_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
         for i in range(self.options.initial_num_lines_per_side):
@@ -552,14 +540,6 @@ class ReconstructionEnv:
         if self.options.reward_metric == "mse" or self.options.reward_metric == "nmse":
             factor *= -1  # We try to minimize MSE, but DQN maximizes
         reward = -1.0 if has_already_been_scanned else reward_.item() * factor
-
-        # Apply normalization if present
-        if (
-            self.data_mode == ReconstructionEnv.DataMode.TRAIN
-            and self.options.normalize_rewards_on_val
-        ):
-            reward /= np.abs(self._reference_mean_for_reward[self.options.budget - 1])
-            reward /= self.options.budget - 1
         self._current_score = new_score
 
         self._scans_left -= 1
@@ -596,23 +576,6 @@ class ReconstructionEnv:
                 torch.argmin(k_space_scores).item()
                 - self.options.initial_num_lines_per_side
             )
-
-    def set_reference_point_for_rewards(self, statistics: Dict[str, Dict]):
-        logging.info("Reference point will be set for reward.")
-        num_actions = min(self.options.budget, self.action_space.n)
-        self._reference_mean_for_reward = np.ndarray(num_actions)
-        self._reference_std_for_reward = np.ndarray(num_actions)
-        for t in range(num_actions - 1, -1, -1):
-            self._reference_mean_for_reward[t] = statistics["rewards"][num_actions - t][
-                "mean"
-            ]
-            self._reference_std_for_reward[t] = np.sqrt(
-                statistics["rewards"][num_actions - t]["m2"]
-                / (statistics["rewards"][num_actions - t]["count"] - 1)
-            )
-        logging.info(f"The following reference will be used:")
-        logging.info(f"    mean: {self._reference_mean_for_reward}")
-        logging.info(f"std: {self._reference_std_for_reward}")
 
     def _reset_saved_masks_dict(self):
         self.mask_dict.clear()
