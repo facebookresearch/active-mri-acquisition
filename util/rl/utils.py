@@ -55,14 +55,6 @@ def save_statistics_and_actions(statistics, all_actions, episode, logger, option
     )
 
 
-def compute_acceleration(num_cols, dataroot):
-    if dataroot == "KNEE":
-        return 128 / num_cols
-    if dataroot == "KNEE_RAW":
-        return 332 / num_cols
-    raise ValueError("Dataset type not understood.")
-
-
 def test_policy(
     env,
     policy,
@@ -110,7 +102,7 @@ def test_policy(
             options_.use_reconstructions, use_current_score=True
         )[0]
         episode_accelerations.append(
-            compute_acceleration(
+            env.convert_num_cols_to_acceleration(
                 env.get_num_active_columns_in_obs(obs), options_.dataroot
             )
         )
@@ -127,7 +119,7 @@ def test_policy(
             reconstruction_results = env.compute_score(use_current_score=True)[0]
             reconstruction_results["rewards"] = reward
             episode_accelerations.append(
-                compute_acceleration(
+                env.convert_num_cols_to_acceleration(
                     env.get_num_active_columns_in_obs(obs), options_.dataroot
                 )
             )

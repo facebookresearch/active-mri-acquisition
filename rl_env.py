@@ -283,6 +283,14 @@ class ReconstructionEnv(gym.Env):
         self._max_cols_cutoff = None
 
     @staticmethod
+    def convert_num_cols_to_acceleration(num_cols, dataroot):
+        if dataroot == "KNEE":
+            return DICOM_IMG_WIDTH / num_cols
+        if dataroot == "KNEE_RAW":
+            return (RAW_IMG_WIDTH - (END_PADDING_RAW - START_PADDING_RAW)) / num_cols
+        raise ValueError("Dataset type not understood.")
+
+    @staticmethod
     def _compute_score(
         reconstruction: torch.Tensor, ground_truth: torch.Tensor, is_raw: bool
     ) -> Dict[str, torch.Tensor]:
@@ -525,7 +533,7 @@ class ReconstructionEnv(gym.Env):
         )
         if self.data_mode == "train":
             image_idx = self._train_order[self._image_idx_train]
-            if image_idx not in self.mask_dict.keys():
+            if image_idx not in self.mask_dict:
                 self.mask_dict[image_idx] = np.zeros(
                     (self.options.budget, self.image_width), dtype=np.float32
                 )

@@ -220,7 +220,7 @@ class Trainer:
         self.reconstructor.load_state_dict(checkpoint["reconstructor"])
         if (
             self.options.use_evaluator
-            and "evaluator" in checkpoint.keys()
+            and "evaluator" in checkpoint
             and checkpoint["evaluator"] is not None
         ):
             self.evaluator.load_state_dict(checkpoint["evaluator"])
