@@ -373,6 +373,7 @@ class ReconstructionEnv(gym.Env):
             @:param `mask_to_use`: specifies if the score has to be computed with an alternate mask.
             @:param `k_space`: specifies if the score has to be computed with an alternate k-space.
             @:param `use_current_score`: If true, the method returns the saved current score.
+
         """
         if use_current_score and use_reconstruction:
             return [self._current_score]

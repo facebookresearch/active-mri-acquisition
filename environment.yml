@@ -1,0 +1,19 @@
+name: active_mri
+channels:
+  - pytorch
+  - anaconda
+  - conda-forge
+  - defaults
+dependencies:
+  - numpy
+  - tensorboardX
+  - pytorch==1.1.0
+  - torchvision==0.3.0
+  - gym
+  - h5py
+  - matplotlib
+  - scikit-image
+  - scikit-learn
+  - filelock
+prefix: /private/home/lep/.conda/envs/active_mri
+
