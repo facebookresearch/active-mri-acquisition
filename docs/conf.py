@@ -17,7 +17,7 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'active_mri_acquisition'
+project = 'Active MRI Acquisition'
 copyright = '2020, Luis Pineda, Adriana Romero, Sumana Basu, Roberto Calandra, Michal Drozdzal'
 author = 'Luis Pineda, Adriana Romero, Sumana Basu, Roberto Calandra, Michal Drozdzal'
 
@@ -36,7 +36,7 @@ templates_path = ['_templates']
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = []
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 
 # -- Options for HTML output -------------------------------------------------
