@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Welcome to active_mri’s documentation! &mdash; active_mri  documentation</title>
+  <title>rl_env module &mdash; active_mri  documentation</title>
   
 
   
@@ -48,7 +48,7 @@
           
 
           
-            <a href="#" class="icon icon-home"> active_mri
+            <a href="index.html" class="icon icon-home"> active_mri
           
 
           
@@ -80,8 +80,7 @@
             
               <!-- Local TOC -->
               <div class="local-toc"><ul>
-<li><a class="reference internal" href="#">Welcome to active_mri’s documentation!</a></li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+<li><a class="reference internal" href="#">rl_env module</a></li>
 </ul>
 </div>
             
@@ -96,7 +95,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="#">active_mri</a>
+          <a href="index.html">active_mri</a>
         
       </nav>
 
@@ -125,15 +124,15 @@
 
   <ul class="wy-breadcrumbs">
     
-      <li><a href="#">Docs</a> &raquo;</li>
+      <li><a href="index.html">Docs</a> &raquo;</li>
         
-      <li>Welcome to active_mri’s documentation!</li>
+      <li>rl_env module</li>
     
     
       <li class="wy-breadcrumbs-aside">
         
             
-            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+            <a href="_sources/rl_env.rst.txt" rel="nofollow"> View page source</a>
           
         
       </li>
@@ -146,14 +145,13 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="welcome-to-active-mri-s-documentation">
-<h1>Welcome to active_mri’s documentation!<a class="headerlink" href="#welcome-to-active-mri-s-documentation" title="Permalink to this headline">¶</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">active_mri</span></code> is a package that lets you apply reinforcement learning techniques to solve active MRI
-acquisition problems.</p>
-<span class="target" id="module-rl_env"></span><dl class="py class">
+  <div class="section" id="module-rl_env">
+<span id="rl-env-module"></span><h1>rl_env module<a class="headerlink" href="#module-rl_env" title="Permalink to this headline">¶</a></h1>
+<dl class="py class">
 <dt id="rl_env.ReconstructionEnv">
 <em class="property">class </em><code class="sig-prename descclassname">rl_env.</code><code class="sig-name descname">ReconstructionEnv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">options</span><span class="p">:</span> <span class="n">types.SimpleNamespace</span></em><span class="sig-paren">)</span><a class="headerlink" href="#rl_env.ReconstructionEnv" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gym-like environment representing the active MRI acquisition process.</p>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">gym.core.Env</span></code></p>
+<p>Gym-like environment representing the active MRI acquisition process.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><p><strong>options</strong> (<em>types.SimpleNamespace</em>) – <p>Configuration options for the environment.
@@ -209,6 +207,11 @@ respect to, instead of <cite>self._ground_truth</cite> and <cite>self._current_m
 &#64;:param <cite>k_space</cite>: specifies if the score has to be computed with an alternate k-space.
 &#64;:param <cite>use_current_score</cite>: If true, the method returns the saved current score.</p>
 </dd></dl>
+
+<dl class="py method">
+<dt id="rl_env.ReconstructionEnv.convert_num_cols_to_acceleration">
+<em class="property">static </em><code class="sig-name descname">convert_num_cols_to_acceleration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_cols</span></em>, <em class="sig-param"><span class="n">dataroot</span></em><span class="sig-paren">)</span><a class="headerlink" href="#rl_env.ReconstructionEnv.convert_num_cols_to_acceleration" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 <dl class="py method">
 <dt id="rl_env.ReconstructionEnv.get_evaluator_action">
@@ -279,6 +282,16 @@ in implementations to use the functionality of this method.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt id="rl_env.ReconstructionEnv.set_testing">
+<code class="sig-name descname">set_testing</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">use_training_set</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">reset_index</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#rl_env.ReconstructionEnv.set_testing" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="rl_env.ReconstructionEnv.set_training">
+<code class="sig-name descname">set_training</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">reset_index</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#rl_env.ReconstructionEnv.set_training" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
 <dt id="rl_env.ReconstructionEnv.step">
 <code class="sig-name descname">step</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>torch.Tensor<span class="p">]</span><span class="p">, </span>float<span class="p">, </span>bool<span class="p">, </span>Dict<span class="p">]</span><a class="headerlink" href="#rl_env.ReconstructionEnv.step" title="Permalink to this definition">¶</a></dt>
 <dd><p>Adds a new line (specified by the action) to the current mask and computes the
@@ -288,16 +301,11 @@ current ground truth).</p>
 
 </dd></dl>
 
-<div class="toctree-wrapper compound">
-</div>
-</div>
-<div class="section" id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
-<ul class="simple">
-<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
-<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
-<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
-</ul>
+<dl class="py function">
+<dt id="rl_env.load_checkpoint">
+<code class="sig-prename descclassname">rl_env.</code><code class="sig-name descname">load_checkpoint</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">checkpoints_dir</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">name</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'best_checkpoint.pth'</span></em><span class="sig-paren">)</span> &#x2192; Optional<span class="p">[</span>Dict<span class="p">]</span><a class="headerlink" href="#rl_env.load_checkpoint" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </div>
 
 

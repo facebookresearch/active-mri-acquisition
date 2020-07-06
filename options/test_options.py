@@ -1,4 +1,4 @@
-import base_options
+from . import base_options
 
 
 class TestOptions(base_options.BaseOptions):

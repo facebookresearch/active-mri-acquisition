@@ -1,6 +1,6 @@
-import argparse
 import logging
 import os
+import types
 
 import gym
 import gym.spaces
@@ -38,15 +38,17 @@ def load_checkpoint(
 
 
 class ReconstructionEnv(gym.Env):
-    """ RL environment representing the active acquisition process with reconstruction model. """
+    """ Gym-like environment representing the active MRI acquisition process.
 
-    def __init__(self, options: argparse.Namespace):
-        """Creates a new environment.
-
-            @param `options`: Should specify the following options:
-                -`reconstructor_dir`: directory where reconstructor is stored.
-                -`evaluator_dir`: directory where evaluator is stored.
-                -`budget`: how many actions to choose (the horizon of the episode).
+        Args:
+            options (types.SimpleNamespace): Configuration options for the environment.
+                It must contain the following mandatory fields:\n
+                \t-``dataroot`` - the type of MRI data to be used. The two valid options are
+                        "KNEE" for knee data stored in DICOM format, and "KNEE_RAW" for knee data
+                        stored in RAW format.\n
+                \t-``reconstructor_dir`` - path to directory where reconstructor is stored.\n
+                \t-``evaluator_dir``: path to directory where evaluator is stored.\n
+                \t-`budget`: how many actions to choose (the horizon of the episode).\n
                 -`obs_type`: one of {'fourier_space', 'image_space'}
                 -`initial_num_lines_per_side`: how many k-space lines to start with.
                 -'num_train_images`: the number of images to use for training. If it's None,
@@ -54,7 +56,10 @@ class ReconstructionEnv(gym.Env):
                 -`num_test_images`: the number of images to use for test. If it's None, then
                     all images will be used.
                 -`test_set`: the name of the test set to use (train, val, or test).
-        """
+
+    """
+
+    def __init__(self, options: types.SimpleNamespace):
         self.options = options
         self.options.device = device
         self.image_height = (

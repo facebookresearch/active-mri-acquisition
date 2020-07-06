@@ -1,0 +1,432 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>models package &mdash; active_mri  documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home"> active_mri
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">models package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-models.evaluator">models.evaluator module</a></li>
+<li><a class="reference internal" href="#module-models.fft_utils">models.fft_utils module</a></li>
+<li><a class="reference internal" href="#module-models.reconstruction">models.reconstruction module</a></li>
+<li><a class="reference internal" href="#module-models">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">active_mri</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>models package</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/models.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="models-package">
+<h1>models package<a class="headerlink" href="#models-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-models.evaluator">
+<span id="models-evaluator-module"></span><h2>models.evaluator module<a class="headerlink" href="#module-models.evaluator" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="models.evaluator.EvaluatorNetwork">
+<em class="property">class </em><code class="sig-prename descclassname">models.evaluator.</code><code class="sig-name descname">EvaluatorNetwork</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">number_of_filters</span><span class="o">=</span><span class="default_value">256</span></em>, <em class="sig-param"><span class="n">number_of_conv_layers</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">use_sigmoid</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">width</span><span class="o">=</span><span class="default_value">128</span></em>, <em class="sig-param"><span class="n">height</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask_embed_dim</span><span class="o">=</span><span class="default_value">6</span></em>, <em class="sig-param"><span class="n">num_output_channels</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">magnitude</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.evaluator.EvaluatorNetwork" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<dl class="py method">
+<dt id="models.evaluator.EvaluatorNetwork.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input</span></em>, <em class="sig-param"><span class="n">mask_embedding</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.evaluator.EvaluatorNetwork.forward" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input</strong> – reconstructed image as returned by the reconstruction network
+shape   :   (batch_size, 2, height, width)</p></li>
+<li><p><strong>mask_embedding</strong> – mask embedding returned by the reconstructor
+shape   :   (batch_size, embedding_dimension, height, width)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns: evaluator score for each measurement</dt><dd><p>shape   :   (batch_size, width)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="models.evaluator.SimpleSequential">
+<em class="property">class </em><code class="sig-prename descclassname">models.evaluator.</code><code class="sig-name descname">SimpleSequential</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">net1</span></em>, <em class="sig-param"><span class="n">net2</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.evaluator.SimpleSequential" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<dl class="py method">
+<dt id="models.evaluator.SimpleSequential.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">mask</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.evaluator.SimpleSequential.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Defines the computation performed at every call.</p>
+<p>Should be overridden by all subclasses.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Although the recipe for forward pass needs to be defined within
+this function, one should call the <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code> instance afterwards
+instead of this since the former takes care of running the
+registered hooks while the latter silently ignores them.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="models.evaluator.SpectralMapDecomposition">
+<em class="property">class </em><code class="sig-prename descclassname">models.evaluator.</code><code class="sig-name descname">SpectralMapDecomposition</code><a class="headerlink" href="#models.evaluator.SpectralMapDecomposition" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<dl class="py method">
+<dt id="models.evaluator.SpectralMapDecomposition.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">reconstructed_image</span></em>, <em class="sig-param"><span class="n">mask_embedding</span></em>, <em class="sig-param"><span class="n">mask</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.evaluator.SpectralMapDecomposition.forward" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>reconstructed_image</strong> – image reconstructed by ReconstructorNetwork
+shape   :   (batch_size, 2, height, width)</p></li>
+<li><p><strong>mask_embedding</strong> – mask embedding created by ReconstructorNetwork (Replicated along
+height and width)</p></li>
+<li><p><strong>shape</strong> – (batch_size, embedding_dimension, height, width)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns:    spectral map concatenated with mask embedding</dt><dd><p>shape   : (batch_size, width + embedding_dimension, height, width)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="models.evaluator.test_evaluator">
+<code class="sig-prename descclassname">models.evaluator.</code><code class="sig-name descname">test_evaluator</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">height</span></em>, <em class="sig-param"><span class="n">width</span></em>, <em class="sig-param"><span class="n">number_of_filters</span></em>, <em class="sig-param"><span class="n">number_of_conv_layers</span></em>, <em class="sig-param"><span class="n">use_sigmoid</span></em>, <em class="sig-param"><span class="n">mask_embed_dim</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.evaluator.test_evaluator" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-models.fft_utils">
+<span id="models-fft-utils-module"></span><h2>models.fft_utils module<a class="headerlink" href="#module-models.fft_utils" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="models.fft_utils.GANLossKspace">
+<em class="property">class </em><code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">GANLossKspace</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">use_lsgan</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">use_mse_as_energy</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">grad_ctx</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">gamma</span><span class="o">=</span><span class="default_value">100</span></em>, <em class="sig-param"><span class="n">options</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.GANLossKspace" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<dl class="py method">
+<dt id="models.fft_utils.GANLossKspace.get_target_tensor">
+<code class="sig-name descname">get_target_tensor</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input</span></em>, <em class="sig-param"><span class="n">target_is_real</span></em>, <em class="sig-param"><span class="n">degree</span></em>, <em class="sig-param"><span class="n">mask</span></em>, <em class="sig-param"><span class="n">pred_and_gt</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.GANLossKspace.get_target_tensor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.center_crop">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">center_crop</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">shape</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.center_crop" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.dicom_to_0_1_range">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">dicom_to_0_1_range</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tensor</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.dicom_to_0_1_range" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.fft">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">fft</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">normalized</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">shift</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.fft" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.fftshift">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">fftshift</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">dim</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.fftshift" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.gaussian_nll_loss">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">gaussian_nll_loss</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">reconstruction</span></em>, <em class="sig-param"><span class="n">target</span></em>, <em class="sig-param"><span class="n">logvar</span></em>, <em class="sig-param"><span class="n">options</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.gaussian_nll_loss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.ifft">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">ifft</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">normalized</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">ifft_shift</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.ifft" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.ifftshift">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">ifftshift</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">dim</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.ifftshift" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.preprocess_inputs">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">preprocess_inputs</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">batch</span></em>, <em class="sig-param"><span class="n">dataroot</span></em>, <em class="sig-param"><span class="n">device</span></em>, <em class="sig-param"><span class="n">prev_reconstruction</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.preprocess_inputs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.rfft">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">rfft</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">normalized</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.rfft" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.roll">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">roll</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">shift</span></em>, <em class="sig-param"><span class="n">dim</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.roll" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.fft_utils.to_magnitude">
+<code class="sig-prename descclassname">models.fft_utils.</code><code class="sig-name descname">to_magnitude</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tensor</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.fft_utils.to_magnitude" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-models.reconstruction">
+<span id="models-reconstruction-module"></span><h2>models.reconstruction module<a class="headerlink" href="#module-models.reconstruction" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="models.reconstruction.ReconstructorNetwork">
+<em class="property">class </em><code class="sig-prename descclassname">models.reconstruction.</code><code class="sig-name descname">ReconstructorNetwork</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">number_of_encoder_input_channels</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">number_of_decoder_output_channels</span><span class="o">=</span><span class="default_value">3</span></em>, <em class="sig-param"><span class="n">number_of_filters</span><span class="o">=</span><span class="default_value">128</span></em>, <em class="sig-param"><span class="n">dropout_probability</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">number_of_layers_residual_bottleneck</span><span class="o">=</span><span class="default_value">6</span></em>, <em class="sig-param"><span class="n">number_of_cascade_blocks</span><span class="o">=</span><span class="default_value">3</span></em>, <em class="sig-param"><span class="n">mask_embed_dim</span><span class="o">=</span><span class="default_value">6</span></em>, <em class="sig-param"><span class="n">padding_type</span><span class="o">=</span><span class="default_value">'reflect'</span></em>, <em class="sig-param"><span class="n">n_downsampling</span><span class="o">=</span><span class="default_value">3</span></em>, <em class="sig-param"><span class="n">img_width</span><span class="o">=</span><span class="default_value">128</span></em>, <em class="sig-param"><span class="n">use_deconv</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.ReconstructorNetwork" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<dl class="py method">
+<dt id="models.reconstruction.ReconstructorNetwork.data_consistency">
+<code class="sig-name descname">data_consistency</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">input</span></em>, <em class="sig-param"><span class="n">mask</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.ReconstructorNetwork.data_consistency" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="models.reconstruction.ReconstructorNetwork.embed_mask">
+<code class="sig-name descname">embed_mask</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">mask</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.ReconstructorNetwork.embed_mask" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="models.reconstruction.ReconstructorNetwork.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">zero_filled_input</span></em>, <em class="sig-param"><span class="n">mask</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.ReconstructorNetwork.forward" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>zero_filled_input</strong> – masked input image
+shape = (batch_size, 2, height, width)</p></li>
+<li><p><strong>mask</strong> – mask used in creating the zero filled image from ground truth image
+shape = (batch_size, 1, 1, width)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returns:    reconstructed high resolution image</dt><dd><p>uncertainty map
+mask_embedding</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="models.reconstruction.ResnetBlock">
+<em class="property">class </em><code class="sig-prename descclassname">models.reconstruction.</code><code class="sig-name descname">ResnetBlock</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">dim</span></em>, <em class="sig-param"><span class="n">padding_type</span></em>, <em class="sig-param"><span class="n">norm_layer</span></em>, <em class="sig-param"><span class="n">dropout_probability</span></em>, <em class="sig-param"><span class="n">use_bias</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.ResnetBlock" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<dl class="py method">
+<dt id="models.reconstruction.ResnetBlock.build_conv_block">
+<code class="sig-name descname">build_conv_block</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">dim</span></em>, <em class="sig-param"><span class="n">padding_type</span></em>, <em class="sig-param"><span class="n">norm_layer</span></em>, <em class="sig-param"><span class="n">dropout_probability</span></em>, <em class="sig-param"><span class="n">use_bias</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.ResnetBlock.build_conv_block" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="models.reconstruction.ResnetBlock.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.ResnetBlock.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Defines the computation performed at every call.</p>
+<p>Should be overridden by all subclasses.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Although the recipe for forward pass needs to be defined within
+this function, one should call the <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code> instance afterwards
+instead of this since the former takes care of running the
+registered hooks while the latter silently ignores them.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="models.reconstruction.get_norm_layer">
+<code class="sig-prename descclassname">models.reconstruction.</code><code class="sig-name descname">get_norm_layer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">norm_type</span><span class="o">=</span><span class="default_value">'instance'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.get_norm_layer" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.reconstruction.init_func">
+<code class="sig-prename descclassname">models.reconstruction.</code><code class="sig-name descname">init_func</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">m</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.init_func" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="models.reconstruction.test">
+<code class="sig-prename descclassname">models.reconstruction.</code><code class="sig-name descname">test</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em><span class="sig-paren">)</span><a class="headerlink" href="#models.reconstruction.test" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-models">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-models" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2020, Luis Pineda, Adriana Romero, Sumana Basu, Roberto Calandra, Michal Drozdzal
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

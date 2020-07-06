@@ -1,8 +1,9 @@
-import argparse
 import ignite.engine
 import logging
 import os
 import tempfile
+import types
+
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -84,7 +85,7 @@ def save_regular_checkpoint(
 
 
 class Trainer:
-    def __init__(self, options: argparse.Namespace):
+    def __init__(self, options: types.SimpleNamespace):
         self.reconstructor = None
         self.evaluator = None
         self.options = options
