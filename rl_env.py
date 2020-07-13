@@ -26,19 +26,8 @@ END_PADDING_RAW = 202
 RAW_CENTER_CROP_SIZE = 320
 
 
-def load_checkpoint(
-    checkpoints_dir: str, name: str = "best_checkpoint.pth"
-) -> Optional[Dict]:
-    checkpoint_path = os.path.join(checkpoints_dir, name)
-    if os.path.isfile(checkpoint_path):
-        logging.info(f"Found checkpoint at {checkpoint_path}.")
-        return torch.load(checkpoint_path)
-    logging.info(f"No checkpoint found at {checkpoint_path}.")
-    return None
-
-
 # TODO set the directory for fastMRI data to be configurable
-# TODO instead of provinding directories for reconstructor/evaluator, provide full paths
+# TODO instead of providing directories for reconstructor/evaluator, provide full paths
 # TODO extract evaluator stuff from environment
 class ReconstructionEnv(gym.Env):
     """ Gym-like environment representing the active MRI acquisition process.
@@ -111,7 +100,7 @@ class ReconstructionEnv(gym.Env):
                         typically set up as maximization problems. See :meth:`step()` for a
                         description of the reward. \n
                 \t-``obs_type`` (str) - one of {"image_space", "fourier_space", "only_mask"}. See
-                        :meth:`step` for description. Defaults to "image_space".\n
+                        :meth:`reset()` for description. Defaults to "image_space".\n
                 \t-``test_set`` (str) - indicates the data to use for testing episodes.
                         Options are "train", "val", "test".
                         See :meth:`set_testing()` and :meth:`set_training()`). Defaults to "val".\n
@@ -125,9 +114,10 @@ class ReconstructionEnv(gym.Env):
 
                 *Optional fields for less typical usage:*\n
 
-                \t-``obs_to_numpy`` (bool) - indicates if :meth:`step()` should pack all observation
-                        fields into a single numpy ndarray. Defaults to ``False`` in which case
-                        a dictionary is returned. See :meth:`step()` for more details.\n
+                \t-``obs_to_numpy`` (bool) - indicates if :meth:`step()` and :meth:`reset()` should
+                        pack all observation fields into a single numpy ndarray.
+                        Defaults to ``False`` in which case
+                        a dictionary is returned. See :meth:`reset()` for more details.\n
                 \t-``test_set_shift`` (int) - shifts the starting index of the test set order.
                         For example, suppose the test set consists of 5 images, and with the
                         given seed the iteration order is [0, 2, 4, 1, 3]. Then,
@@ -211,7 +201,7 @@ class ReconstructionEnv(gym.Env):
         self._image_idx_train = 0
         self.data_mode = "train"
 
-        reconstructor_checkpoint = load_checkpoint(
+        reconstructor_checkpoint = ReconstructionEnv._load_checkpoint(
             options.reconstructor_dir, "best_checkpoint.pth"
         )
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
@@ -244,7 +234,7 @@ class ReconstructionEnv(gym.Env):
         self._evaluator = None
         evaluator_checkpoint = None
         if options.evaluator_dir is not None:
-            evaluator_checkpoint = load_checkpoint(
+            evaluator_checkpoint = ReconstructionEnv._load_checkpoint(
                 options.evaluator_dir, "best_checkpoint.pth"
             )
         if (
@@ -299,7 +289,6 @@ class ReconstructionEnv(gym.Env):
         if self.options.dataroot == "KNEE_RAW":
             # use invalid_actions when using k_space knee data that are zero padded
             # at some frequencies
-            # TODO: do we want to change the fixed numbers below or not?
             invalid_actions = list(
                 range(
                     START_PADDING_RAW - self.options.initial_num_lines_per_side,
@@ -321,6 +310,17 @@ class ReconstructionEnv(gym.Env):
         self._reference_mean_for_reward = None
         self._reference_std_for_reward = None
         self._max_cols_cutoff = None
+
+    @staticmethod
+    def _load_checkpoint(
+        checkpoints_dir: str, name: str = "best_checkpoint.pth"
+    ) -> Optional[Dict]:
+        checkpoint_path = os.path.join(checkpoints_dir, name)
+        if os.path.isfile(checkpoint_path):
+            logging.info(f"Found checkpoint at {checkpoint_path}.")
+            return torch.load(checkpoint_path)
+        logging.info(f"No checkpoint found at {checkpoint_path}.")
+        return None
 
     def _generate_initial_lowf_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
@@ -434,7 +434,7 @@ class ReconstructionEnv(gym.Env):
             reset_index (bool): indicates that test episodes should restart from the first image
             in the test order (see note in :class:`ReconstructionEnv`).
             use_training_set (bool): indicates that the training set should be used for testing.
-            This overrides ``options.test_set`` in :class:`ReconstructioEnv` and can be useful for
+            This overrides ``options.test_set`` in :class:`ReconstructionEnv` and can be useful for
             debugging purposes. Defaults to False.
 
         """
@@ -469,7 +469,7 @@ class ReconstructionEnv(gym.Env):
 
             Returns:
                 The acceleration factor for the given number of columns, which is computed as the
-                maximum number of non active columns for the given data, divided by `num_cols`.
+                maximum number of non active columns for the given data divided by `num_cols`.
         """
         if dataroot == "KNEE":
             return DICOM_IMG_WIDTH / num_cols
@@ -610,8 +610,38 @@ class ReconstructionEnv(gym.Env):
     ) -> Tuple[Union[Dict, None], Dict]:
         """ Loads a new image from the dataset and starts a new episode with this image.
 
-            Loops over images in the dataset in order. The dataset is ordered according to
-            `self._{train/test}_order`.
+            The method returns an observation stored in one of two possible formats - a dictionary
+            of strings to torch tensors (the default), or a single numpy array encoding all
+            observation fields (if ``options.obs_to_numpy`` is used when constructing the
+            environment).
+
+            The dictionary format includes the following fields:
+
+                * "reconstruction": the reconstructed image if ``options.obs_type = "image_space"``
+                    (the default). If ``options.obs_type = "fourier_space"``, this stores the
+                    2-D Fourier Transform of the image instead.
+                * "mask": the current mask.
+                * "mask_embedding": The mask embedding produced by the reconstructor.
+
+            The single array numpy format is encoded as follows:
+
+                * Rows `H` to `H - 1` contain the reconstructed image, where `H` is the height of
+                    the dataset images.
+                * Row `H` contains the current mask.
+                * Row `H + 1` contains the mask embedding, padded with zeros. The dimension of the
+                    embedding can be recovered with ``self.metadata["mask_embed_dim"].
+
+            Args:
+                start_with_initial_mask(bool): If `True`, then the episode starts with a mask that
+                    contains ``self.initial_num_lines_per_side`` low frequency lines active on
+                    each side. Otherwise, the mask is sampled from the data loader corresponding
+                    to the current data mode (see :meth:`set_training()` and :meth:`set_testing()`).
+
+            Returns:
+                Tuple[Dict, Dict]: An observation corresponding to the reconstruction obtained with
+                    the initial mask, and a dictionary with two keys - "split", indicating the
+                    dataset split being used, and "image_idx", indicating the index of the image
+                    in the fastMRI dataset.
         """
         info = {}
         if self.data_mode == "test":
@@ -672,9 +702,16 @@ class ReconstructionEnv(gym.Env):
         return observation, info
 
     def step(self, action: int) -> Tuple[Dict[str, torch.Tensor], float, bool, Dict]:
-        """ Adds a new line (specified by the action) to the current mask and computes the
-            resulting observation and reward (drop in MSE after reconstructing with respect to the
-            current ground truth).
+        """ Carries a step in the reconstruction environment according to the given action.
+
+            Args:
+                action(int): The action representing the k-space column to scan.
+
+            Returns:
+                Tuple(Dict, float, bool, Dict): A tuple of (observation, reward, done, _). For the
+                    observation format see :meth:`reset()`. The fourth element of the tuple is an
+                    empty dictionary, for compatibility with gym.
+
         """
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action
