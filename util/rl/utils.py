@@ -92,7 +92,9 @@ def test_policy(
         episode_scores = []
         episode_step = 0
         reconstruction_results = env.compute_score(
-            options_.use_reconstructions, use_current_score=True
+            options_.use_reconstructions,
+            use_current_score=True,
+            keep_prev_reconstruction=options_.keep_prev_reconstructions,
         )[0]
         episode_accelerations.append(
             env.convert_num_cols_to_acceleration(
@@ -109,7 +111,10 @@ def test_policy(
             total_reward_episode += reward
             obs = next_obs
             episode_step += 1
-            reconstruction_results = env.compute_score(use_current_score=True)[0]
+            reconstruction_results = env.compute_score(
+                use_current_score=True,
+                keep_prev_reconstruction=options_.keep_prev_reconstructions,
+            )[0]
             reconstruction_results["rewards"] = reward
             episode_accelerations.append(
                 env.convert_num_cols_to_acceleration(

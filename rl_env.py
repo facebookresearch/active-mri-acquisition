@@ -354,49 +354,6 @@ class ReconstructionEnv(gym.Env):
 
         return reconstruction, mask_embed, mask_to_use
 
-    def set_testing(self, use_training_set=False, reset_index=True):
-        """ Activates testing mode for the environment.
-
-        When this is called, it toggles the data loader so that episodes will sample images
-        from the test set.
-
-        Args:
-            - reset_index (bool): indicates that test episodes should restart from the first image
-            in the test order (see note in :class:`ReconstructionEnv`).
-            - use_training_set (bool): indicates that the training set should be used for testing.
-            This overrides ``options.test_set`` in :class:`ReconstructioEnv` and can be useful for
-            debugging purposes. Defaults to False.
-
-        """
-        self.data_mode = "test_on_train" if use_training_set else "test"
-        if reset_index:
-            self._image_idx_test = 0
-        self._max_cols_cutoff = self.options.test_num_cols_cutoff
-
-    def set_training(self, reset_index=False):
-        """ Activates training mode for the environment.
-
-        When this is called, it toggles the data loader so that episodes will sample images
-        from the training set.
-
-        Args:
-            - reset_index (bool): indicates that train episodes should restart from the first image
-            in the train order (see note in :class:`ReconstructionEnv`).
-
-        """
-        self.data_mode = "train"
-        if reset_index:
-            self._image_idx_train = 0
-        self._max_cols_cutoff = None
-
-    @staticmethod
-    def convert_num_cols_to_acceleration(num_cols, dataroot):
-        if dataroot == "KNEE":
-            return DICOM_IMG_WIDTH / num_cols
-        if dataroot == "KNEE_RAW":
-            return (RAW_IMG_WIDTH - (END_PADDING_RAW - START_PADDING_RAW)) / num_cols
-        raise ValueError("Dataset type not understood.")
-
     @staticmethod
     def _compute_score_given_tensors(
         reconstruction: torch.Tensor, ground_truth: torch.Tensor, is_raw: bool
@@ -420,96 +377,6 @@ class ReconstructionEnv(gym.Env):
         score = {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
 
         return score
-
-    def compute_new_mask(
-        self, old_mask: torch.Tensor, action: int
-    ) -> Tuple[torch.Tensor, bool]:
-        """ Computes a new mask by adding the action to the given old mask.
-
-            Note that action is relative to the set of valid k-space lines that can be scanned.
-            That is, action = 0 represents the lowest index of k-space lines that are not part of
-            the initial mask.
-        """
-        line_to_scan = self.options.initial_num_lines_per_side + action
-        new_mask = old_mask.clone().squeeze()
-        had_already_been_scanned = bool(new_mask[line_to_scan])
-        new_mask[line_to_scan] = 1
-        if self.conjugate_symmetry:
-            new_mask[-(line_to_scan + 1)] = 1
-        return new_mask.view(1, 1, 1, -1), had_already_been_scanned
-
-    def get_num_active_columns_in_obs(self, obs):
-        """ Returns the number of active columns in the given (single) observation's mask. """
-        if self.options.obs_to_numpy:
-            mask = (
-                obs
-                if self.options.obs_type == "only_mask"
-                else obs[0, self.image_height, :]
-            )
-            num_active_cols = len(mask.nonzero()[0])
-        else:
-            num_active_cols = len(obs["mask"].nonzero())
-        if self.options.dataroot == "KNEE_RAW":
-            num_active_cols -= (
-                END_PADDING_RAW - START_PADDING_RAW
-            )  # remove count of padding cols
-        return num_active_cols
-
-    def compute_score(
-        self,
-        use_reconstruction: bool = True,
-        ground_truth: Optional[torch.Tensor] = None,
-        mask_to_use: Optional[torch.Tensor] = None,
-        k_space: Optional[torch.Tensor] = None,
-        use_current_score: bool = False,
-    ) -> List[Dict[str, torch.Tensor]]:
-        """ Computes the score (MSE or SSIM) of current state with respect to current ground truth.
-
-            This method takes the current ground truth, masks it with the current mask and creates
-            a zero-filled reconstruction from the masked image. Additionally, this zero-filled
-            reconstruction can be passed through the reconstruction network, `self._reconstructor`.
-            The score evaluates the difference between the final reconstruction and the current
-            ground truth.
-
-            It is possible to pass alternate ground truth and mask to compute the score with
-            respect to, instead of `self._ground_truth` and `self._current_mask`.
-
-            @:param `use_reconstruction`: specifies if the reconstruction network will be used.
-            @:param `ground_truth`: specifies if the score has to be computed with respect to an
-                alternate "ground truth".
-            @:param `mask_to_use`: specifies if the score has to be computed with an alternate mask.
-            @:param `k_space`: specifies if the score has to be computed with an alternate k-space.
-            @:param `use_current_score`: If true, the method returns the saved current score.
-
-        """
-        if use_current_score and use_reconstruction:
-            return [self._current_score]
-        with torch.no_grad():
-            if ground_truth is None:
-                ground_truth = self._ground_truth
-            if mask_to_use is None:
-                mask_to_use = self._current_mask
-            if k_space is None:
-                k_space = self._k_space
-            prev_reconstruction = (
-                self._current_reconstruction
-                if self.options.keep_prev_reconstruction
-                else None
-            )
-            image, _, mask_to_use = models.fft_utils.preprocess_inputs(
-                (mask_to_use, ground_truth, k_space),
-                self.options.dataroot,
-                device,
-                prev_reconstruction,
-            )
-            if use_reconstruction:  # pass through reconstruction network
-                image, _, _ = self._reconstructor(image, mask_to_use)
-        return [
-            ReconstructionEnv._compute_score_given_tensors(
-                img.unsqueeze(0), ground_truth, self.options.dataroot == "KNEE_RAW"
-            )
-            for img in image
-        ]
 
     def _compute_observation_and_score(self) -> Tuple[Union[Dict, np.ndarray], Dict]:
         with torch.no_grad():
@@ -557,7 +424,190 @@ class ReconstructionEnv(gym.Env):
 
         return observation, score
 
-    def reset(self, start_with_initial_mask=False) -> Tuple[Union[Dict, None], Dict]:
+    def set_testing(self, use_training_set=False, reset_index=True):
+        """ Activates testing mode for the environment.
+
+        When this is called, it toggles the data loader so that episodes will sample images
+        from the test set.
+
+        Args:
+            reset_index (bool): indicates that test episodes should restart from the first image
+            in the test order (see note in :class:`ReconstructionEnv`).
+            use_training_set (bool): indicates that the training set should be used for testing.
+            This overrides ``options.test_set`` in :class:`ReconstructioEnv` and can be useful for
+            debugging purposes. Defaults to False.
+
+        """
+        self.data_mode = "test_on_train" if use_training_set else "test"
+        if reset_index:
+            self._image_idx_test = 0
+        self._max_cols_cutoff = self.options.test_num_cols_cutoff
+
+    def set_training(self, reset_index=False):
+        """ Activates training mode for the environment.
+
+        When this is called, it toggles the data loader so that episodes will sample images
+        from the training set.
+
+        Args:
+            reset_index (bool): indicates that train episodes should restart from the first image
+            in the train order (see note in :class:`ReconstructionEnv`).
+
+        """
+        self.data_mode = "train"
+        if reset_index:
+            self._image_idx_train = 0
+        self._max_cols_cutoff = None
+
+    @staticmethod
+    def convert_num_cols_to_acceleration(num_cols, dataroot):
+        """ Computes the acceleration factor corresponding to the given number of columns.
+
+            Args:
+                num_cols(int): The number of columns.
+                dataroot(str): The type of data for which the acceleration is computed.
+
+            Returns:
+                The acceleration factor for the given number of columns, which is computed as the
+                maximum number of non active columns for the given data, divided by `num_cols`.
+        """
+        if dataroot == "KNEE":
+            return DICOM_IMG_WIDTH / num_cols
+        if dataroot == "KNEE_RAW":
+            return (RAW_IMG_WIDTH - (END_PADDING_RAW - START_PADDING_RAW)) / num_cols
+        raise ValueError("Dataset type not understood.")
+
+    def compute_new_mask(
+        self, old_mask: torch.Tensor, action: int
+    ) -> Tuple[torch.Tensor, bool]:
+        """ Computes a new mask by adding the given action to the given old mask.
+
+            Args:
+                old_mask(torch.Tensor): The previous mask.
+                action(int): The new mask.
+
+            Returns:
+                Tuple(torch.Tensor, bool): A tuple containing the new mask and a boolean value
+                indicating if the action was already active in the given mask.
+
+            Note:
+                Actions are relative to L = ``self.options.initial_num_lines_per_side``.
+                That is, action = 0 represents column index L in the mask.
+
+            Note:
+                When using DICOM KNEE data, the symmetric column is also activated by this method.
+        """
+        line_to_scan = self.options.initial_num_lines_per_side + action
+        new_mask = old_mask.clone().squeeze()
+        had_already_been_scanned = bool(new_mask[line_to_scan])
+        new_mask[line_to_scan] = 1
+        if self.conjugate_symmetry:
+            new_mask[-(line_to_scan + 1)] = 1
+        return new_mask.view(1, 1, 1, -1), had_already_been_scanned
+
+    def get_num_active_columns_in_obs(self, obs: Union[Dict, np.array]):
+        """ Returns the number of active columns in the given observation's mask.
+
+            Args:
+                obs(Dict or np.array): The observation that stores the mask.
+
+            Returns:
+                int: The number of active columns in the given observation.
+        """
+        if self.options.obs_to_numpy:
+            mask = (
+                obs
+                if self.options.obs_type == "only_mask"
+                else obs[0, self.image_height, :]
+            )
+            num_active_cols = len(mask.nonzero()[0])
+        else:
+            num_active_cols = len(obs["mask"].nonzero())
+        if self.options.dataroot == "KNEE_RAW":
+            num_active_cols -= (
+                END_PADDING_RAW - START_PADDING_RAW
+            )  # remove count of padding cols
+        return num_active_cols
+
+    def compute_score(
+        self,
+        use_reconstruction: bool = True,
+        ground_truth: Optional[torch.Tensor] = None,
+        k_space: Optional[torch.Tensor] = None,
+        mask_to_use: Optional[torch.Tensor] = None,
+        use_current_score: bool = False,
+        keep_prev_reconstruction: bool = False,
+    ) -> List[Dict[str, torch.Tensor]]:
+        """ Computes the score of current state with respect to current ground truth.
+
+            This method contains the logic used to compute the reward function. Typical usage
+            won't need to call this method, rather relying on :meth:`step()`. However,
+            exposing this interface can be useful for external evaluation loops or for implementing
+            non-RL baselines.
+
+            In details, this method takes the current ground truth, masks it with the current mask,
+            and creates a zero-filled reconstruction from the masked image. The zero-filled
+            reconstruction can then be passed through the reconstruction network to produce
+            an estimate of the ground truth image. The score evaluates the error between the
+            final reconstruction and the current ground truth.
+
+            Note:
+                The term `current` above refers to the tensors stored in the environment object
+                after calls to :meth:`reset()` and :meth:`set()`.
+
+            Most of the stored tensors can be replaced via the arguments described below.
+
+            Args:
+                use_reconstruction (bool): If set to ``False``, no reconstruction will be used,
+                    thus the error is computed with respect to the zero-filled reconstruction
+                    obtained from the current mask. Defaults to ``True``.
+                ground_truth (torch.Tensor): If given, it overrides the stored current ground truth.
+                k_space (torch.Tensor): If given, it overrides the stored k-space data.
+                mask_to_use (torch.Tensor): If given, overrides the stored current mask.
+                use_current_score (bool): If true, the method just returns the
+                    stored current score.
+                keep_prev_reconstruction (bool): If true, rather than passing the zero-filled image
+                    to the reconstruction network, the stored reconstruction will be passed instead.
+
+            Returns:
+                Dictionary(str, float): The computed score.
+                Contains four entries, one for "mse", one for "nmse", one
+                for "ssim", and one for "psnr".
+
+            Warning:
+                The method does not enforce consistency between provided ground truth and k-space
+                data. It is up to the user to guarantee this consistency.
+        """
+        if use_current_score and use_reconstruction:
+            return [self._current_score]
+        with torch.no_grad():
+            if ground_truth is None:
+                ground_truth = self._ground_truth
+            if mask_to_use is None:
+                mask_to_use = self._current_mask
+            if k_space is None:
+                k_space = self._k_space
+            prev_reconstruction = (
+                self._current_reconstruction if keep_prev_reconstruction else None
+            )
+            image, _, mask_to_use = models.fft_utils.preprocess_inputs(
+                (mask_to_use, ground_truth, k_space),
+                self.options.dataroot,
+                device,
+                prev_reconstruction,
+            )
+            if use_reconstruction:  # pass through reconstruction network
+                image, _, _ = self._reconstructor(image, mask_to_use)
+        return [
+            ReconstructionEnv._compute_score_given_tensors(
+                img.unsqueeze(0), ground_truth, self.options.dataroot == "KNEE_RAW"
+            )
+            for img in image
+        ]
+
+    def reset(
+        self, start_with_initial_mask: bool = False
+    ) -> Tuple[Union[Dict, None], Dict]:
         """ Loads a new image from the dataset and starts a new episode with this image.
 
             Loops over images in the dataset in order. The dataset is ordered according to
