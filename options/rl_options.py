@@ -129,10 +129,9 @@ class RLOptions(base_options.BaseOptions):
         # Reinforcement learning options
         parser.add_argument(
             "--dqn_model_type",
-            choices=["basic", "evaluator", "simple_mlp"],
+            choices=["evaluator", "simple_mlp"],
             default="evaluator",
-            help="The architecture to use for DQN. <basic> consists of convolutional layers "
-            "followed by fully connected layers. <evaluator> is based on the evaluator "
+            help="The architecture to use for DQN. <evaluator> is based on the evaluator "
             "baseline. <simple_mlp> consists of a few fully connected layers.",
         )
         parser.add_argument(
@@ -194,11 +193,6 @@ class RLOptions(base_options.BaseOptions):
         parser.add_argument("--dqn_eval_train_set_episode_freq", type=int, default=None)
         parser.add_argument("--target_net_update_freq", type=int, default=5000)
         parser.add_argument("--gamma", type=float, default=0.5)
-        parser.add_argument(
-            "--allow_replace_actions",
-            dest="no_replacement_policy",
-            action="store_false",
-        )
         parser.add_argument(
             "--freq_dqn_checkpoint_save",
             type=int,

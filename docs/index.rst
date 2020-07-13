@@ -16,6 +16,9 @@ policies.
 .. automodule:: models.fft_utils
     :members:
 
+.. automodule:: util.rl.dqn
+    :members:
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

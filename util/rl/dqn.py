@@ -1,3 +1,10 @@
+"""
+util.rl.dqn.py
+====================================
+Double-DQN implementation for active MRI acquisition, based on `Van Hasselt, Hado, Arthur Guez,
+and David Silver. "Deep reinforcement learning with double q-learning." Thirtieth AAAI conference
+on artificial intelligence. 2016.`
+"""
 import logging
 import math
 import os
@@ -5,6 +12,7 @@ import pickle
 import random
 import sys
 import time
+import types
 
 import filelock
 import numpy as np
@@ -19,8 +27,10 @@ import rl_env
 import util.rl.replay_buffer
 import util.rl.utils
 
+from typing import Any, Dict, Optional
 
-def get_epsilon(steps_done, opts):
+
+def _get_epsilon(steps_done, opts):
     return opts.epsilon_end + (opts.epsilon_start - opts.epsilon_end) * math.exp(
         -1.0 * steps_done / opts.epsilon_decay
     )
@@ -32,15 +42,37 @@ class Flatten(nn.Module):
 
 
 class SimpleMLP(nn.Module):
+    """ A basic multi-layer perceptron model for active MRI acquisition.
+
+
+        This is the architecture used by the dataset-specific DDQN model in our MICCAI'20, which
+        only receives the time as input. It can also be used to receive the current mask as input.
+        Assumes that environment is configured with ``options.obs_type = ''only_mask''``, and
+        ``options.obs_to_numpy = True``.
+
+        Args:
+            budget(int): The budget for the active acquisition episodes.
+            image_width(int): The width of the images to be used as inputs.
+            initial_num_lines_per_side(int): The initial number of low frequency lines used by
+                the environment. It is used to parse correctly the observations and to determine
+                the number of available actions.
+            num_hidden_layers(int): How many hidden layers to use. Defaults to 2.
+            hidden_size(int): The number of units in the hidden layers. Defaults to 32.
+            ignore_mask(bool): If ``True``, the :meth:`forward()` will ignore the mask and use
+                only their sum, which indicates the current time step.
+            symmetric(bool): ``True`` or ``False`` depending on whether the environment assumes
+                conjugate symmetry (KNEE_DICOM) or not (KNEE_RAW).
+    """
+
     def __init__(
         self,
-        budget,
-        image_width,
-        initial_num_lines_per_side,
-        num_hidden_layers=2,
-        num_hidden=32,
-        ignore_mask=True,
-        symmetric=True,
+        budget: int,
+        image_width: int,
+        initial_num_lines_per_side: int,
+        num_hidden_layers: int = 2,
+        hidden_size: int = 32,
+        ignore_mask: bool = True,
+        symmetric: bool = True,
     ):
         super(SimpleMLP, self).__init__()
         self.initial_num_lines_per_side = initial_num_lines_per_side
@@ -48,17 +80,31 @@ class SimpleMLP(nn.Module):
         self.symmetric = symmetric
         self.num_inputs = budget if self.ignore_mask else self.image_width
         num_actions = image_width - 2 * initial_num_lines_per_side
-        self.linear1 = nn.Sequential(nn.Linear(self.num_inputs, num_hidden), nn.ReLU())
+        self.linear1 = nn.Sequential(nn.Linear(self.num_inputs, hidden_size), nn.ReLU())
         hidden_layers = []
         for i in range(num_hidden_layers):
             hidden_layers.append(
-                nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU())
+                nn.Sequential(nn.Linear(hidden_size, hidden_size), nn.ReLU())
             )
         self.hidden = nn.Sequential(*hidden_layers)
-        self.output = nn.Linear(num_hidden, num_actions)
+        self.output = nn.Linear(hidden_size, num_actions)
         self.model = nn.Sequential(self.linear1, self.hidden, self.output)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> Dict[str, Optional[torch.Tensor]]:
+        """ Predicts action values.
+
+            Args:
+                x(np.array): The observation tensor.
+
+            Returns:
+                Dictionary(str, torch.Tensor): For compatibility with our RL code, it returns
+                    three keys, "qvalue", "value", and "advantage". However, only "qvalue" is used,
+                    which returns an estimate of the Q-value of the given observation.
+
+            Note:
+                Values corresponding to active k-space columns in the observation are manually
+                set to ``1e-10``.
+        """
         previous_actions = x[
             :, self.initial_num_lines_per_side : -self.initial_num_lines_per_side
         ]
@@ -83,6 +129,25 @@ class SimpleMLP(nn.Module):
 
 
 class EvaluatorBasedValueNetwork(nn.Module):
+    """ Value network based on models.evaluator.py (Zhang et al. CVPR 19).
+
+        This is the architecture used for the MICCAI'20 subject-specific DDQN experiments.
+        Assumes that environment is configured with ``options.obs_type = ''image_space''``, and
+        ``options.obs_to_numpy = True``.
+
+        Args:
+            image_width(int): The width of the images to be used as inputs.
+            initial_num_lines_per_side(int): The initial number of low frequency lines used by
+                the environment. It is used to parse correctly the observations and to determine
+                the number of available actions.
+            mask_embed_dim(int): The size of the mask embedding used by the reconstructor (which
+                the evaluator receives as part of the input).
+            use_dueling(bool): If ``True``, dueling networks as in `Wang, Ziyu, et al. "Dueling
+                network architectures for deep reinforcement learning." International conference
+                on machine learning. 2016.` will be used. Default is ``False``
+                (dueling was not used in MICCAI'20).
+        """
+
     def __init__(
         self, image_width, initial_num_lines_per_side, mask_embed_dim, use_dueling=False
     ):
@@ -115,6 +180,21 @@ class EvaluatorBasedValueNetwork(nn.Module):
             )
 
     def forward(self, x):
+        """ Predicts action values.
+
+            Args:
+                x(np.array): The observation tensor.
+
+            Returns:
+                Dictionary(str, torch.Tensor): For compatibility with our RL code, it returns
+                    three keys, "qvalue", "value", and "advantage", which return the corresponding
+                    tensors. If ``self.use_dueling = False``, only "qvalue" will return a tensor,
+                    and the other two will be ``None``.
+
+            Note:
+                Values corresponding to active k-space columns in the observation are manually
+                set to ``1e-10``.
+        """
         reconstruction = x[..., :-2, :]
         bs = x.shape[0]
         if torch.isnan(x[0, 0, -1, 0]).item() == 1:
@@ -146,52 +226,7 @@ class EvaluatorBasedValueNetwork(nn.Module):
         return {"qvalue": qvalue, "value": value, "advantage": advantage}
 
 
-class BasicValueNetwork(nn.Module):
-    """ The input to this model includes the reconstruction and the current mask. The
-        reconstruction is passed through a convolutional path and the mask through a few MLP layers.
-        Then both outputs are combined to produce the final value.
-    """
-
-    def __init__(self, num_actions):
-        super(BasicValueNetwork, self).__init__()
-
-        self.conv_image = nn.Sequential(
-            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
-            nn.ReLU(),
-            Flatten(),
-        )
-
-        self.conv_fft = nn.Sequential(
-            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=0),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
-            nn.ReLU(),
-            Flatten(),
-        )
-
-        self.fc = nn.Sequential(
-            nn.Linear(2 * 12 * 12 * 64, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, num_actions),
-        )
-
-    def forward(self, x):
-        reconstructions = x[:, :2, :, :]
-        masked_rffts = x[:, 2:, :, :]
-        image_encoding = self.conv_image(reconstructions)
-        rfft_encoding = self.conv_image(masked_rffts)
-        return {"qvalue": self.fc(torch.cat((image_encoding, rfft_encoding), dim=1))}
-
-
-def get_model(num_actions, options):
+def _get_model(options):
     if options.dqn_model_type == "simple_mlp":
         if options.use_dueling_dqn:
             raise NotImplementedError(
@@ -200,12 +235,6 @@ def get_model(num_actions, options):
         return SimpleMLP(
             options.budget, options.image_width, options.initial_num_lines_per_side
         )
-    if options.dqn_model_type == "basic":
-        if options.use_dueling_dqn:
-            raise NotImplementedError(
-                "Dueling DQN only implemented with dqn_model_type=evaluator."
-            )
-        return BasicValueNetwork(num_actions)
     if options.dqn_model_type == "evaluator":
         return EvaluatorBasedValueNetwork(
             options.image_width,
@@ -217,19 +246,51 @@ def get_model(num_actions, options):
 
 
 class DDQN(nn.Module):
-    def __init__(self, num_actions, device, memory, opts):
+    """ Double-DQN implementation.
+
+        Args:
+            num_actions(int): The number of available actions.
+            device(torch.device): The torch device to use.
+            memory(util.rl.replay_buffer.ReplayMemory): The replay memory to sample transitions
+                from.
+            opts(types.SimpleNamespace): Options to use. Must include the following fields:
+
+                \t-``dqn_learning_rate`` (float) - the learning rate to use for target updates.\n
+                \t-``gamma`` (float) - discount factor for target updates.\n
+                \t-``epsilon_start`` (float) - initial exploration epsilon.\n
+                \t-``epsilon_end`` (float) - final exploration epsilon.\n
+                \t-``epsilon_decay`` (float) - decay rate for exploration epsilon
+                        (exponential decay).\n
+                \t-``dqn_model_type`` (str) - describes the architecture of the neural net. Options
+                        are "simple_mlp" and "evaluator", to use :class:`SimpleMLP` and
+                        :class:`EvaluatorBasedValueNetwork`, respectively.\n
+                \t-``use_dueling_dqn`` (bool) - if ``True``, dueling networks will be used.
+                \t-``budget`` (int) -  as defined in :class:`rl_env.ReconstructionEnv`.\n
+                \t-``mask_embedding_dim`` (int) - see :class:`EvaluatorBasedValueNetwork`.\n
+                \t-``image_width`` (int) - the width of the input images.\n
+                \t-``initial_num_lines_per_side`` (int) - as defined in
+                        :class:`rl_env.ReconstructionEnv`.\n
+                \t-``obs_type`` (str) - as defined in  :class:`rl_env.ReconstructionEnv`.\n
+    """
+
+    def __init__(
+        self,
+        num_actions: int,
+        device: torch.device,
+        memory: util.rl.replay_buffer.ReplayMemory,
+        opts: types.SimpleNamespace,
+    ):
         super(DDQN, self).__init__()
-        self.model = get_model(num_actions, opts)
+        self.model = _get_model(opts)
         self.memory = memory
         self.optimizer = optim.Adam(self.parameters(), lr=opts.dqn_learning_rate)
         self.num_actions = num_actions
         self.opts = opts
         self.device = device
 
-    def forward(self, x):
-        return self.model(x)
-
-    def _get_action_no_replacement(self, observation, eps_threshold):
+    def _get_action_no_replacement(
+        self, observation: np.array, eps_threshold: float
+    ) -> int:
         sample = random.random()
         if self.opts.obs_type == "only_mask":
             previous_actions = np.nonzero(
@@ -257,7 +318,9 @@ class DDQN(nn.Module):
             ]
         return torch.argmax(q_values, dim=1).item()
 
-    def _get_action_standard_e_greedy(self, observation, eps_threshold):
+    def _get_action_standard_e_greedy(
+        self, observation: np.array, eps_threshold: float
+    ) -> int:
         sample = random.random()
         if sample < eps_threshold:
             return random.randrange(self.num_actions)
@@ -267,17 +330,17 @@ class DDQN(nn.Module):
             ]
         return torch.argmax(q_values, dim=1).item()
 
-    def get_action(self, observation, eps_threshold, _):
-        self.model.eval()
-        if self.opts.no_replacement_policy:
-            return self._get_action_no_replacement(observation, eps_threshold)
-        else:
-            return self._get_action_standard_e_greedy(observation, eps_threshold)
-
-    def add_experience(self, observation, action, next_observation, reward, done):
+    def _add_experience(
+        self,
+        observation: np.array,
+        action: int,
+        next_observation: np.array,
+        reward: float,
+        done: bool,
+    ):
         self.memory.push(observation, action, next_observation, reward, done)
 
-    def update_parameters(self, target_net):
+    def _update_parameters(self, target_net: nn.Module) -> Dict[str, Any]:
         self.model.train()
         batch = self.memory.sample()
         if batch is None:
@@ -350,6 +413,13 @@ class DDQN(nn.Module):
             "value": value,
             "advantage": advantage,
         }
+
+    def forward(self, x: torch.Tensor) -> Dict:
+        return self.model(x)
+
+    def get_action(self, observation, eps_threshold, _):
+        self.model.eval()
+        return self._get_action_no_replacement(observation, eps_threshold)
 
     def init_episode(self):
         pass
@@ -802,7 +872,7 @@ class DQNTrainer:
                 self.options.reward_metric
             ]
             while not done:
-                epsilon = get_epsilon(steps_epsilon, self.options)
+                epsilon = _get_epsilon(steps_epsilon, self.options)
                 action = self.policy.get_action(obs, epsilon, None)
                 if self.options.obs_type == "only_mask":
                     is_repeated_action = bool(
@@ -816,13 +886,11 @@ class DQNTrainer:
                         obs[0, -2, action + self.options.initial_num_lines_per_side]
                     )
 
-                assert not (self.options.no_replacement_policy and is_repeated_action)
-
                 next_obs, reward, done, _ = self.env.step(action)
                 self.steps += 1
-                self.policy.add_experience(obs, action, next_obs, reward, done)
+                self.policy._add_experience(obs, action, next_obs, reward, done)
 
-                update_results = self.policy.update_parameters(self.target_net)
+                update_results = self.policy._update_parameters(self.target_net)
                 if self.steps % self.options.target_net_update_freq == 0:
                     self.logger.info("Updating target network.")
                     self.target_net.load_state_dict(self.policy.state_dict())
