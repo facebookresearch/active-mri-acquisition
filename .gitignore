@@ -20,3 +20,4 @@ experiments/*
 *personal*
 *.orig
 *__pycache__*
+docs/_build

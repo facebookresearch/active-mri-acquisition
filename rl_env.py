@@ -37,25 +37,46 @@ def load_checkpoint(
     return None
 
 
+# TODO set the directory for fastMRI data to be configurable
 class ReconstructionEnv(gym.Env):
     """ Gym-like environment representing the active MRI acquisition process.
 
         Args:
-            options (types.SimpleNamespace): Configuration options for the environment.
-                It must contain the following mandatory fields:\n
-                \t-``dataroot`` - the type of MRI data to be used. The two valid options are
+            options (types.SimpleNamespace): Configuration options for the environment.\n
+                *Mandatory fields:*\n
+
+                \t-``dataroot`` (str)- the type of MRI data to be used. The two valid options are
                         "KNEE" for knee data stored in DICOM format, and "KNEE_RAW" for knee data
                         stored in RAW format.\n
-                \t-``reconstructor_dir`` - path to directory where reconstructor is stored.\n
-                \t-``evaluator_dir``: path to directory where evaluator is stored.\n
-                \t-`budget`: how many actions to choose (the horizon of the episode).\n
-                -`obs_type`: one of {'fourier_space', 'image_space'}
-                -`initial_num_lines_per_side`: how many k-space lines to start with.
-                -'num_train_images`: the number of images to use for training. If it's None,
-                    then all images will be used.
-                -`num_test_images`: the number of images to use for test. If it's None, then
-                    all images will be used.
-                -`test_set`: the name of the test set to use (train, val, or test).
+                \t-``reconstructor_dir`` (str) - path to directory where reconstructor is stored.\n
+                \t-``evaluator_dir`` (str) - path to directory where evaluator is stored.\n
+
+                *Optional fields (i.e., can either be missing or set to None):*\n
+
+                \t-``budget`` (int) - the horizon for an episode. Defaults to the number of non-active
+                        columns in the initial mask (or half of this, for DICOM data).\n
+                \t-``obs_type`` (str) - one of {"image_space", "fourier_space", "only_mask"}. See
+                        :meth:`step` for description.
+                        Defaults to "image_space".\n
+                \t-``test_set`` (str) - indicates the data to use for testing episodes (i.e.,
+                        when ``self.data_mode`` is "test"). Options are "train", "val", "test".
+                        See :meth:`set_testing`). Defaults to "val".\n
+                \t-``num_train_images`` (int) - how many images to select from the training dataset.
+                        Defaults to the full dataset.\n
+                \t-``num_test_images`` (int) - how many images to select from the test dataset.
+                        Defaults to the full dataset.\n
+                \t-``initial_num_lines_per_side`` (int) - how many active k-space columns
+                        on each side of the initial mask for each episode.
+                        Defaults to 5 for "KNEE" data and 15 for "KNEE_RAW" data.\n
+
+                *Optional fields - advanced usage:*\n
+
+                \t-``rnl_params`` (str) - "Random Number of Lines" parameters."
+                        :meth:`reset` by default initializes episodes using the masks that are
+                        returned by our MRI data loader, which are randomly sampled according to
+                        some distribution. The ``rnl_params`` option is used to control this
+                        distribution. For details, see :mod:`data.masking_utils`.\n
+
 
     """
 
@@ -138,24 +159,6 @@ class ReconstructionEnv(gym.Env):
         self._reconstructor.eval()
         self._reconstructor.to(device)
         logging.info("Loaded reconstructor and original options from checkpoint.")
-        logging.info(
-            "Checking if new weights are available from alternate optimization steps."
-        )
-        reconstructor_alt_opt_checkpoint = load_checkpoint(
-            self.options.checkpoints_dir, "best_alt_opt_reconstructor.pt"
-        )
-        self._start_epoch_for_alt_opt = 0
-        if reconstructor_alt_opt_checkpoint is not None:
-            logging.info(
-                "Found a more recent reconstructor from alternate optimization."
-            )
-            self._reconstructor.load_state_dict(
-                (reconstructor_alt_opt_checkpoint["state_dict"])
-            )
-            self._start_epoch_for_alt_opt = reconstructor_alt_opt_checkpoint["epoch"]
-            logging.info(
-                f"Start epoch for alternate optimization set to {self._start_epoch_for_alt_opt}."
-            )
 
         self._evaluator = None
         evaluator_checkpoint = None
@@ -237,11 +240,6 @@ class ReconstructionEnv(gym.Env):
         self._reference_mean_for_reward = None
         self._reference_std_for_reward = None
         self._max_cols_cutoff = None
-
-        # Variables used when alternate optimization is active
-        self.mask_dict = {}
-        self.epoch_count_callback = None
-        self.epoch_frequency_callback = None
 
     def _generate_initial_lowf_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
@@ -482,16 +480,6 @@ class ReconstructionEnv(gym.Env):
                 set_idx = self._image_idx_test
                 self._image_idx_test += 1
             else:
-                if self.epoch_count_callback is not None:
-                    if (
-                        self._image_idx_train != 0
-                        and self._image_idx_train % self.epoch_frequency_callback == 0
-                    ):
-                        self.epoch_count_callback()
-
-                if self._image_idx_train == 0:
-                    self._reset_saved_masks_dict()
-
                 set_idx = self._image_idx_train
                 self._image_idx_train = (
                     self._image_idx_train + 1
@@ -537,16 +525,6 @@ class ReconstructionEnv(gym.Env):
         self._current_mask, has_already_been_scanned = self.compute_new_mask(
             self._current_mask, action
         )
-        if self.data_mode == "train":
-            image_idx = self._train_order[self._image_idx_train]
-            if image_idx not in self.mask_dict:
-                self.mask_dict[image_idx] = np.zeros(
-                    (self.options.budget, self.image_width), dtype=np.float32
-                )
-
-            self.mask_dict[image_idx][-self._scans_left] = (
-                self._current_mask.squeeze().cpu().numpy()
-            )
         observation, new_score = self._compute_observation_and_score()
 
         metric = self.options.reward_metric
@@ -595,9 +573,6 @@ class ReconstructionEnv(gym.Env):
                 torch.argmin(k_space_scores).item()
                 - self.options.initial_num_lines_per_side
             )
-
-    def _reset_saved_masks_dict(self):
-        self.mask_dict.clear()
 
     def render(self, mode="human"):
         pass
