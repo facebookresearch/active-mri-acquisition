@@ -38,8 +38,47 @@ def load_checkpoint(
 
 
 # TODO set the directory for fastMRI data to be configurable
+# TODO instead of provinding directories for reconstructor/evaluator, provide full paths
+# TODO extract evaluator stuff from environment
 class ReconstructionEnv(gym.Env):
     """ Gym-like environment representing the active MRI acquisition process.
+
+        This class provides an interface to the fastMRI dataset, allowing the user to easily
+        simulate a k-space acquisition and reconstruction sequence. Such a sequence typically
+        looks as follows:
+
+            0. The user provides a reconstruction model that receives a partially reconstructed
+            image (e.g., inverse Fourier transform from a zero-filled reconstruction), and
+            then returns an estimate of the underlying ground truth image.
+
+        Repeat until done:
+
+            1. Starting from an initial binary mask indicating the active (i.e., non-zero)
+            k-space columns, an inactive k-space column is selected to scan. The environment
+            then simulates what the zero-filled partial image will look like, as well as
+            the resulting image after passing it through the reconstruction network.
+
+            2. The environment returns an observation based on this reconstruction, typically with
+            information about the new mask, the resulting reconstruction, and additional
+            metadata. The environment also returns a reward signal based on the reconstruction
+            error with respect to the ground truth image.
+
+            3. An active acquisition system, such as an RL agent, takes this observation and uses
+            it to propose a new line to scan next. At train time, the agent can also use the
+            information provided by the reward to modify its action selection strategy.
+
+        The methods in this class can be used to simulate this process. For instance,
+        :meth:`reset()` samples an image from one of the fastMRI dataset splits
+        ("train", "val", "test"), together with some initial mask indicating the
+        active (i.e., already scanned) k-space columns. :meth:`step()` method can
+        be used to indicate a new column to scan, and obtain the resulting observation and
+        reward. Once the sequence reaches a user specified
+        budget, or no more k-space columns are available, :meth:`step()` will return
+        ``done=True``, to indicate that the episode has ended.
+
+        Warning:
+            For KNEE_RAW data we provide our own validation/test split, since the ground truth
+            images are not publicly available for the original fastMRI dataset.
 
         Args:
             options (types.SimpleNamespace): Configuration options for the environment.\n
@@ -49,34 +88,65 @@ class ReconstructionEnv(gym.Env):
                         "KNEE" for knee data stored in DICOM format, and "KNEE_RAW" for knee data
                         stored in RAW format.\n
                 \t-``reconstructor_dir`` (str) - path to directory where reconstructor is stored.\n
-                \t-``evaluator_dir`` (str) - path to directory where evaluator is stored.\n
 
                 *Optional fields (i.e., can either be missing or set to None):*\n
 
-                \t-``budget`` (int) - the horizon for an episode. Defaults to the number of non-active
-                        columns in the initial mask (or half of this, for DICOM data).\n
+                \t-``seed`` (int) - the seed to use to determine the iteration order over images.\n
+                \t-``budget`` (int) - the horizon for an episode. Defaults to the number of
+                        non-active columns in the initial mask (or half of this, for DICOM data).
+                        See note below for additional details. Note that episodes will terminate
+                        once all k-space columns are active, regardless of the value
+                        of ``budget``\n
+                \t-``reward_metric`` (str) - the reward is based on a measure of error with respect
+                        to the ground truth image. Options are "mse", "nmse", "ssim", "psnr". For
+                        "mse" and "nmse" the reward will be negative, as RL algorithms are
+                        typically set up as maximization problems. See :meth:`step()` for a
+                        description of the reward. \n
                 \t-``obs_type`` (str) - one of {"image_space", "fourier_space", "only_mask"}. See
-                        :meth:`step` for description.
-                        Defaults to "image_space".\n
-                \t-``test_set`` (str) - indicates the data to use for testing episodes (i.e.,
-                        when ``self.data_mode`` is "test"). Options are "train", "val", "test".
-                        See :meth:`set_testing`). Defaults to "val".\n
+                        :meth:`step` for description. Defaults to "image_space".\n
+                \t-``test_set`` (str) - indicates the data to use for testing episodes.
+                        Options are "train", "val", "test".
+                        See :meth:`set_testing()` and :meth:`set_training()`). Defaults to "val".\n
                 \t-``num_train_images`` (int) - how many images to select from the training dataset.
                         Defaults to the full dataset.\n
                 \t-``num_test_images`` (int) - how many images to select from the test dataset.
                         Defaults to the full dataset.\n
                 \t-``initial_num_lines_per_side`` (int) - how many active k-space columns
-                        on each side of the initial mask for each episode.
+                        on each side of each episode's initial mask.
                         Defaults to 5 for "KNEE" data and 15 for "KNEE_RAW" data.\n
 
-                *Optional fields - advanced usage:*\n
+                *Optional fields for less typical usage:*\n
 
-                \t-``rnl_params`` (str) - "Random Number of Lines" parameters."
-                        :meth:`reset` by default initializes episodes using the masks that are
-                        returned by our MRI data loader, which are randomly sampled according to
-                        some distribution. The ``rnl_params`` option is used to control this
-                        distribution. For details, see :mod:`data.masking_utils`.\n
-
+                \t-``obs_to_numpy`` (bool) - indicates if :meth:`step()` should pack all observation
+                        fields into a single numpy ndarray. Defaults to ``False`` in which case
+                        a dictionary is returned. See :meth:`step()` for more details.\n
+                \t-``test_set_shift`` (int) - shifts the starting index of the test set order.
+                        For example, suppose the test set consists of 5 images, and with the
+                        given seed the iteration order is [0, 2, 4, 1, 3]. Then,
+                        ``test_set_shift = 3`` loops in order [1, 3, 0, 2, 4]. When combined with
+                        ``num_test_images``, this is useful for running evaluations in parallel.\n
+                \t-``rl_env_train_no_seed`` (bool) - the iteration order in training mode
+                        (see :meth:`set_testing()` and :meth:`set_training()`)
+                        mode will ignore ``options.seed``, instead being
+                        determined by numpy's default seed for ``np.random.RandomState()``.
+                        The iteration order for "test" mode will still be based on ``options.seed``.
+                        For an example use case, in cluster-based jobs with preemption,
+                        this reduces the need of keeping track of the last used image index when
+                        resuming training loops.\n
+                \t-``keep_prev_reconstruction`` (bool) - if ``True``, indicates that the
+                        reconstructor network will receive the previous reconstruction as input,
+                        rather then the partial zero-filled image. Defaults to ``False``.\n
+                \t-``use_reconstructions`` (bool) - If ``False``, the reconstructor won't be used
+                        and the observation will just return the zero-filled image. Defaults to
+                        ``True``.\n
+                \t-``use_score_as_reward`` (bool) - by default the reward is the improvement in
+                        prediction score (e.g., MSE) after adding the k-space column. If
+                        ``use_score_as_reward = True``, the actual score will be used as reward
+                        instead of the delta improvement.\n
+                \t-``test_num_cols_cutoff`` (int) - if provided, test episodes will end as soon as
+                        there are ``test_num_cols_cutoff`` active columns in the current mask.\n
+                \t-``reward_scaling`` (float) - if provided rewards are scaled by this factor.\n
+                \t-``evaluator_dir`` (str) - path to directory where evaluator is stored.\n
 
     """
 
@@ -91,6 +161,9 @@ class ReconstructionEnv(gym.Env):
         )
         self.conjugate_symmetry = options.dataroot != "KNEE_RAW"
 
+        # This is used to configure the mask distribution returned by the data loader in every
+        # call to `reset`.
+        # Only relevant when `reset(start_with_initial_mask = False)`.
         self.options.rnl_params = (
             f"{2 * self.options.initial_num_lines_per_side},"
             f"{2 * (self.options.initial_num_lines_per_side + 1)},1,5"
