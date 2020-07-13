@@ -20,9 +20,9 @@ sys.path.insert(0, os.path.abspath(".."))
 
 project = "active_mri"
 copyright = (
-    "2020, Luis Pineda, Adriana Romero, Sumana Basu, Roberto Calandra, Michal Drozdzal"
+    "2020, Luis Pineda, Sumana Basu, Adriana Romero, Roberto Calandra, Michal Drozdzal"
 )
-author = "Luis Pineda, Adriana Romero, Sumana Basu, Roberto Calandra, Michal Drozdzal"
+author = "Luis Pineda, Sumana Basu, Adriana Romero, Roberto Calandra, Michal Drozdzal"
 
 
 # -- General configuration ---------------------------------------------------

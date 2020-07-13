@@ -7,6 +7,15 @@ policies.
 .. automodule:: rl_env
     :members:
 
+.. automodule:: models.reconstruction
+    :members:
+
+.. automodule:: models.evaluator
+    :members:
+
+.. automodule:: models.fft_utils
+    :members:
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

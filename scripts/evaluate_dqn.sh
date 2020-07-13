@@ -71,7 +71,7 @@ fi
 cd ..
 export HDF5_USE_FILE_LOCKING=FALSE
 
-python acquire_rl.py --dataroot ${DATAROOT} \
+python main_miccai20.py --dataroot ${DATAROOT} \
     --reconstructor_dir ${RECONSTR_DIR} \
     --checkpoints_dir ${CHECKPOINT_DIR} \
     --dqn_weights_dir ${DQN_WEIGHTS_DIR} \

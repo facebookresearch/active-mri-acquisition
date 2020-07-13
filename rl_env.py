@@ -1,3 +1,8 @@
+"""
+rl_env.py
+====================================
+Reinforcement learning environment for active MRI acquisition research.
+"""
 import logging
 import os
 import types
@@ -142,7 +147,7 @@ class ReconstructionEnv(gym.Env):
                         ``use_score_as_reward = True``, the actual score will be used as reward
                         instead of the delta improvement.\n
                 \t-``test_num_cols_cutoff`` (int) - if provided, test episodes will end as soon as
-                        there are ``test_num_cols_cutoff`` active columns in the current mask.\n
+                        there are this many active columns in the current mask.\n
                 \t-``reward_scaling`` (float) - if provided rewards are scaled by this factor.\n
                 \t-``evaluator_dir`` (str) - path to directory where evaluator is stored.\n
 
@@ -495,7 +500,8 @@ class ReconstructionEnv(gym.Env):
                 That is, action = 0 represents column index L in the mask.
 
             Note:
-                When using DICOM KNEE data, the symmetric column is also activated by this method.
+                When using DICOM KNEE data, the symmetrically opposed column is also activated by
+                this method (i.e., at position image_width - (L + action) - 1).
         """
         line_to_scan = self.options.initial_num_lines_per_side + action
         new_mask = old_mask.clone().squeeze()

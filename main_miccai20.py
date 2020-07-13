@@ -1,3 +1,10 @@
+"""
+main_miccai20.py
+====================================
+Entry point to replicate experiments in `Luis Pineda, Sumana Basu, Adriana Romero,
+Roberto Calandra, Michal Drozdzal, "Active MR $k$-space Sampling with Reinforcement Learning",
+MICCAI 2020`.
+"""
 import logging
 import os
 import random
