@@ -62,6 +62,9 @@ class SimpleMLP(nn.Module):
                 only their sum, which indicates the current time step.
             symmetric(bool): ``True`` or ``False`` depending on whether the environment assumes
                 conjugate symmetry (KNEE_DICOM) or not (KNEE_RAW).
+
+        Warning:
+            This class does not support dueling networks.
     """
 
     def __init__(
@@ -94,12 +97,13 @@ class SimpleMLP(nn.Module):
         """ Predicts action values.
 
             Args:
-                x(np.array): The observation tensor.
+                x(torch.Tensor): The observation tensor.
 
             Returns:
-                Dictionary(str, torch.Tensor): For compatibility with our RL code, it returns
-                    three keys, "qvalue", "value", and "advantage". However, only "qvalue" is used,
-                    which returns an estimate of the Q-value of the given observation.
+                Dictionary(str, torch.Tensor): A dictionary containing
+                three keys, "qvalue", "value", and "advantage". However, only "qvalue" is used,
+                which returns an estimate of the Q-value of the given observation. The other
+                two keys map to ``None``.
 
             Note:
                 Values corresponding to active k-space columns in the observation are manually
@@ -183,13 +187,13 @@ class EvaluatorBasedValueNetwork(nn.Module):
         """ Predicts action values.
 
             Args:
-                x(np.array): The observation tensor.
+                x(torch.Tensor): The observation tensor.
 
             Returns:
-                Dictionary(str, torch.Tensor): For compatibility with our RL code, it returns
-                    three keys, "qvalue", "value", and "advantage", which return the corresponding
-                    tensors. If ``self.use_dueling = False``, only "qvalue" will return a tensor,
-                    and the other two will be ``None``.
+                Dictionary(str, torch.Tensor): A dictionary with three keys, "qvalue", "value",
+                and "advantage", which return the corresponding
+                tensors. If ``self.use_dueling = False``, only "qvalue" will return a tensor,
+                and the other two will be ``None``.
 
             Note:
                 Values corresponding to active k-space columns in the observation are manually
@@ -330,7 +334,7 @@ class DDQN(nn.Module):
             ]
         return torch.argmax(q_values, dim=1).item()
 
-    def _add_experience(
+    def add_experience(
         self,
         observation: np.array,
         action: int,
@@ -338,9 +342,38 @@ class DDQN(nn.Module):
         reward: float,
         done: bool,
     ):
+        """ Adds a transition to the replay buffer.
+
+            Args:
+                observation(np.ndarray): The observation, o_t.
+                action(int): The action, a_t.
+                next_observation(np.ndarray): The observation at the next time step, o_t+1.
+                reward(float): The reward, r_t+1.
+                done(bool): ``True`` if the episode ended, ``False`` otherwise.
+
+        """
         self.memory.push(observation, action, next_observation, reward, done)
 
-    def _update_parameters(self, target_net: nn.Module) -> Dict[str, Any]:
+    def update_parameters(self, target_net: nn.Module) -> Optional[Dict[str, Any]]:
+        """ Updates the weights of the model using temporal difference.
+
+            Samples a batch from the replay buffer and updates the parameters using the temporal
+            difference. 
+
+            Args:
+                target_net(DDQN): The target network.
+
+            Returns:
+                Dictionary(str, Any): A dictionary with six keys:\n
+                    \t-"loss"(torch.Tensor): The temporal difference for this update.\n
+                    \t-"grad_norm"(float): The norm of the computed gradients.\n
+                    \t-"q_values_mean" (np.array): The mean of the Q-values for the batch.\n
+                    \t-"q_values_std" (np.array): The standard deviation of Q-values for
+                        the batch.\n
+                    \t-"value" (torch.Tensor): The values computed for each element of the batch.\n
+                    \t-"advantage" (torch.Tensor): The advantage computed for each element of the
+                        batch.
+        """
         self.model.train()
         batch = self.memory.sample()
         if batch is None:
@@ -415,9 +448,34 @@ class DDQN(nn.Module):
         }
 
     def forward(self, x: torch.Tensor) -> Dict:
+        """ Predicts action values.
+
+            Args:
+                x(torch.Tensor): The observation tensor.
+
+            Returns:
+                Dictionary(str, torch.Tensor): A dictionary with
+                three keys, "qvalue", "value", and "advantage", which return the corresponding
+                tensors. If ``self.use_dueling = False``, only "qvalue" will return a tensor,
+                and the other two will be ``None``.
+
+            Note:
+                Values corresponding to active k-space columns in the observation are manually
+                set to ``1e-10``.
+        """
         return self.model(x)
 
-    def get_action(self, observation, eps_threshold, _):
+    def get_action(self, observation: torch.Tensor, eps_threshold: float, _):
+        """ Returns an action sampled from an epsilon-greedy policy.
+
+            With probability epsilon sample a random k-space column (ignoring active columns),
+            otherwise return the column with the highest estimated Q-value for the observation.
+
+            Args:
+                observation(torch.Tensor): The observation for which an action is required.
+                eps_threshold(float): The probability of sampling a random action instead of using
+                    a greedy action.
+        """
         self.model.eval()
         return self._get_action_no_replacement(observation, eps_threshold)
 
@@ -425,7 +483,7 @@ class DDQN(nn.Module):
         pass
 
 
-def get_folder_lock(path):
+def _get_folder_lock(path):
     return filelock.FileLock(path, timeout=-1)
 
 
@@ -470,7 +528,7 @@ class DQNTester:
         options_file_found = False
         while not options_file_found:
             options_filename = DQNTrainer.get_options_filename(self.training_dir)
-            with get_folder_lock(self.folder_lock_path):
+            with _get_folder_lock(self.folder_lock_path):
                 if os.path.isfile(options_filename):
                     self.logger.info(f"Options file found at {options_filename}.")
                     with open(options_filename, "rb") as f:
@@ -545,7 +603,7 @@ class DQNTester:
                 )
 
     def check_if_train_done(self):
-        with get_folder_lock(self.folder_lock_path):
+        with _get_folder_lock(self.folder_lock_path):
             return os.path.isfile(DQNTrainer.get_done_filename(self.training_dir))
 
     def checkpoint(self):
@@ -579,7 +637,7 @@ class DQNTester:
     # noinspection PyProtectedMember
     def load_latest_policy(self):
         """ Loads the latest checkpoint and returns the training episode at which it was saved. """
-        with get_folder_lock(self.folder_lock_path):
+        with _get_folder_lock(self.folder_lock_path):
             if not os.path.isfile(self.latest_policy_path):
                 return None, None
             timestamp = os.path.getmtime(self.latest_policy_path)
@@ -608,7 +666,7 @@ class DQNTrainer:
             self.options.checkpoints_dir
         )
 
-        with get_folder_lock(self.folder_lock_path):
+        with _get_folder_lock(self.folder_lock_path):
             done_file = DQNTrainer.get_done_filename(self.options.checkpoints_dir)
             if os.path.isfile(done_file):
                 os.remove(done_file)
@@ -655,7 +713,7 @@ class DQNTrainer:
             self.reward_images_in_window = np.zeros(self.window_size)
             self.current_score_auc_window = np.zeros(self.window_size)
 
-            with get_folder_lock(self.folder_lock_path):
+            with _get_folder_lock(self.folder_lock_path):
                 with open(
                     DQNTrainer.get_options_filename(self.options.checkpoints_dir), "wb"
                 ) as f:
@@ -749,7 +807,7 @@ class DQNTrainer:
         self.reward_images_in_window = np.zeros(self.window_size)
         self.current_score_auc_window = np.zeros(self.window_size)
 
-        with get_folder_lock(self.folder_lock_path):
+        with _get_folder_lock(self.folder_lock_path):
             with open(
                 DQNTrainer.get_options_filename(self.options.checkpoints_dir), "wb"
             ) as f:
@@ -888,9 +946,9 @@ class DQNTrainer:
 
                 next_obs, reward, done, _ = self.env.step(action)
                 self.steps += 1
-                self.policy._add_experience(obs, action, next_obs, reward, done)
+                self.policy.add_experience(obs, action, next_obs, reward, done)
 
-                update_results = self.policy._update_parameters(self.target_net)
+                update_results = self.policy.update_parameters(self.target_net)
                 if self.steps % self.options.target_net_update_freq == 0:
                     self.logger.info("Updating target network.")
                     self.target_net.load_state_dict(self.policy.state_dict())
@@ -952,7 +1010,7 @@ class DQNTrainer:
 
         self.checkpoint()
 
-        with get_folder_lock(self.folder_lock_path):
+        with _get_folder_lock(self.folder_lock_path):
             with open(
                 DQNTrainer.get_done_filename(self.options.checkpoints_dir), "w"
             ) as f:
@@ -983,7 +1041,7 @@ class DQNTrainer:
             self.logger.info(f"Saved replay buffer to {memory_path}.")
 
     def save(self, path):
-        with get_folder_lock(self.folder_lock_path):
+        with _get_folder_lock(self.folder_lock_path):
             torch.save(
                 {
                     "dqn_weights": self.policy.state_dict(),
