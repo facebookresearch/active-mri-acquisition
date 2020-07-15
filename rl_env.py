@@ -439,8 +439,8 @@ class ReconstructionEnv(gym.Env):
             reset_index (bool): indicates that test episodes should restart from the first image
             in the test order (see note in :class:`ReconstructionEnv`).
             use_training_set (bool): indicates that the training set should be used for testing.
-            This overrides ``options.test_set`` in :class:`ReconstructionEnv` and can be useful for
-            debugging purposes. Defaults to False.
+                    This overrides ``options.test_set`` in :class:`ReconstructionEnv` and
+                    can be useful for debugging purposes. Defaults to ``False``.
 
         """
         self.data_mode = "test_on_train" if use_training_set else "test"

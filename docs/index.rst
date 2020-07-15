@@ -19,6 +19,15 @@ policies.
 .. automodule:: util.rl.dqn
     :members:
 
+.. automodule:: util.rl.replay_buffer
+    :members:
+
+.. automodule:: util.rl.simple_baselines
+    :members:
+
+.. automodule:: util.rl.utils
+    :members:
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

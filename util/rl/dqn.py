@@ -249,7 +249,7 @@ def _get_model(options):
     raise ValueError("Unknown model specified for DQN.")
 
 
-class DDQN(nn.Module):
+class DDQN(nn.Module, util.rl.Policy):
     """ Double-DQN implementation.
 
         Args:

@@ -1,14 +1,21 @@
+import logging
 import os
+import types
 
 import numpy as np
 import sklearn.metrics
+import tensorboardX
 import torch
 
+from . import Policy
 
-def update_statistics(value, episode_step, statistics):
-    """ Updates a running mean and standard deviation for `episode_step`, given `value`.
-        https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
-    """
+from typing import Dict, Tuple
+
+
+def _update_statistics(value, episode_step, statistics):
+    # Updates a running mean and standard deviation for `episode_step`, given `value`.
+    # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
+
     assert len(value) == len(statistics)
     for k, v in statistics.items():
         if episode_step not in statistics[k]:
@@ -24,15 +31,7 @@ def update_statistics(value, episode_step, statistics):
         statistics[k][episode_step]["m2"] += delta * delta2
 
 
-def compute_test_score_from_stats(statistics):
-    """ Computes a single-value score from a set of time step statistics. """
-    score = 0
-    for episode_step, step_stats in statistics.items():
-        score += step_stats["mean"]
-    return score
-
-
-def save_statistics_and_actions(statistics, all_actions, episode, logger, options_):
+def _save_statistics_and_actions(statistics, all_actions, episode, logger, options_):
     logger.info(f"Episode {episode}. Saving statistics to {options_.checkpoints_dir}.")
     np.save(
         os.path.join(options_.checkpoints_dir, "test_stats_mse_{}".format(episode)),
@@ -56,15 +55,48 @@ def save_statistics_and_actions(statistics, all_actions, episode, logger, option
 
 
 def test_policy(
-    env, policy, writer, logger, step, options_, test_on_train=False, silent=False,
-):
-    """ Evaluates a given policy for the environment on the test set. """
+    env: "rl_env.ReconstructionEnv",
+    policy: Policy,
+    writer: tensorboardX.SummaryWriter,
+    logger: logging.Logger,
+    step: int,
+    options_: types.SimpleNamespace,
+    test_on_train: bool = False,
+    silent: bool = False,
+) -> Tuple[float, Dict]:
+    """ Evaluates a given policy for the given environment on its test set.
+
+        Args:
+            env(rl_env.ReconstructionEnv): The environment where the policy will be run on. The
+                    evaluation will be done over the test set, as configured when creating the env.
+            policy(Policy): The policy to evaluate.
+            writer(tensorboardX.SummaryWriter): A tensorboard writer for results.
+            logger(logging.Logger): The logger to which to write outputs.
+            options_(types.SimpleNamespace): See :class:rl_env.ReconstructionEnv for fields.
+            test_on_train(bool): If ``True`` the policy will be evaluated on the environments'
+                    train set. Useful for debugging.
+            silent(bool): If ``True`` nothing will be sent to writer nor to logger.
+
+        Returns:
+            Tuple(float,Dict): The first element is the score obtained by the policy. The second
+            one is a dictionary storing statistics for all reward metrics, as well as the
+            actions chosen at each episode and time step (key "all_actions").\n
+
+            The dictionary will contain a key for each metric (mse, nmse, ssim, psnr). Each
+            of these dictionaries will contain the following entries:
+                \t"all" - storing all observed metric values per episode per time.\n
+                \t"count" - the count of values over which mean and m2 where computed.
+                \t"mean" - the mean at each time step across all episodes.\n
+                \t"m2" - the sum of squared deviations at each time step across all episodes.
+                        The estimated variance can be then obtained as m2 / (count - 1).
+
+    """
     env.set_testing(use_training_set=test_on_train)
     cols_cutoff = env.options.test_num_cols_cutoff
     if cols_cutoff is None:
         cols_cutoff = env.action_space.n
     logger.info(
-        f"Starting test iterations. Max. num lines for test set " f"to {cols_cutoff}."
+        f"Starting test iterations. Max. num lines for test set to {cols_cutoff}."
     )
     episode = 0
     statistics = {"mse": {}, "nmse": {}, "ssim": {}, "psnr": {}, "rewards": {}}
@@ -80,7 +112,7 @@ def test_policy(
         policy.init_episode()
         if obs is None:
             if not silent:
-                save_statistics_and_actions(
+                _save_statistics_and_actions(
                     statistics, all_actions, episode, logger, options_
                 )
             break
@@ -103,7 +135,7 @@ def test_policy(
         )
         episode_scores.append(reconstruction_results[options_.reward_metric])
         reconstruction_results["rewards"] = 0
-        update_statistics(reconstruction_results, episode_step, statistics)
+        _update_statistics(reconstruction_results, episode_step, statistics)
         while not done:
             action = policy.get_action(obs, 0.0, episode_actions)
             episode_actions.append(action)
@@ -122,7 +154,7 @@ def test_policy(
                 )
             )
             episode_scores.append(reconstruction_results[options_.reward_metric])
-            update_statistics(reconstruction_results, episode_step, statistics)
+            _update_statistics(reconstruction_results, episode_step, statistics)
         all_actions.append(episode_actions)
         all_auc.append(sklearn.metrics.auc(episode_accelerations, episode_scores))
         if not silent:
@@ -136,7 +168,7 @@ def test_policy(
             and not silent
             and (episode % options_.freq_save_test_stats == 0)
         ):
-            save_statistics_and_actions(
+            _save_statistics_and_actions(
                 statistics, all_actions, episode, logger, options_
             )
     end = time.time()
