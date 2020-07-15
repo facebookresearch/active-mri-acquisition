@@ -104,6 +104,27 @@ class ResnetBlock(nn.Module):
 
 
 class ReconstructorNetwork(nn.Module):
+    """ Reconstructor network used in Zhang et al., CVPR'19.
+
+        Args:
+            number_of_encoder_input_channels(int): Number of input channels to the
+                    reconstruction model.
+            number_of_decoder_output_channels(int): Number of output channels
+                    of the reconstruction model.
+            number_of_filters(int): Number of convolutional filters.\n
+            dropout_probability(float): Dropout probability.
+            number_of_layers_residual_bottleneck (int): Number of residual
+                    blocks in each model between two consecutive down-
+                    or up-sampling operations.
+            number_of_cascade_blocks (int): Number of times the entire architecture is
+                    replicated.
+            mask_embed_dim(int): Dimensionality of the mask embedding.
+            padding_type(str): Convolution operation padding type.
+            n_downsampling(int): Number of down-sampling operations.
+            img_width(int): The width of the image.
+            use_deconv(binary): Whether to use deconvolution in the up-sampling.
+    """
+
     def __init__(
         self,
         number_of_encoder_input_channels=2,
@@ -265,17 +286,19 @@ class ReconstructorNetwork(nn.Module):
 
     # noinspection PyUnboundLocalVariable
     def forward(self, zero_filled_input, mask):
-        """
+        """ Generates reconstructions given images with partial k-space info.
 
-        Args:
-                    zero_filled_input:  masked input image
-                                        shape = (batch_size, 2, height, width)
-                    mask: mask used in creating the zero filled image from ground truth image
-                                        shape = (batch_size, 1, 1, width)
+            Args:
+                zero_filled_input(torch.Tensor): Image obtained from zero-filled reconstruction
+                    of partial k-space scans.
+                mask(torch.Tensor): Mask used in creating the zero filled image from ground truth
+                    image.
 
-        Returns:    reconstructed high resolution image
-                    uncertainty map
-                    mask_embedding
+            Returns:
+                tuple(torch.Tensor, torch.Tensor, torch.Tensor): Contains:\n
+                    * Reconstructed high resolution image.
+                    * Uncertainty map.
+                    * Mask_embedding.
         """
         if self.use_mask_embedding:
             mask_embedding = self.embed_mask(mask)
@@ -314,61 +337,3 @@ class ReconstructorNetwork(nn.Module):
                 encoder_input = reconstructed_image
 
         return reconstructed_image, uncertainty_map, mask_embedding
-
-
-def test(data):
-    batch = 4
-
-    if data == "dicom":
-        # DICOM
-        dicom = torch.rand(batch, 2, 128, 128)
-        dicom = dicom.type(torch.FloatTensor)
-
-        mask_dicom = torch.rand(batch, 1, 1, 128)
-        mask_dicom.type(torch.FloatTensor)
-
-        net_dicom = ReconstructorNetwork(
-            number_of_encoder_input_channels=2,
-            number_of_decoder_output_channels=3,
-            number_of_filters=64,
-            number_of_layers_residual_bottleneck=6,
-            number_of_cascade_blocks=4,
-            mask_embed_dim=0,
-            n_downsampling=4,
-            img_width=dicom.shape[3],
-            dropout_probability=0.5,
-        )
-
-        out = net_dicom.forward(dicom, mask_dicom)
-
-    elif data == "raw":
-        # RAW
-        raw = torch.rand(batch, 2, 640, 368)
-        raw = raw.type(torch.FloatTensor)
-
-        mask_raw = torch.randint(0, 1, (batch, 1, 1, 368))
-        mask_raw = mask_raw.type(torch.FloatTensor)
-
-        net_raw = ReconstructorNetwork(
-            number_of_encoder_input_channels=2,
-            number_of_decoder_output_channels=3,
-            number_of_filters=128,
-            number_of_layers_residual_bottleneck=3,
-            number_of_cascade_blocks=3,
-            mask_embed_dim=6,
-            n_downsampling=3,
-            img_width=raw.shape[3],
-        )
-
-        out = net_raw.forward(raw, mask_raw)
-
-    print("reconstruction shape :", out[0].shape)
-    print("uncertainty shape :", out[1].shape)
-
-    if out[2] is not None:
-        print("embedding shape :", out[2].shape)
-
-
-if __name__ == "__main__":
-    test(data="raw")
-    test(data="dicom")

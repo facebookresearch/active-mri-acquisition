@@ -12,6 +12,8 @@ import torch.nn as nn
 from . import fft_utils
 from . import reconstruction
 
+from typing import Optional
+
 
 class SimpleSequential(nn.Module):
     def __init__(self, net1, net2):
@@ -29,19 +31,6 @@ class SpectralMapDecomposition(nn.Module):
         super(SpectralMapDecomposition, self).__init__()
 
     def forward(self, reconstructed_image, mask_embedding, mask):
-        """
-
-        Args:
-            reconstructed_image: image reconstructed by ReconstructorNetwork
-                                    shape   :   (batch_size, 2, height, width)
-            mask_embedding: mask embedding created by ReconstructorNetwork (Replicated along
-                height and width)
-            shape   :   (batch_size, embedding_dimension, height, width)
-
-        Returns:    spectral map concatenated with mask embedding
-                        shape   : (batch_size, width + embedding_dimension, height, width)
-
-        """
         batch_size = reconstructed_image.shape[0]
         height = reconstructed_image.shape[2]
         width = reconstructed_image.shape[3]
@@ -88,6 +77,20 @@ class SpectralMapDecomposition(nn.Module):
 
 
 class EvaluatorNetwork(nn.Module):
+    """ Evaluator network used in Zhang et al., CVPR'19.
+
+        Args:
+            number_of_filters(int): Number of filters used in convolutions.\n
+            number_of_conv_layers(int): Depth of the model defined as a number of
+                    convolutional layers.
+            use_sigmoid(bool): Whether the sigmoid non-linearity is applied to the
+                    output of the network.
+            width(int): The width of the image.
+            height(int): The height of the image.
+            mask_embed_dim(int): Dimensionality of the mask embedding.
+            num_output_channels(int): The dimensionality of the output.
+    """
+
     def __init__(
         self,
         number_of_filters=256,
@@ -97,7 +100,6 @@ class EvaluatorNetwork(nn.Module):
         height=None,
         mask_embed_dim=6,
         num_output_channels=None,
-        magnitude=False,
     ):
         print(f"[EvaluatorNetwork] -> n_layers = {number_of_conv_layers}")
         super(EvaluatorNetwork, self).__init__()
@@ -174,66 +176,23 @@ class EvaluatorNetwork(nn.Module):
         self.model = nn.Sequential(*sequence)
         self.apply(reconstruction.init_func)
 
-    def forward(self, input, mask_embedding=None, mask=None):
-        """
+    def forward(
+        self,
+        input: torch.Tensor,
+        mask_embedding: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None,
+    ):
+        """ Computes scores for each k-space column.
 
         Args:
-            input: reconstructed image as returned by the reconstruction network
-                        shape   :   (batch_size, 2, height, width)
-            mask_embedding:     mask embedding returned by the reconstructor
-                        shape   :   (batch_size, embedding_dimension, height, width)
+            input(torch.Tensor): Batch of reconstructed images,
+                    as produced by :class:`models.reconstruction.ReconstructorNetwork`.
+            mask_embedding torch.Tensor): Corresponding batch of mask embeddings
+                    produced by :class:`models.reconstruction.ReconstructorNetwork`.
+            mask(torch.Tensor): Corresponding masks arrays.
 
-        Returns: evaluator score for each measurement
-                    shape   :   (batch_size, width)
-
+        Returns:
+            torch.Tensor: Evaluator score for each k-space column in each image in the batch.
         """
         spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding, mask)
         return self.model(spectral_map_and_mask_embedding).squeeze(3).squeeze(2)
-
-
-def test_evaluator(
-    height, width, number_of_filters, number_of_conv_layers, use_sigmoid, mask_embed_dim
-):
-    batch = 4
-
-    image = torch.rand(batch, 2, height, width)
-    image = image.type(torch.FloatTensor)
-
-    if mask_embed_dim > 0:
-        mask_embedding = torch.rand(batch, mask_embed_dim, height, width)
-        mask_embedding.type(torch.FloatTensor)
-    else:
-        mask_embedding = None
-
-    evaluator = EvaluatorNetwork(
-        number_of_filters=number_of_filters,
-        number_of_conv_layers=number_of_conv_layers,
-        use_sigmoid=use_sigmoid,
-        width=width,
-        mask_embed_dim=mask_embed_dim,
-    )
-    output = evaluator(image, mask_embedding)
-    print("evaluator output shape :", output.shape)
-
-
-if __name__ == "__main__":
-
-    print("DICOM :")
-    test_evaluator(
-        height=128,
-        width=128,
-        number_of_filters=256,
-        number_of_conv_layers=4,
-        use_sigmoid=False,
-        mask_embed_dim=6,
-    )
-
-    print("RAW:")
-    test_evaluator(
-        height=640,
-        width=368,
-        number_of_filters=64,
-        number_of_conv_layers=5,
-        use_sigmoid=False,
-        mask_embed_dim=0,
-    )
