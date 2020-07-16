@@ -281,7 +281,7 @@ class DDQN(nn.Module, util.rl.Policy):
         self,
         num_actions: int,
         device: torch.device,
-        memory: util.rl.replay_buffer.ReplayMemory,
+        memory: Optional[util.rl.replay_buffer.ReplayMemory],
         opts: types.SimpleNamespace,
     ):
         super(DDQN, self).__init__()
@@ -665,6 +665,9 @@ class DQNTrainer:
         self.folder_lock_path = DQNTrainer.get_lock_filename(
             self.options.checkpoints_dir
         )
+        self.reward_images_in_window = None
+        self.current_score_auc_window = None
+        self.replay_memory = None
 
         with _get_folder_lock(self.folder_lock_path):
             done_file = DQNTrainer.get_done_filename(self.options.checkpoints_dir)
@@ -678,46 +681,7 @@ class DQNTrainer:
 
             self.logger.info("Creating DDQN model.")
 
-            # If replay will be loaded set capacity to zero (defer allocation to `__call__()`)
-            mem_capacity = (
-                0
-                if self.load_replay_mem or options.dqn_only_test
-                else self._max_replay_buffer_size()
-            )
-            self.logger.info(f"Creating replay buffer with capacity {mem_capacity}.")
-            self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-                mem_capacity,
-                self.env.observation_space.shape,
-                options.rl_batch_size,
-                options.dqn_burn_in,
-                use_normalization=options.dqn_normalize,
-            )
-            self.logger.info("Created replay buffer.")
-
-            if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-                device = torch.device(f"cuda:{torch.cuda.device_count() - 1}")
-            else:
-                device = rl_env.device
-            self.policy = DDQN(
-                self.env.action_space.n, device, self.replay_memory, options
-            ).to(device)
-            self.target_net = DDQN(self.env.action_space.n, device, None, options).to(
-                device
-            )
-            self.target_net.eval()
-            self.logger.info(
-                f"Created neural networks with {self.env.action_space.n} outputs."
-            )
-
-            self.window_size = min(self.options.num_train_images, 5000)
-            self.reward_images_in_window = np.zeros(self.window_size)
-            self.current_score_auc_window = np.zeros(self.window_size)
-
-            with _get_folder_lock(self.folder_lock_path):
-                with open(
-                    DQNTrainer.get_options_filename(self.options.checkpoints_dir), "wb"
-                ) as f:
-                    pickle.dump(self.options, f)
+            self._init_common()
 
     @staticmethod
     def get_done_filename(path):
@@ -738,11 +702,50 @@ class DQNTrainer:
     def _max_replay_buffer_size(self):
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
 
-    def _init_all(self):
-        print(
-            f"Checkpoint dir for this job is {self.options.checkpoints_dir}", flush=True
+    def _init_common(self):
+        # If replay will be loaded set capacity to zero (defer allocation to `__call__()`)
+        mem_capacity = (
+            0
+            if self.load_replay_mem or self.options.dqn_only_test
+            else self._max_replay_buffer_size()
+        )
+        self.logger.info(f"Creating replay buffer with capacity {mem_capacity}.")
+        self.replay_memory = util.rl.replay_buffer.ReplayMemory(
+            mem_capacity,
+            self.env.observation_space.shape,
+            self.options.rl_batch_size,
+            self.options.dqn_burn_in,
+            use_normalization=self.options.dqn_normalize,
+        )
+        self.logger.info("Created replay buffer.")
+
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+            device = torch.device(f"cuda:{torch.cuda.device_count() - 1}")
+        else:
+            device = rl_env.device
+
+        self.policy = DDQN(
+            self.env.action_space.n, device, self.replay_memory, self.options
+        ).to(device)
+        self.target_net = DDQN(self.env.action_space.n, device, None, self.options).to(
+            device
+        )
+        self.target_net.eval()
+        self.logger.info(
+            f"Created neural networks with {self.env.action_space.n} outputs."
         )
 
+        self.window_size = min(self.options.num_train_images, 5000)
+        self.reward_images_in_window = np.zeros(self.window_size)
+        self.current_score_auc_window = np.zeros(self.window_size)
+
+        with _get_folder_lock(self.folder_lock_path):
+            with open(
+                DQNTrainer.get_options_filename(self.options.checkpoints_dir), "wb"
+            ) as f:
+                pickle.dump(self.options, f)
+
+    def _init_all(self):
         # Initialize writer and logger
         self.writer = tensorboardX.SummaryWriter(
             os.path.join(self.options.checkpoints_dir)
@@ -758,6 +761,8 @@ class DQNTrainer:
         )
         fh.setFormatter(formatter)
         self.logger.addHandler(fh)
+
+        self.logger.info(f"Checkpoint dir is {self.options.checkpoints_dir}")
 
         # Logging information about the options used
         self.logger.info("Creating RL acquisition run with the following options:")
@@ -775,42 +780,7 @@ class DQNTrainer:
         self.env.set_training()
         self.logger.info(f"Created environment with {self.env.action_space.n} actions")
 
-        # If replay will be loaded, set capacity to zero (defer allocation to `__call__()`)
-        mem_capacity = (
-            0
-            if self.load_replay_mem or self.options.dqn_only_test
-            else self._max_replay_buffer_size()
-        )
-        self.replay_memory = util.rl.replay_buffer.ReplayMemory(
-            mem_capacity,
-            self.env.observation_space.shape,
-            self.options.rl_batch_size,
-            self.options.dqn_burn_in,
-            use_normalization=self.options.dqn_normalize,
-        )
-
-        # Initialize policy
-        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-            device = torch.device(f"cuda:{torch.cuda.device_count() - 1}")
-        else:
-            device = rl_env.device
-
-        self.policy = DDQN(
-            self.env.action_space.n, device, self.replay_memory, self.options
-        ).to(device)
-        self.target_net = DDQN(self.env.action_space.n, device, None, self.options).to(
-            device
-        )
-
-        self.window_size = min(self.options.num_train_images, 5000)
-        self.reward_images_in_window = np.zeros(self.window_size)
-        self.current_score_auc_window = np.zeros(self.window_size)
-
-        with _get_folder_lock(self.folder_lock_path):
-            with open(
-                DQNTrainer.get_options_filename(self.options.checkpoints_dir), "wb"
-            ) as f:
-                pickle.dump(self.options, f)
+        self._init_common()
 
     def load_checkpoint_if_needed(self):
         if self.options.dqn_only_test:
