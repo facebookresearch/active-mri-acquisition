@@ -31,6 +31,8 @@ END_PADDING_RAW = 202
 RAW_CENTER_CROP_SIZE = 320
 
 
+# TODO rename this to amria??
+# TODO add method to specify mandatory options
 # TODO extract evaluator stuff from environment
 class ReconstructionEnv(gym.Env):
     """ Gym-like environment representing the active MRI acquisition process.
