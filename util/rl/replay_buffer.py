@@ -95,8 +95,8 @@ class ReplayMemory:
 
             Returns:
                 Dictionary(str, torch.Tensor): Contains keys for "observations",
-                    "next_observations", "actions", "rewards", "dones". If the number of entries
-                    in the buffer is less than ``self.burn_in``, then returns ``None`` instead.
+                "next_observations", "actions", "rewards", "dones". If the number of entries
+                in the buffer is less than ``self.burn_in``, then returns ``None`` instead.
         """
         if self.count_seen - 1 < self.burn_in:
             return None

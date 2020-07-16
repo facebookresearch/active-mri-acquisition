@@ -20,14 +20,6 @@ options.rl\_options module
    :undoc-members:
    :show-inheritance:
 
-options.test\_options module
-----------------------------
-
-.. automodule:: options.test_options
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 options.train\_options module
 -----------------------------
 

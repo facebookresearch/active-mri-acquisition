@@ -1,7 +1,7 @@
 Welcome to active_mri's documentation!
 ==================================================
 ``active_mri`` is a package that allows the application of reinforcement learning techniques to
-fastMRI data. In particular, active_mri enables training of the active cartesian k-space sampling
+fastMRI data. In particular, ``active_mri`` enables training of active cartesian k-space sampling
 policies.
 
 .. automodule:: rl_env
