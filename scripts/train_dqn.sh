@@ -4,15 +4,15 @@ Help()
 {
       echo "Usage:"
       echo "    ./train_dqn -h                                                        Display this help message."
-      echo "    ./train_dqn dataset mode reconstructor_dir checkpoint_dir [metric]    Train DQN model. See below for description of arguments."
+      echo "    ./train_dqn dataset mode reconstructor_path checkpoint_dir [metric]   Train DQN model. See below for description of arguments."
       echo "        dataset: Dataset to use [raw | dicom]."
       echo "        mode: One of"
       echo "            ss:         Uses subject-specific DQN (image+mask as observation). Acquisition up to 12X acceleration."
       echo "            ss_extreme: Uses subject-specific DQN (image+mask as observation). Acquisition up 100X acceleration."
       echo "            ds:         Uses dataset specific DQN (only time step as observation). Standard acceleration."
       echo "            ds_extreme: Uses dataset specific DQN (only time step as observation). Extreme acceleration."
-      echo "        reconstructor_dir: Path to the saved reconstructor model."
-      echo "        checkpoint_dir: Path to store model and logs of DQN training."
+      echo "        reconstructor_path: Path to the saved reconstructor model."
+      echo "        checkpoint_dir: Folder to store model and logs of DQN training."
       echo "        metric: (Optional) Reward metric to use from [mse|nmse|ssim|psnr]. Default: mse."
 }
 
@@ -27,7 +27,7 @@ done
 
 DATASET=${1}
 MODE=${2}
-RECONSTR_DIR=${3}
+RECONSTR_PATH=${3}
 CHECKPOINT_DIR=${4}
 METRIC=${5:-mse}
 
@@ -87,7 +87,7 @@ export HDF5_USE_FILE_LOCKING=FALSE
 
 python main_miccai20.py \
     --dataroot ${DATAROOT} \
-    --reconstructor_dir ${RECONSTR_DIR} \
+    --reconstructor_path ${RECONSTR_PATH} \
     --checkpoints_dir ${CHECKPOINT_DIR} \
     --gpu_ids 0 \
     --policy dqn \

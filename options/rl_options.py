@@ -6,10 +6,10 @@ class RLOptions(base_options.BaseOptions):
         parser = base_options.BaseOptions.initialize(self, parser)
         # Environment options
         parser.add_argument(
-            "--reconstructor_dir",
+            "--reconstructor_path",
             type=str,
             default=None,
-            help="Directory where reconstructor is stored.",
+            help="Path where reconstructor is stored.",
         )
         parser.add_argument(
             "--obs_type",
@@ -115,10 +115,10 @@ class RLOptions(base_options.BaseOptions):
             help="When using one_step_greedy policy, how many actions to sample per step.",
         )
         parser.add_argument(
-            "--evaluator_dir",
+            "--evaluator_path",
             type=str,
             default=None,
-            help="Directory where evaluator is stored.",
+            help="Path where evaluator is stored.",
         )
         parser.add_argument(
             "--add_mask_eval",

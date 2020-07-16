@@ -739,7 +739,6 @@ class DQNTrainer:
         return min(self.options.num_train_steps, self.options.replay_buffer_size)
 
     def _init_all(self):
-        # This is here so that it appears in SLURM stdout logs
         print(
             f"Checkpoint dir for this job is {self.options.checkpoints_dir}", flush=True
         )

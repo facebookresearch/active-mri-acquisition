@@ -4,12 +4,12 @@ Help()
 {
       echo "Usage:"
       echo "    ./evaluate_baseline -h                                                                 Display this help message."
-      echo "    ./evaluate_baseline dataset reconstructor_dir checkpoint_dir policy [evaluator_dir]    Evaluate baseline. See below for description of arguments."
+      echo "    ./evaluate_baseline dataset reconstructor_dir checkpoint_path policy [evaluator_dir]   Evaluate baseline. See below for description of arguments."
       echo "        dataset: Dataset to use [raw | dicom]."
-      echo "        reconstructor_dir: Path to the saved reconstructor model."
+      echo "        reconstructor_path: Path to the saved reconstructor model."
       echo "        checkpoint_dir: Path to store the results."
       echo "        policy: The baseline policy to use. One of [random | lowfirst| random_low_bias | evaluator_net | one_step_greedy]."
-      echo "        evaluator: (Optional) Path to evaluator model, when policy=evaluator_net."
+      echo "        evaluator_path: (Optional) Path to evaluator model, when policy=evaluator_net."
 }
 
 while getopts ":h" opt; do
@@ -22,15 +22,15 @@ while getopts ":h" opt; do
 done
 
 DATASET=${1}
-RECONSTR_DIR=${2}
+RECONSTR_PATH=${2}
 CHECKPOINT_DIR=${3}
 POLICY=${4:-random}
-EVALUATOR_DIR=${5:-""}
+EVALUATOR_PATH=${5:-""}
 
 EVALUATOR_ARGS=""
-if [[ "${EVALUATOR_DIR}" != "" ]]
+if [[ "${EVALUATOR_PATH}" != "" ]]
 then
-    EVALUATOR_ARGS="--evaluator_dir ${EVALUATOR_DIR} --add_mask_eval"
+    EVALUATOR_ARGS="--evaluator_path ${EVALUATOR_PATH} --add_mask_eval"
 fi
 
 # Adjust default options for the desired dataset
@@ -54,7 +54,7 @@ export HDF5_USE_FILE_LOCKING=FALSE
 python main_miccai20.py \
     --dataroot ${DATAROOT} \
     --mask_type basic_rnl \
-    --reconstructor_dir ${RECONSTR_DIR} ${EVALUATOR_ARGS} \
+    --reconstructor_path ${RECONSTR_PATH} ${EVALUATOR_ARGS} \
     --checkpoints_dir ${CHECKPOINT_DIR} \
     --seed 0 \
     --gpu_ids 0 \

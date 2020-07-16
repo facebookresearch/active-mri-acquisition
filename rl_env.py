@@ -32,7 +32,6 @@ RAW_CENTER_CROP_SIZE = 320
 
 
 # TODO set the directory for fastMRI data to be configurable
-# TODO instead of providing directories for reconstructor/evaluator, provide full paths
 # TODO extract evaluator stuff from environment
 class ReconstructionEnv(gym.Env):
     """ Gym-like environment representing the active MRI acquisition process.
@@ -89,7 +88,7 @@ class ReconstructionEnv(gym.Env):
                 \t-``dataroot`` (str)- the type of MRI data to be used. The two valid options are
                         "KNEE" for knee data stored in DICOM format, and "KNEE_RAW" for knee data
                         stored in RAW format.\n
-                \t-``reconstructor_dir`` (str) - path to directory where reconstructor is stored.\n
+                \t-``reconstructor_path`` (str) - path to reconstructor model.\n
 
                 *Optional fields (i.e., can either be missing or set to None):*\n
 
@@ -149,7 +148,7 @@ class ReconstructionEnv(gym.Env):
                 \t-``test_num_cols_cutoff`` (int) - if provided, test episodes will end as soon as
                         there are this many active columns in the current mask.\n
                 \t-``reward_scaling`` (float) - if provided rewards are scaled by this factor.\n
-                \t-``evaluator_dir`` (str) - path to directory where evaluator is stored.\n
+                \t-``evaluator_path`` (str) - path to evaluator model.\n
 
     """
 
@@ -207,7 +206,7 @@ class ReconstructionEnv(gym.Env):
         self.data_mode = "train"
 
         reconstructor_checkpoint = ReconstructionEnv._load_checkpoint(
-            options.reconstructor_dir, "best_checkpoint.pth"
+            options.reconstructor_path
         )
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
             number_of_cascade_blocks=reconstructor_checkpoint[
@@ -238,9 +237,9 @@ class ReconstructionEnv(gym.Env):
 
         self._evaluator = None
         evaluator_checkpoint = None
-        if options.evaluator_dir is not None:
+        if options.evaluator_path is not None:
             evaluator_checkpoint = ReconstructionEnv._load_checkpoint(
-                options.evaluator_dir, "best_checkpoint.pth"
+                options.evaluator_path
             )
         if (
             evaluator_checkpoint is not None
@@ -317,10 +316,7 @@ class ReconstructionEnv(gym.Env):
         self._max_cols_cutoff = None
 
     @staticmethod
-    def _load_checkpoint(
-        checkpoints_dir: str, name: str = "best_checkpoint.pth"
-    ) -> Optional[Dict]:
-        checkpoint_path = os.path.join(checkpoints_dir, name)
+    def _load_checkpoint(checkpoint_path: str) -> Optional[Dict]:
         if os.path.isfile(checkpoint_path):
             logging.info(f"Found checkpoint at {checkpoint_path}.")
             return torch.load(checkpoint_path)
