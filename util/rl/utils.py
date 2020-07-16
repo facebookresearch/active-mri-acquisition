@@ -75,7 +75,8 @@ def test_policy(
             options_(types.SimpleNamespace): See :class:rl_env.ReconstructionEnv for fields.
             test_on_train(bool): If ``True`` the policy will be evaluated on the environments'
                     train set. Useful for debugging.
-            silent(bool): If ``True`` nothing will be sent to writer nor to logger.
+            silent(bool): If ``True`` nothing will be sent to writer nor to logger, and no
+                    statistics will be saved.
 
         Returns:
             Tuple(float,Dict): The first element is the score obtained by the policy. The second
@@ -126,7 +127,7 @@ def test_policy(
         reconstruction_results = env.compute_score(
             options_.use_reconstructions,
             use_current_score=True,
-            keep_prev_reconstruction=options_.keep_prev_reconstructions,
+            keep_prev_reconstruction=options_.keep_prev_reconstruction,
         )[0]
         episode_accelerations.append(
             env.convert_num_cols_to_acceleration(
@@ -145,7 +146,7 @@ def test_policy(
             episode_step += 1
             reconstruction_results = env.compute_score(
                 use_current_score=True,
-                keep_prev_reconstruction=options_.keep_prev_reconstructions,
+                keep_prev_reconstruction=options_.keep_prev_reconstruction,
             )[0]
             reconstruction_results["rewards"] = reward
             episode_accelerations.append(
