@@ -10,106 +10,56 @@ class BaseOptions:
 
     def initialize(self, parser):
         parser.add_argument(
-            "--dataset_dir", required=True, help="path to fastmri dataset."
+            "--dataset_dir", required=True, help="Path to fastmri dataset."
         )
         parser.add_argument(
             "--dataroot",
             required=True,
-            help="path to images (should have subfolders trainA, trainB, valA, valB, etc)",
+            help="Path to images (should have subfolders trainA, trainB, valA, valB, etc)",
         )
-        parser.add_argument("--batchSize", type=int, default=1, help="input batch size")
+        parser.add_argument(
+            "--batchSize", type=int, default=1, help="Input batch size."
+        )
         parser.add_argument(
             "--gpu_ids",
             type=str,
             default="0",
-            help="gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU",
+            help="GPU IDs: e.g. 0  0,1,2, 0,2. use -1 for CPU.",
         )
         parser.add_argument(
             "--name",
             type=str,
             default="experiment_name",
-            help="name of the experiment. It decides where to store samples and models",
+            help="Name of the experiment. It determines the sub folder where results are stored.",
         )
         parser.add_argument(
-            "--dataset_mode",
-            type=str,
-            default="unaligned",
-            help="chooses how datasets are loaded. [unaligned | aligned | single]",
-        )
-        parser.add_argument(
-            "--nThreads", default=4, type=int, help="# threads for loading data"
+            "--nThreads", default=4, type=int, help="Number of threads for data loader."
         )
         parser.add_argument(
             "--checkpoints_dir",
             type=str,
             default="./checkpoints",
-            help="models are saved here",
-        )
-        parser.add_argument(
-            "--norm",
-            type=str,
-            default="instance",
-            help="instance normalization or batch normalization",
-        )
-        parser.add_argument(
-            "--serial_batches",
-            action="store_true",
-            help="if true, takes images in order to make batches, otherwise takes them randomly",
+            help="Root directory to save results and model checkpoints.",
         )
         parser.add_argument(
             "--init_type",
             type=str,
+            choices=["normal", "xavier", "kaiming", "orthogonal"],
             default="normal",
-            help="network initialization [normal|xavier|kaiming|orthogonal]",
+            help="Network weights initialization type.",
         )
-        parser.add_argument(
-            "--verbose",
-            action="store_true",
-            help="if specified, print more debugging information",
-        )
-        parser.add_argument(
-            "--suffix",
-            default="",
-            type=str,
-            help="customized suffix: opt.name = opt.name + suffix: "
-            "e.g., {model}_{which_model_netG}_size{loadSize}",
-        )
-        parser.add_argument("--num_volumes_train", type=int, default=None)
-        parser.add_argument("--num_volumes_val", type=int, default=None)
 
-        # adding for my project fmri
         parser.add_argument(
-            "--kspace_keep_ratio",
-            type=float,
-            default=0.25,
-            help="mask raio of kspace lines",
-        )
-        parser.add_argument(
-            "--normalize_type",
-            default="gan",
-            type=str,
-            choices=["gan", "zero_one", "imagenet", "cae"],
-            help="normalizing type",
-        )
-        parser.add_argument(
-            "--eval_full_valid",
-            action="store_true",
-            help="if specified, evaluate the full validation set, otherwised 10%",
-        )
-        parser.add_argument(
-            "--nz", type=int, default=8, help="dimension of prior/posterior"
-        )
-        parser.add_argument(
-            "--non_strict_state_dict",
-            action="store_true",
-            help="if specified, load dict non-strictly. "
-            "Sometimes needed to avoid the naming issues (not sure why)",
-        )
-        parser.add_argument(
-            "--n_samples",
+            "--num_volumes_train",
             type=int,
-            default=16,
-            help="for vae models, the number of samples in sampling.py",
+            default=None,
+            help="Number of MRI volumes to use for training.",
+        )
+        parser.add_argument(
+            "--num_volumes_val",
+            type=int,
+            default=None,
+            help="Number of MRI volumes to use for validation.",
         )
 
         self.initialized = True
@@ -147,11 +97,6 @@ class BaseOptions:
     def parse(self):
 
         opt = self.gather_options()
-
-        # process opt.suffix
-        if opt.suffix:
-            suffix = ("_" + opt.suffix.format(**vars(opt))) if opt.suffix != "" else ""
-            opt.name = opt.name + suffix
 
         # set gpu ids
         str_ids = opt.gpu_ids.split(",")
