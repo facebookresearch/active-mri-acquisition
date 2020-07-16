@@ -74,9 +74,9 @@ def test_policy(
             logger(logging.Logger): The logger to which to write outputs.
             options_(types.SimpleNamespace): See :class:rl_env.ReconstructionEnv for fields.
             test_on_train(bool): If ``True`` the policy will be evaluated on the environments'
-                    train set. Useful for debugging.
+                    train set. Useful for debugging. Defaults to ``False``.
             silent(bool): If ``True`` nothing will be sent to writer nor to logger, and no
-                    statistics will be saved.
+                    statistics will be saved. Defaults to ``False``.
 
         Returns:
             Tuple(float,Dict): The first element is the score obtained by the policy. The second
@@ -93,12 +93,6 @@ def test_policy(
 
     """
     env.set_testing(use_training_set=test_on_train)
-    cols_cutoff = env.options.test_num_cols_cutoff
-    if cols_cutoff is None:
-        cols_cutoff = env.action_space.n
-    logger.info(
-        f"Starting test iterations. Max. num lines for test set to {cols_cutoff}."
-    )
     episode = 0
     statistics = {"mse": {}, "nmse": {}, "ssim": {}, "psnr": {}, "rewards": {}}
     import time
@@ -186,9 +180,7 @@ def test_policy(
     if options_.reward_metric == "mse" or options_.reward_metric == "nmse":
         test_score = -test_score
 
-    logger.info(
-        f"Completed test iterations. Test budget set back to {env.options.budget}."
-    )
+    logger.info(f"Completed test iterations.")
 
     env.set_training()
     return test_score, statistics
