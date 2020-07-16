@@ -31,7 +31,6 @@ END_PADDING_RAW = 202
 RAW_CENTER_CROP_SIZE = 320
 
 
-# TODO set the directory for fastMRI data to be configurable
 # TODO extract evaluator stuff from environment
 class ReconstructionEnv(gym.Env):
     """ Gym-like environment representing the active MRI acquisition process.
@@ -228,7 +227,7 @@ class ReconstructionEnv(gym.Env):
         )
         self._reconstructor.load_state_dict(
             {
-                # TODO: this is true only in case of single gpu:
+                # This assumes that environment code runs in a single GPU
                 key.replace("module.", ""): val
                 for key, val in reconstructor_checkpoint["reconstructor"].items()
             }

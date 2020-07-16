@@ -228,7 +228,6 @@ class Trainer:
         else:
             self.logger.info("Evaluator was not loaded.")
 
-    # TODO: consider adding learning rate scheduler
     def update(self, batch):
         if not self.options.only_evaluator:
             self.reconstructor.train()
