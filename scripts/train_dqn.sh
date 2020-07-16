@@ -3,9 +3,10 @@
 Help()
 {
       echo "Usage:"
-      echo "    ./train_dqn -h                                                        Display this help message."
-      echo "    ./train_dqn dataset mode reconstructor_path checkpoint_dir [metric]   Train DQN model. See below for description of arguments."
-      echo "        dataset: Dataset to use [raw | dicom]."
+      echo "    ./train_dqn -h                                                                      Display this help message."
+      echo "    ./train_dqn dataset_dir data_type mode reconstructor_path checkpoint_dir [metric]   Train DQN model. See below for description of arguments."
+      echo "        datset_dir: Directory storing the fastMRI dataset."
+      echo "        data_type: Data type of the dataset to use [raw | dicom]."
       echo "        mode: One of"
       echo "            ss:         Uses subject-specific DQN (image+mask as observation). Acquisition up to 12X acceleration."
       echo "            ss_extreme: Uses subject-specific DQN (image+mask as observation). Acquisition up 100X acceleration."
@@ -25,15 +26,16 @@ while getopts ":h" opt; do
   esac
 done
 
-DATASET=${1}
-MODE=${2}
-RECONSTR_PATH=${3}
-CHECKPOINT_DIR=${4}
-METRIC=${5:-mse}
+DATASET_DIR=${1}
+DATA_TYPE=${2}
+MODE=${3}
+RECONSTR_PATH=${4}
+CHECKPOINT_DIR=${5}
+METRIC=${6:-mse}
 
 
 # Adjust default options for the desired dataset
-if [[ "${DATASET}" = "dicom" ]]
+if [[ "${DATA_TYPE}" = "dicom" ]]
 then
     DATAROOT=KNEE
     RL_BS=32
@@ -42,7 +44,7 @@ then
     MASK_TYPE=symmetric_basic_rnl
     INIT_LINES=5
     BUDGET=20
-elif [[ "${DATASET}" = "raw" ]]
+elif [[ "${DATA_TYPE}" = "raw" ]]
 then
     DATAROOT=KNEE_RAW
     RL_BS=2
@@ -52,6 +54,7 @@ then
     INIT_LINES=15
     BUDGET=70
 else
+    echo "Data type not understood."
     Help
     exit 1
 fi
@@ -66,6 +69,7 @@ then
     MODEL_TYPE=evaluator
     OBS_TYPE=image_space
 else
+    echo "DDQN mode not understood."
     Help
     exit 1
 fi
@@ -74,7 +78,7 @@ fi
 if [[ "${MODE}" = *"_extreme" ]]
 then
     INIT_LINES=1
-    if [[ "${DATASET}" = "dicom" ]]
+    if [[ "${DATA_TYPE}" = "dicom" ]]
     then
         BUDGET=28
     else
@@ -86,6 +90,7 @@ cd ..
 export HDF5_USE_FILE_LOCKING=FALSE
 
 python main_miccai20.py \
+    --dataset_dir ${DATASET_DIR} \
     --dataroot ${DATAROOT} \
     --reconstructor_path ${RECONSTR_PATH} \
     --checkpoints_dir ${CHECKPOINT_DIR} \

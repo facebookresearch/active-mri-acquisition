@@ -5,6 +5,7 @@ def create_data_loaders(options, is_test=False):
 
     if not is_test:
         train_loader, valid_loader = base_data_loader.get_train_valid_loader(
+            options.dataset_dir,
             batch_size=options.batchSize,
             num_workers=options.nThreads,
             pin_memory=True,
@@ -17,6 +18,7 @@ def create_data_loaders(options, is_test=False):
         return train_loader, valid_loader
     else:
         test_loader = base_data_loader.get_test_loader(
+            options.dataset_dir,
             batch_size=options.batchSize,
             num_workers=0,
             pin_memory=True,

@@ -3,9 +3,10 @@
 Help()
 {
       echo "Usage:"
-      echo "    ./train_knee_models -h                                      Display this help message."
-      echo "    ./train_knee_models dataset path [extra_options_...]        Train reconstructor/evaluator model."
-      echo "        dataset: Dataset to use [raw | dicom]."
+      echo "    ./train_knee_models -h                                                    Display this help message."
+      echo "    ./train_knee_models dataset_dir data_type path [extra_options_...]        Train reconstructor/evaluator model."
+      echo "        datset_dir: Directory storing the fastMRI dataset."
+      echo "        data_type: Data type of the dataset to use [raw | dicom]."
       echo "        path: location to store model checkpoint and logs."
       echo "        extra_options: Choose at most one from"
       echo "            --no_evaluator: Trains the reconstructor alone."
@@ -21,12 +22,13 @@ while getopts ":h" opt; do
   esac
 done
 
-DATASET=${1}
-CHECKPOINTS_DIR=${2}
-EXTRA_OPTIONS=${3:-""}
+DATASET_DIR=${1}
+DATA_TYPE=${2}
+CHECKPOINTS_DIR=${3}
+EXTRA_OPTIONS=${4:-""}
 
 
-if [[ "${DATASET}" = "dicom" ]]
+if [[ "${DATA_TYPE}" = "dicom" ]]
 then
     DATAROOT=KNEE
     MASK=symmetric_basic_rnl
@@ -36,7 +38,7 @@ then
     LAYERS_BOTTLENECK=5
     LR=0.001
     GAMMA=100
-elif [[ "${DATASET}" = "raw" ]]
+elif [[ "${DATA_TYPE}" = "raw" ]]
 then
     DATAROOT=KNEE_RAW
     MASK=basic_rnl
@@ -47,6 +49,7 @@ then
     LR=0.0001
     GAMMA=3000
 else
+    echo "Data type not understood."
     Help
     exit 1
 fi
@@ -60,9 +63,11 @@ fi
 cd ..
 export HDF5_USE_FILE_LOCKING=FALSE
 
-python trainer.py --dataroot ${DATAROOT} \
+python trainer.py \
+    --dataset_dir ${DATASET_DIR} \
+    --dataroot ${DATAROOT} \
     --mask_type ${MASK} \
-    --name ${MASK}_${DATASET} \
+    --name ${MASK}_${DATA_TYPE} \
     --image_width ${IW} \
     --rnl_params 2,4,1,5 \
     --checkpoints_dir ${CHECKPOINTS_DIR} \

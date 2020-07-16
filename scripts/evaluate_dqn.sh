@@ -3,9 +3,10 @@
 Help()
 {
       echo "Usage:"
-      echo "    ./evaluate_dqn -h                                                                       Display this help message."
-      echo "    ./train_dqn dataset mode reconstructor_path checkpoint_dir dqn_weights_dir [metric]     Evaluate DQN model. See below for description of arguments."
-      echo "        dataset: Dataset to use [raw | dicom]."
+      echo "    ./evaluate_dqn -h                                                                                        Display this help message."
+      echo "    ./evaluate_dqn dataset_dir data_type mode reconstructor_path checkpoint_dir dqn_weights_dir [metric]     Evaluate DQN model. See below for description of arguments."
+      echo "        dataset_dir: Directory storing fastMRI data."
+      echo "        data_type: Type of MRI data stored in dataset_dir [raw | dicom]."
       echo "        mode: One of"
       echo "            ss:         Uses subject-specific DQN (image+mask as observation). Acquisition up to 12X acceleration."
       echo "            ss_extreme: Uses subject-specific DQN (image+mask as observation). Acquisition up 100X acceleration."
@@ -26,24 +27,26 @@ while getopts ":h" opt; do
   esac
 done
 
-DATASET=${1}
-MODE=${2}
-RECONSTR_PATH=${3}
-CHECKPOINT_DIR=${4}
-DQN_WEIGHTS_DIR=${5}
-METRIC=${6:-mse}
+DATASET_DIR=${1}
+DATA_TYPE=${2}
+MODE=${3}
+RECONSTR_PATH=${4}
+CHECKPOINT_DIR=${5}
+DQN_WEIGHTS_DIR=${6}
+METRIC=${7:-mse}
 
 
 # Adjust default options for the desired dataset
-if [[ "${DATASET}" = "dicom" ]]
+if [[ "${DATA_TYPE}" = "dicom" ]]
 then
     DATAROOT=KNEE
     INIT_LINES=5
-elif [[ "${DATASET}" = "raw" ]]
+elif [[ "${DATA_TYPE}" = "raw" ]]
 then
     DATAROOT=KNEE_RAW
     INIT_LINES=15
 else
+    echo "Data type not understood."
     Help
     exit 1
 fi
@@ -58,6 +61,7 @@ then
     MODEL_TYPE=evaluator
     OBS_TYPE=image_space
 else
+    echo "DDQN mode not understood."
     Help
     exit 1
 fi
@@ -71,7 +75,9 @@ fi
 cd ..
 export HDF5_USE_FILE_LOCKING=FALSE
 
-python main_miccai20.py --dataroot ${DATAROOT} \
+python main_miccai20.py \
+    --dataset_dir ${DATASET_DIR} \
+    --dataroot ${DATAROOT} \
     --reconstructor_path ${RECONSTR_PATH} \
     --checkpoints_dir ${CHECKPOINT_DIR} \
     --dqn_weights_dir ${DQN_WEIGHTS_DIR} \

@@ -15,6 +15,5 @@ dependencies:
   - scikit-image
   - scikit-learn
   - filelock
-  - ignite
-prefix: /private/home/lep/.conda/envs/active_mri
-
+  - ignite==0.2.0
+  - tqdm

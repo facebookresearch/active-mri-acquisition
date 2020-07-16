@@ -11,6 +11,7 @@ from . import masking_utils
 
 
 def get_train_valid_loader(
+    dataset_dir,
     batch_size,
     num_workers=4,
     pin_memory=False,
@@ -25,7 +26,7 @@ def get_train_valid_loader(
         mask_func = masking_utils.get_mask_func(
             mask_type, which_dataset, rnl_params=rnl_params
         )
-        dicom_root = pathlib.Path("/checkpoint/jzb/data/mmap")
+        dicom_root = pathlib.Path(dataset_dir)
         data_transform = dicom_data_loader.DicomDataTransform(
             mask_func, fixed_seed=None, seed_per_image=True
         )
@@ -52,7 +53,7 @@ def get_train_valid_loader(
         mask_func = masking_utils.get_mask_func(
             mask_type, which_dataset, rnl_params=rnl_params
         )
-        raw_root = "/datasets01/fastMRI/112718"
+        raw_root = dataset_dir
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + " not exists. Change to the right path.")
         data_transform = raw_data_loader.RawDataTransform(
@@ -106,6 +107,7 @@ def get_train_valid_loader(
 
 
 def get_test_loader(
+    dataset_dir,
     batch_size,
     num_workers=2,
     pin_memory=False,
@@ -113,11 +115,11 @@ def get_test_loader(
     mask_type="basic",
     rnl_params=None,
 ):
-    if which_dataset in ("KNEE"):
+    if which_dataset == "KNEE":
         mask_func = masking_utils.get_mask_func(
             mask_type, which_dataset, rnl_params=rnl_params
         )
-        dicom_root = pathlib.Path("/checkpoint/jzb/data/mmap")
+        dicom_root = pathlib.Path(dataset_dir)
         data_transform = dicom_data_loader.DicomDataTransform(
             mask_func, fixed_seed=None, seed_per_image=True
         )
@@ -148,7 +150,7 @@ def get_test_loader(
         mask_func = masking_utils.get_mask_func(
             mask_type, which_dataset, rnl_params=rnl_params
         )
-        raw_root = "/datasets01/fastMRI/112718"
+        raw_root = dataset_dir
         if not os.path.isdir(raw_root):
             raise ImportError(raw_root + " not exists. Change to the right path.")
         data_transform = raw_data_loader.RawDataTransform(

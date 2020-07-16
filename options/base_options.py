@@ -10,6 +10,9 @@ class BaseOptions:
 
     def initialize(self, parser):
         parser.add_argument(
+            "--dataset_dir", required=True, help="path to fastmri dataset."
+        )
+        parser.add_argument(
             "--dataroot",
             required=True,
             help="path to images (should have subfolders trainA, trainB, valA, valB, etc)",

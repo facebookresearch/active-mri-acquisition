@@ -85,6 +85,8 @@ class ReconstructionEnv(gym.Env):
             options (types.SimpleNamespace): Configuration options for the environment.\n
                 *Mandatory fields:*\n
 
+                \t-``dataset_dir`` (str)- the directory storing the fastMRI dataset. Expects
+                        sub folders "singlecoil_train" and "singlecoil_val".\n
                 \t-``dataroot`` (str)- the type of MRI data to be used. The two valid options are
                         "KNEE" for knee data stored in DICOM format, and "KNEE_RAW" for knee data
                         stored in RAW format.\n
