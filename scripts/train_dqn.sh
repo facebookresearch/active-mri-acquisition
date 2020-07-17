@@ -98,7 +98,7 @@ python main_miccai20.py \
     --policy dqn \
     --dqn_model_type ${MODEL_TYPE} \
     --budget ${BUDGET} \
-    --num_test_images 200 \
+    --num_test_images 100 \
     --num_train_steps 5000000 \
     --freq_save_test_stats 1000 \
     --initial_num_lines_per_side ${INIT_LINES} \
@@ -115,6 +115,7 @@ python main_miccai20.py \
     --dqn_burn_in 1000 \
     --rl_batch_size ${RL_BS} \
     --mask_type basic_rnl \
+    --dqn_test_episode_freq 1000 \
     --test_num_cols_cutoff ${COLS_CUTOFF} \
     --add_mask_eval \
     --train_with_fixed_initial_mask

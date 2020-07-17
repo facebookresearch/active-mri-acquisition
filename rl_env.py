@@ -30,7 +30,6 @@ RAW_CENTER_CROP_SIZE = 320
 RAW_EFFECTIVE_WIDTH = RAW_IMG_WIDTH - (END_PADDING_RAW - START_PADDING_RAW)
 
 
-# TODO add method to specify mandatory options
 class ReconstructionEnv(gym.Env):
     """ Gym-like environment representing the active MRI acquisition process.
 
@@ -152,6 +151,8 @@ class ReconstructionEnv(gym.Env):
 
     def __init__(self, options: types.SimpleNamespace):
         self.options = options
+        for key in ["dataset_dir", "dataroot", "reconstructor_path", "seed"]:
+            assert hasattr(self.options, key)
         self._set_missing_options_to_default_val()
         self.options.device = device
         self.image_height = (
