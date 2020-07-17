@@ -29,6 +29,7 @@ DICOM_IMG_WIDTH = 128
 START_PADDING_RAW = 166
 END_PADDING_RAW = 202
 RAW_CENTER_CROP_SIZE = 320
+RAW_EFFECTIVE_WIDTH = RAW_IMG_WIDTH - (END_PADDING_RAW - START_PADDING_RAW)
 
 
 # TODO rename this to amria??
@@ -445,7 +446,16 @@ class ReconstructionEnv(gym.Env):
         self.data_mode = "test_on_train" if use_training_set else "test"
         if reset_index:
             self._image_idx_test = 0
-        self._max_cols_cutoff = self.options.test_num_cols_cutoff
+        if self.options.dataroot == "KNEE_RAW":
+            self._max_cols_cutoff = min(
+                self.options.test_num_cols_cutoff, RAW_EFFECTIVE_WIDTH
+            )
+        elif self.options.dataroot == "KNEE":
+            self._max_cols_cutoff = min(
+                self.options.test_num_cols_cutoff, self.image_width
+            )
+        else:
+            raise ValueError(f"Unknown data type {self.options.dataroot}.")
 
     def set_training(self, reset_index=False):
         """ Activates training mode for the environment.
@@ -478,7 +488,7 @@ class ReconstructionEnv(gym.Env):
         if dataroot == "KNEE":
             return DICOM_IMG_WIDTH / num_cols
         if dataroot == "KNEE_RAW":
-            return (RAW_IMG_WIDTH - (END_PADDING_RAW - START_PADDING_RAW)) / num_cols
+            return RAW_EFFECTIVE_WIDTH / num_cols
         raise ValueError("Dataset type not understood.")
 
     def compute_new_mask(
