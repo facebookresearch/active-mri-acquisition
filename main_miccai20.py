@@ -67,7 +67,13 @@ def get_policy(env, writer, logger, options_):
         assert options_.obs_type == "image_space"
         # At the moment, Evaluator gets valid actions in a mask - preprocess data function.
         # So, no need to pass `valid_actions`
-        policy = util.rl.simple_baselines.EvaluatorNetwork(env)
+        policy = util.rl.simple_baselines.EvaluatorNetwork(
+            options_.evaluator_path,
+            options_.dataroot == "KNEE_RAW",
+            options_.add_mask_eval,
+            options_.initial_num_lines_per_side,
+            rl_env.device,
+        )
     elif "dqn" in options_.policy:
         assert options_.obs_to_numpy
         dqn_trainer = util.rl.dqn.DQNTrainer(options_, env, writer, logger)

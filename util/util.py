@@ -1,8 +1,21 @@
+import logging
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import skimage.measure
 import torch
 import torchvision.utils as tvutil
+
+from typing import Dict, Optional
+
+
+def load_checkpoint(checkpoint_path: str) -> Optional[Dict]:
+    if os.path.isfile(checkpoint_path):
+        logging.info(f"Found checkpoint at {checkpoint_path}.")
+        return torch.load(checkpoint_path)
+    logging.info(f"No checkpoint found at {checkpoint_path}.")
+    return None
 
 
 def compute_ssims(xs, ys):

@@ -4,7 +4,6 @@ rl_env.py
 Reinforcement learning environment for active MRI acquisition research.
 """
 import logging
-import os
 import types
 
 import gym
@@ -14,7 +13,6 @@ import torch
 from typing import Dict, List, Optional, Tuple, Union
 
 import data
-import models.evaluator
 import models.fft_utils
 import models.reconstruction
 import util.util
@@ -32,9 +30,7 @@ RAW_CENTER_CROP_SIZE = 320
 RAW_EFFECTIVE_WIDTH = RAW_IMG_WIDTH - (END_PADDING_RAW - START_PADDING_RAW)
 
 
-# TODO rename this to amria??
 # TODO add method to specify mandatory options
-# TODO extract evaluator stuff from environment
 class ReconstructionEnv(gym.Env):
     """ Gym-like environment representing the active MRI acquisition process.
 
@@ -152,7 +148,6 @@ class ReconstructionEnv(gym.Env):
                 \t-``test_num_cols_cutoff`` (int) - if provided, test episodes will end as soon as
                         there are this many active columns in the current mask.\n
                 \t-``reward_scaling`` (float) - if provided rewards are scaled by this factor.\n
-                \t-``evaluator_path`` (str) - path to evaluator model.\n
 
     """
 
@@ -209,9 +204,7 @@ class ReconstructionEnv(gym.Env):
         self._image_idx_train = 0
         self.data_mode = "train"
 
-        reconstructor_checkpoint = ReconstructionEnv._load_checkpoint(
-            options.reconstructor_path
-        )
+        reconstructor_checkpoint = util.util.load_checkpoint(options.reconstructor_path)
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
             number_of_cascade_blocks=reconstructor_checkpoint[
                 "options"
@@ -238,38 +231,6 @@ class ReconstructionEnv(gym.Env):
         self._reconstructor.eval()
         self._reconstructor.to(device)
         logging.info("Loaded reconstructor and original options from checkpoint.")
-
-        self._evaluator = None
-        evaluator_checkpoint = None
-        if options.evaluator_path is not None:
-            evaluator_checkpoint = ReconstructionEnv._load_checkpoint(
-                options.evaluator_path
-            )
-        if (
-            evaluator_checkpoint is not None
-            and evaluator_checkpoint["evaluator"] is not None
-        ):
-            self._evaluator = models.evaluator.EvaluatorNetwork(
-                number_of_filters=evaluator_checkpoint[
-                    "options"
-                ].number_of_evaluator_filters,
-                number_of_conv_layers=evaluator_checkpoint[
-                    "options"
-                ].number_of_evaluator_convolution_layers,
-                use_sigmoid=False,
-                width=evaluator_checkpoint["options"].image_width,
-                height=RAW_IMG_HEIGHT if options.dataroot == "KNEE_RAW" else None,
-                mask_embed_dim=evaluator_checkpoint["options"].mask_embed_dim,
-            )
-            logging.info(f"Loaded evaluator from checkpoint.")
-            self._evaluator.load_state_dict(
-                {
-                    key.replace("module.", ""): val
-                    for key, val in evaluator_checkpoint["evaluator"].items()
-                }
-            )
-            self._evaluator.eval()
-            self._evaluator.to(device)
 
         self.observation_space = (
             None  # The observation is a dict unless `obs_to_numpy` is used
@@ -318,14 +279,6 @@ class ReconstructionEnv(gym.Env):
         self._reference_mean_for_reward = None
         self._reference_std_for_reward = None
         self._max_cols_cutoff = None
-
-    @staticmethod
-    def _load_checkpoint(checkpoint_path: str) -> Optional[Dict]:
-        if os.path.isfile(checkpoint_path):
-            logging.info(f"Found checkpoint at {checkpoint_path}.")
-            return torch.load(checkpoint_path)
-        logging.info(f"No checkpoint found at {checkpoint_path}.")
-        return None
 
     def _generate_initial_lowf_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
@@ -755,30 +708,6 @@ class ReconstructionEnv(gym.Env):
             )
 
         return observation, reward, done, {}
-
-    def get_evaluator_action(self, obs: Dict[str, torch.Tensor]) -> int:
-        """ Returns the action recommended by the evaluator network of `self._evaluator`. """
-        with torch.no_grad():
-            assert (
-                not self.options.obs_type == "fourier_space"
-                and not self.options.obs_to_numpy
-            )
-            mask_embedding = (
-                None
-                if obs["mask_embedding"] is None
-                else obs["mask_embedding"].to(device)
-            )
-            k_space_scores = self._evaluator(
-                obs["reconstruction"].to(device),
-                mask_embedding,
-                obs["mask"] if self.options.add_mask_eval else None,
-            )
-            # Just fill chosen actions with some very large number to prevent from selecting again.
-            k_space_scores.masked_fill_(obs["mask"].to(device).squeeze().byte(), 100000)
-            return (
-                torch.argmin(k_space_scores).item()
-                - self.options.initial_num_lines_per_side
-            )
 
     def render(self, mode="human"):
         pass

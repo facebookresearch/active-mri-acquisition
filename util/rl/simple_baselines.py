@@ -3,10 +3,14 @@ util.rl.simple_baselines.py
 ====================================
 Simple baselines for active MRI acquisition.
 """
+import logging
+
 import numpy as np
 import torch.nn.functional
 
+import models.evaluator
 import rl_env
+import util.util
 
 from typing import Dict, Optional
 
@@ -220,18 +224,86 @@ class EvaluatorNetwork:
     """ Wraps the evaluator network of Zhang et al. CVPR 2019 as a policy.
 
         Args:
-            env(rl_env.ReconstructionEnv): The environment to choose actions for. Note that the
-                evaluator network is actually stored in the environment, and this class is just
-                a wrapper for external access.
+            evaluator_path(str): The path to an evaluator model of type
+                :class:`models.evaluator.EvaluatorNetwork`
+            is_raw_data(bool): ``True`` for RAW knee data, ``False`` for DICOM.
+            add_mask_eval(bool): If ``True``, masks will be added to the observation inside
+                the evaluator.
+            initial_num_lines_per_side(int): The number of initial low frequency lines for the
+                episodes, so that actions can be offset appropriately.
+            device(torch.device): The device to use for computation
+
+        Warning:
+            This class assumes observation is of type "image_space" and that
+            ``obs_to_numpy == False``.
 
     """
 
-    def __init__(self, env: rl_env.ReconstructionEnv):
-        self.env = env
+    def __init__(
+        self,
+        evaluator_path: str,
+        is_raw_data: bool,
+        add_mask_eval: bool,
+        initial_num_lines_per_side: int,
+        device: torch.device,
+    ):
+        self.add_mask_eval = add_mask_eval
+        self.initial_num_lines_per_side = initial_num_lines_per_side
+        self.device = device
+        evaluator_checkpoint = util.util.load_checkpoint(evaluator_path)
+        assert (
+            evaluator_checkpoint is not None
+            and evaluator_checkpoint["evaluator"] is not None
+        )
 
-    def get_action(self, obs, *_):
-        """ Returns an action sampled from the evaluator network. """
-        return self.env.get_evaluator_action(obs)
+        self._evaluator = models.evaluator.EvaluatorNetwork(
+            number_of_filters=evaluator_checkpoint[
+                "options"
+            ].number_of_evaluator_filters,
+            number_of_conv_layers=evaluator_checkpoint[
+                "options"
+            ].number_of_evaluator_convolution_layers,
+            use_sigmoid=False,
+            width=evaluator_checkpoint["options"].image_width,
+            height=rl_env.RAW_IMG_HEIGHT if is_raw_data else None,
+            mask_embed_dim=evaluator_checkpoint["options"].mask_embed_dim,
+        )
+        logging.info(f"Loaded evaluator from checkpoint.")
+        self._evaluator.load_state_dict(
+            {
+                key.replace("module.", ""): val
+                for key, val in evaluator_checkpoint["evaluator"].items()
+            }
+        )
+        self._evaluator.eval()
+        self._evaluator.to(device)
+
+    def get_action(self, obs: Dict[str, torch.Tensor], *_) -> int:
+        """ Returns an action sampled from the evaluator network.
+
+            Args:
+                obs(Dict[str, torch.Tensor]): An observation as returned by
+                    :class:`rl_env.ReconstructionEnv`, with type "image_space" and
+                    ``obs_to_numpy == False``.
+
+            Returns(int): The action recommended by the evaluator network.
+        """
+        with torch.no_grad():
+            mask_embedding = (
+                None
+                if obs["mask_embedding"] is None
+                else obs["mask_embedding"].to(self.device)
+            )
+            k_space_scores = self._evaluator(
+                obs["reconstruction"].to(self.device),
+                mask_embedding,
+                obs["mask"] if self.add_mask_eval else None,
+            )
+            # Just fill chosen actions with some very large number to prevent from selecting again.
+            k_space_scores.masked_fill_(
+                obs["mask"].to(self.device).squeeze().byte(), 100000
+            )
+            return torch.argmin(k_space_scores).item() - self.initial_num_lines_per_side
 
     def init_episode(self):
         pass
