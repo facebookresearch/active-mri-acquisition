@@ -89,20 +89,20 @@ class ReconstructionEnv(gym.Env):
                         "KNEE" for knee data stored in DICOM format, and "KNEE_RAW" for knee data
                         stored in RAW format.\n
                 \t-``reconstructor_path`` (str) - path to reconstructor model.\n
+                \t-``seed`` (int) - the seed to use to determine the iteration order over images.\n
 
                 *Optional fields (i.e., can either be missing or set to None):*\n
 
-                \t-``seed`` (int) - the seed to use to determine the iteration order over images.\n
                 \t-``budget`` (int) - the horizon for an episode. Defaults to the number of
                         non-active columns in the initial mask (or half of this, for DICOM data).
                         See note below for additional details. Note that episodes will terminate
                         once all k-space columns are active, regardless of the value
-                        of ``budget``\n
+                        of ``budget``.\n
                 \t-``reward_metric`` (str) - the reward is based on a measure of error with respect
                         to the ground truth image. Options are "mse", "nmse", "ssim", "psnr". For
                         "mse" and "nmse" the reward will be negative, as RL algorithms are
                         typically set up as maximization problems. See :meth:`step()` for a
-                        description of the reward. \n
+                        description of the reward. Defaults to "mse". \n
                 \t-``obs_type`` (str) - one of {"image_space", "fourier_space", "only_mask"}. See
                         :meth:`reset()` for description. Defaults to "image_space".\n
                 \t-``test_set`` (str) - indicates the data to use for testing episodes.
@@ -113,8 +113,7 @@ class ReconstructionEnv(gym.Env):
                 \t-``num_test_images`` (int) - how many images to select from the test dataset.
                         Defaults to the full dataset.\n
                 \t-``initial_num_lines_per_side`` (int) - how many active k-space columns
-                        on each side of each episode's initial mask.
-                        Defaults to 5 for "KNEE" data and 15 for "KNEE_RAW" data.\n
+                        on each side of each episode's initial mask. Defaults to 5.\n
 
                 *Optional fields for less typical usage:*\n
 
@@ -127,14 +126,14 @@ class ReconstructionEnv(gym.Env):
                         given seed the iteration order is [0, 2, 4, 1, 3]. Then,
                         ``test_set_shift = 3`` loops in order [1, 3, 0, 2, 4]. When combined with
                         ``num_test_images``, this is useful for running evaluations in parallel.\n
-                \t-``rl_env_train_no_seed`` (bool) - the iteration order in training mode
-                        (see :meth:`set_testing()` and :meth:`set_training()`)
-                        mode will ignore ``options.seed``, instead being
+                \t-``rl_env_train_no_seed`` (bool) - if ``True`` the iteration order in training
+                        mode (see :meth:`set_testing()` and :meth:`set_training()`)
+                        will ignore ``options.seed``, instead being
                         determined by numpy's default seed for ``np.random.RandomState()``.
                         The iteration order for "test" mode will still be based on ``options.seed``.
                         For an example use case, in cluster-based jobs with preemption,
                         this reduces the need of keeping track of the last used image index when
-                        resuming training loops.\n
+                        resuming training loops. Defaults to ``False``.\n
                 \t-``keep_prev_reconstruction`` (bool) - if ``True``, indicates that the
                         reconstructor network will receive the previous reconstruction as input,
                         rather then the partial zero-filled image. Defaults to ``False``.\n
@@ -146,13 +145,14 @@ class ReconstructionEnv(gym.Env):
                         ``use_score_as_reward = True``, the actual score will be used as reward
                         instead of the delta improvement.\n
                 \t-``test_num_cols_cutoff`` (int) - if provided, test episodes will end as soon as
-                        there are this many active columns in the current mask.\n
+                        there are this many active columns in the current mask. \n
                 \t-``reward_scaling`` (float) - if provided rewards are scaled by this factor.\n
 
     """
 
     def __init__(self, options: types.SimpleNamespace):
         self.options = options
+        self._set_missing_options_to_default_val()
         self.options.device = device
         self.image_height = (
             RAW_IMG_HEIGHT if options.dataroot == "KNEE_RAW" else DICOM_IMG_HEIGHT
@@ -181,17 +181,34 @@ class ReconstructionEnv(gym.Env):
         self._reference_std_for_reward = None
         self._max_cols_cutoff = None
 
-    def _setup_dataset(self):
+    def _maybe_assign_option_default(self, option_name, value):
         if (
-            self.options.train_with_fixed_initial_mask is False
-            and self.options.rnl_params is None
+            not hasattr(self.options, option_name)
+            or getattr(self.options, option_name) is None
         ):
-            logging.warning(
-                "Option train_with_fixed_initial_mask is set to False but "
-                "option rnl_params is set None. Mask distribution will use default "
-                "configuration."
-            )
+            logging.info(f"Assigned default value ({value}) to option {option_name}.")
+            setattr(self.options, option_name, value)
 
+    def _set_missing_options_to_default_val(self):
+        # Any value >= image width works for the first two options
+        self._maybe_assign_option_default("budget", 1234567)
+        self._maybe_assign_option_default("test_num_cols_cutoff", 1234567)
+        # For these two any number that is larger than the dataset size will do
+        self._maybe_assign_option_default("num_train_images", 1234567890)
+        self._maybe_assign_option_default("num_test_images", 1234567890)
+        self._maybe_assign_option_default("reward_metric", "mse")
+        self._maybe_assign_option_default("obs_type", "image_space")
+        self._maybe_assign_option_default("test_set", "val")
+        self._maybe_assign_option_default("initial_num_lines_per_side", 5)
+        self._maybe_assign_option_default("obs_to_numpy", False)
+        self._maybe_assign_option_default("test_set_shift", None)
+        self._maybe_assign_option_default("rl_env_train_no_seed", False)
+        self._maybe_assign_option_default("keep_prev_reconstruction", False)
+        self._maybe_assign_option_default("options.use_reconstructions", True)
+        self._maybe_assign_option_default("use_score_as_reward", False)
+        self._maybe_assign_option_default("reward_scaling", 1.0)
+
+    def _setup_dataset(self):
         train_loader, valid_loader = data.create_data_loaders(
             self.options, is_test=False
         )
@@ -627,6 +644,13 @@ class ReconstructionEnv(gym.Env):
                     dataset split being used, and "image_idx", indicating the index of the image
                     in the fastMRI dataset.
         """
+        if start_with_initial_mask is False and self.options.rnl_params is None:
+            logging.warning(
+                "Reset called with start_with_initial_mask = False but "
+                "option rnl_params is None. Mask distribution will use default "
+                "configuration of data loader."
+            )
+
         info = {}
         if self.data_mode == "test":
             if self._image_idx_test == min(
