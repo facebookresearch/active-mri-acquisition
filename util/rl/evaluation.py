@@ -1,3 +1,8 @@
+"""
+util.rl.evaluation.py
+====================================
+Utility functions for evaluating policies.
+"""
 import logging
 import os
 import types

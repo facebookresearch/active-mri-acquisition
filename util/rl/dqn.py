@@ -25,7 +25,7 @@ import torch.optim as optim
 import models.evaluator
 import rl_env
 import util.rl.replay_buffer
-import util.rl.utils
+import util.rl.evaluation
 
 from typing import Any, Dict, Optional
 
@@ -582,7 +582,7 @@ class DQNTester:
                 f"Found a new checkpoint with timestamp {timestamp}, "
                 f"I will start evaluation now."
             )
-            test_score, _ = util.rl.utils.test_policy(
+            test_score, _ = util.rl.evaluation.test_policy(
                 self.env,
                 self.policy,
                 self.writer,
@@ -854,7 +854,7 @@ class DQNTrainer:
             if self.options.dqn_test_episode_freq is not None and (
                 self.episode % self.options.dqn_test_episode_freq == 0
             ):
-                test_score, _ = util.rl.utils.test_policy(
+                test_score, _ = util.rl.evaluation.test_policy(
                     self.env,
                     self.policy,
                     self.writer,
@@ -878,7 +878,7 @@ class DQNTrainer:
                 and (self.episode % self.options.dqn_eval_train_set_episode_freq == 0)
                 and (self.options.num_train_images <= 1000)
             ):
-                util.rl.utils.test_policy(
+                util.rl.evaluation.test_policy(
                     self.env,
                     self.policy,
                     self.writer,

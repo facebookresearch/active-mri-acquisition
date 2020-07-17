@@ -19,7 +19,7 @@ import rl_env
 import util.rl.dqn
 import util.rl.replay_buffer
 import util.rl.simple_baselines
-import util.rl.utils
+import util.rl.evaluation
 
 
 def get_experiment_str(options_):
@@ -94,7 +94,7 @@ def main(options_, logger):
     policy = get_policy(env, writer, logger, options_)  # Trains if necessary
     logger.info(f"Created environment with {env.action_space.n} actions")
     env.set_testing()
-    util.rl.utils.test_policy(env, policy, writer, logger, 0, options_)
+    util.rl.evaluation.test_policy(env, policy, writer, logger, 0, options_)
 
 
 if __name__ == "__main__":

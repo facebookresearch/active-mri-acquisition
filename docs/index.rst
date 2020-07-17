@@ -30,7 +30,7 @@ policies.
 .. automodule:: util.rl.simple_baselines
     :members:
 
-.. automodule:: util.rl.utils
+.. automodule:: util.rl.evaluation
     :members:
 
 
