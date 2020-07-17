@@ -80,26 +80,28 @@ class EvaluatorNetwork(nn.Module):
     """ Evaluator network used in Zhang et al., CVPR'19.
 
         Args:
-            number_of_filters(int): Number of filters used in convolutions.\n
+            number_of_filters(int): Number of filters used in convolutions. Defaults to 256. \n
             number_of_conv_layers(int): Depth of the model defined as a number of
-                    convolutional layers.
+                    convolutional layers. Defaults to 4.
             use_sigmoid(bool): Whether the sigmoid non-linearity is applied to the
-                    output of the network.
-            width(int): The width of the image.
-            height(int): The height of the image.
+                    output of the network. Defaults to False.
+            width(int): The width of the image. Defaults to 128 (corresponds to DICOM).
+            height(Optional[int]): The height of the image. If ``None`` the value of ``width``.
+                is used. Defaults to ``None``.
             mask_embed_dim(int): Dimensionality of the mask embedding.
-            num_output_channels(int): The dimensionality of the output.
+            num_output_channels(Optional[int]): The dimensionality of the output. If ``None``,
+                the value of ``width`` is used. Defaults to ``None``.
     """
 
     def __init__(
         self,
-        number_of_filters=256,
-        number_of_conv_layers=4,
-        use_sigmoid=False,
-        width=128,
-        height=None,
-        mask_embed_dim=6,
-        num_output_channels=None,
+        number_of_filters: int = 256,
+        number_of_conv_layers: int = 4,
+        use_sigmoid: bool = False,
+        width: int = 128,
+        height: Optional[int] = None,
+        mask_embed_dim: int = 6,
+        num_output_channels: Optional[int] = None,
     ):
         print(f"[EvaluatorNetwork] -> n_layers = {number_of_conv_layers}")
         super(EvaluatorNetwork, self).__init__()
@@ -107,7 +109,7 @@ class EvaluatorNetwork(nn.Module):
         self.spectral_map = SpectralMapDecomposition()
         self.mask_embed_dim = mask_embed_dim
 
-        if height == None:
+        if height is None:
             height = width
 
         number_of_input_channels = 2 * width + mask_embed_dim
@@ -178,21 +180,23 @@ class EvaluatorNetwork(nn.Module):
 
     def forward(
         self,
-        input: torch.Tensor,
+        input_tensor: torch.Tensor,
         mask_embedding: Optional[torch.Tensor] = None,
         mask: Optional[torch.Tensor] = None,
     ):
         """ Computes scores for each k-space column.
 
         Args:
-            input(torch.Tensor): Batch of reconstructed images,
+            input_tensor(torch.Tensor): Batch of reconstructed images,
                     as produced by :class:`models.reconstruction.ReconstructorNetwork`.
-            mask_embedding torch.Tensor): Corresponding batch of mask embeddings
-                    produced by :class:`models.reconstruction.ReconstructorNetwork`.
-            mask(torch.Tensor): Corresponding masks arrays.
+            mask_embedding(Optional[torch.Tensor]): Corresponding batch of mask embeddings
+                    produced by :class:`models.reconstruction.ReconstructorNetwork`, if needed.
+            mask(Optional[torch.Tensor]): Corresponding masks arrays, if needed.
 
         Returns:
             torch.Tensor: Evaluator score for each k-space column in each image in the batch.
         """
-        spectral_map_and_mask_embedding = self.spectral_map(input, mask_embedding, mask)
+        spectral_map_and_mask_embedding = self.spectral_map(
+            input_tensor, mask_embedding, mask
+        )
         return self.model(spectral_map_and_mask_embedding).squeeze(3).squeeze(2)

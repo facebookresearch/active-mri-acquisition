@@ -89,7 +89,7 @@ def test_policy(
                 \t"count" - the count of values over which mean and m2 where computed.
                 \t"mean" - the mean at each time step across all episodes.\n
                 \t"m2" - the sum of squared deviations at each time step across all episodes.
-                        The estimated variance can be then obtained as m2 / (count - 1).
+                        The estimated variance can be then obtained as m2 / (count - 1).\n
 
     """
     env.set_testing(use_training_set=test_on_train)

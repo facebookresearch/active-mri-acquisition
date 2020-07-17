@@ -597,7 +597,7 @@ class ReconstructionEnv(gym.Env):
                     the dataset images.
                 * Row `H` contains the current mask.
                 * Row `H + 1` contains the mask embedding, padded with zeros. The dimension of the
-                    embedding can be recovered with ``self.metadata["mask_embed_dim"].
+                        embedding can be recovered with ``self.metadata["mask_embed_dim"].
 
             Args:
                 start_with_initial_mask(bool): If `True`, then the episode starts with a mask that

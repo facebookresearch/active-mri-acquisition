@@ -79,15 +79,6 @@ def tensor2im(input_image, imtype=np.uint8, renormalize=True):
 
 
 def create_grid_from_tensor(tensor_of_images, num_rows=4):
-    """
-
-    Args:
-        tensor_of_images:   cuda tensor of images to be converted into grid of images
-                            shape   :   (batch_size, 2, height, width)
-
-    Returns:
-
-    """
     # take norm over real-imaginary dimension
     # tensor_of_images = tensor_of_images.norm(dim=1, keepdim=True)
 

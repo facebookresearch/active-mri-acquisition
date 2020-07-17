@@ -11,11 +11,12 @@ import torch.nn.functional
 import models.evaluator
 import rl_env
 import util.util
+from . import Policy
 
 from typing import Dict, Optional
 
 
-class RandomLowBiasPolicy:
+class RandomLowBiasPolicy(Policy):
     """ A policy representing a random policy biased towards choosing low frequencies.
 
         Args:
@@ -27,6 +28,7 @@ class RandomLowBiasPolicy:
     """
 
     def __init__(self, lowf_offset: int, acc: int = 3):
+        super().__init__()
         self.acc = acc
         self.lowf_offset = lowf_offset
 
@@ -70,7 +72,7 @@ class RandomLowBiasPolicy:
         return mask
 
 
-class RandomPolicy:
+class RandomPolicy(Policy):
     """ A policy representing random k-space selection.
 
         This policy samples without replacement, by creating a permutation of the valid actions
@@ -85,6 +87,7 @@ class RandomPolicy:
     """
 
     def __init__(self, actions: list):
+        super().__init__()
         self.actions = np.random.permutation(actions)
         self.index = 0
 
@@ -100,7 +103,7 @@ class RandomPolicy:
         self.index = 0
 
 
-class NextIndexPolicy:
+class NextIndexPolicy(Policy):
     """ A policy representing action selection in increasing index of column.
 
         This class can be used to simulate a low to high frequency scan order,
@@ -119,6 +122,7 @@ class NextIndexPolicy:
     """
 
     def __init__(self, actions: list, alternate_sides: bool):
+        super().__init__()
         if alternate_sides:
             self.actions = []
             for i in range(len(actions) // 2):
@@ -140,7 +144,7 @@ class NextIndexPolicy:
 
 
 # noinspection PyProtectedMember
-class OneStepGreedy:
+class OneStepGreedy(Policy):
     """ This policy finds the action that optimizes the reconstruction score.
 
         This policy has oracle access to the ground truth image, which is not-accessible to other
@@ -166,6 +170,7 @@ class OneStepGreedy:
         max_actions_to_eval: Optional[int] = None,
         use_reconstructions: bool = True,
     ):
+        super().__init__()
         self.env = env
         self.reward_metric = reward_metric
         self.actions = env.valid_actions
@@ -220,7 +225,7 @@ class OneStepGreedy:
         self._valid_actions = list(self.actions)
 
 
-class EvaluatorNetwork:
+class EvaluatorPolicy(Policy):
     """ Wraps the evaluator network of Zhang et al. CVPR 2019 as a policy.
 
         Args:
@@ -247,6 +252,7 @@ class EvaluatorNetwork:
         initial_num_lines_per_side: int,
         device: torch.device,
     ):
+        super().__init__()
         self.add_mask_eval = add_mask_eval
         self.initial_num_lines_per_side = initial_num_lines_per_side
         self.device = device
@@ -286,7 +292,8 @@ class EvaluatorNetwork:
                     :class:`rl_env.ReconstructionEnv`, with type "image_space" and
                     ``obs_to_numpy == False``.
 
-            Returns(int): The action recommended by the evaluator network.
+            Returns(int):
+                The action recommended by the evaluator network.
         """
         with torch.no_grad():
             mask_embedding = (

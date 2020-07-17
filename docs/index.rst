@@ -4,8 +4,13 @@ Welcome to active_mri's documentation!
 fastMRI data. In particular, ``active_mri`` enables training of active cartesian k-space sampling
 policies.
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
 .. automodule:: rl_env
     :members:
+    :noindex:
 
 .. automodule:: models.reconstruction
     :members:
@@ -27,10 +32,6 @@ policies.
 
 .. automodule:: util.rl.utils
     :members:
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
 
 
 
