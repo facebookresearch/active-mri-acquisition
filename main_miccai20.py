@@ -115,11 +115,11 @@ if __name__ == "__main__":
 
     # Initializing logger
     logger_ = logging.getLogger()
-    logger_.setLevel(logging.DEBUG)
+    logger_.setLevel(logging.DEBUG if opts.debug else logging.INFO)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.DEBUG if opts.debug else logging.INFO)
     fh = logging.FileHandler(os.path.join(opts.checkpoints_dir, "train.log"))
-    fh.setLevel(logging.DEBUG)
+    fh.setLevel(logging.DEBUG if opts.debug else logging.INFO)
     formatter = logging.Formatter(
         "%(asctime)s - %(threadName)s - %(levelname)s: %(message)s"
     )
@@ -131,11 +131,13 @@ if __name__ == "__main__":
     logger_.info(f"Results will be saved at {opts.checkpoints_dir}.")
 
     logger_.info("Creating RL acquisition run with the following options:")
-    for key, value in vars(opts).items():
+    sorted_keys = sorted(vars(opts).keys())
+    for key in sorted_keys:
+        value = vars(opts)[key]
         if key == "device":
             value = value.type
         elif key == "gpu_ids":
             value = "cuda : " + str(value) if torch.cuda.is_available() else "cpu"
-        logger_.info(f"    {key:>25}: {'None' if value is None else value:<30}")
+        logger_.info(f"    {key:>32}: {'None' if value is None else value:<40}")
 
     main(opts, logger_)

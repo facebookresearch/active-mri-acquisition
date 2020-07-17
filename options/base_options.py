@@ -94,7 +94,7 @@ class BaseOptions:
         message += "----------------- End -------------------"
         print(message)
 
-    def parse(self):
+    def parse(self, silent=True):
 
         opt = self.gather_options()
 
@@ -114,6 +114,7 @@ class BaseOptions:
                 f"times to {opt.batchSize}"
             )
 
-        self.print_options(opt)
+        if not silent:
+            self.print_options(opt)
 
         return opt

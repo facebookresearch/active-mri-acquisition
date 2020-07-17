@@ -162,23 +162,46 @@ class ReconstructionEnv(gym.Env):
         )
         self.conjugate_symmetry = options.dataroot != "KNEE_RAW"
 
-        # This is used to configure the mask distribution returned by the data loader in every
-        # call to `reset`.
-        # Only relevant when `reset(start_with_initial_mask = False)`.
-        self.options.rnl_params = (
-            f"{2 * self.options.initial_num_lines_per_side},"
-            f"{2 * (self.options.initial_num_lines_per_side + 1)},1,5"
+        self.data_mode = None
+        self._image_idx_train = None
+        self._image_idx_test = None
+        self._setup_dataset()
+        self._setup_reconstructor()
+        self._setup_observations_and_actions()
+
+        self._initial_mask = self._generate_initial_lowf_mask().to(device)
+        self._ground_truth = None
+        self._current_reconstruction = None
+        self._k_space = None
+        self._current_mask = None
+        self._current_score = None
+        self._initial_score_episode = None
+        self._scans_left = None
+        self._reference_mean_for_reward = None
+        self._reference_std_for_reward = None
+        self._max_cols_cutoff = None
+
+    def _setup_dataset(self):
+        if (
+            self.options.train_with_fixed_initial_mask is False
+            and self.options.rnl_params is None
+        ):
+            logging.warning(
+                "Option train_with_fixed_initial_mask is set to False but "
+                "option rnl_params is set None. Mask distribution will use default "
+                "configuration."
+            )
+
+        train_loader, valid_loader = data.create_data_loaders(
+            self.options, is_test=False
         )
-
-        train_loader, valid_loader = data.create_data_loaders(options, is_test=False)
-        test_loader = data.create_data_loaders(options, is_test=True)
-
+        test_loader = data.create_data_loaders(self.options, is_test=True)
         self._dataset_train = train_loader.dataset
-        if options.test_set == "train":
+        if self.options.test_set == "train":
             self._dataset_test = train_loader.dataset
-        elif options.test_set == "val":
+        elif self.options.test_set == "val":
             self._dataset_test = valid_loader.dataset
-        elif options.test_set == "test":
+        elif self.options.test_set == "test":
             self._dataset_test = test_loader.dataset
         else:
             raise ValueError("Valid options are train, val, test")
@@ -191,9 +214,9 @@ class ReconstructionEnv(gym.Env):
         )
         self.latest_train_images = []
 
-        self.rng = np.random.RandomState(options.seed)
+        self.rng = np.random.RandomState(self.options.seed)
         rng_train = (
-            np.random.RandomState() if options.rl_env_train_no_seed else self.rng
+            np.random.RandomState() if self.options.rl_env_train_no_seed else self.rng
         )
         self._train_order = rng_train.permutation(len(self._dataset_train))
         self._test_order = self.rng.permutation(len(self._dataset_test))
@@ -204,7 +227,10 @@ class ReconstructionEnv(gym.Env):
         self._image_idx_train = 0
         self.data_mode = "train"
 
-        reconstructor_checkpoint = util.util.load_checkpoint(options.reconstructor_path)
+    def _setup_reconstructor(self):
+        reconstructor_checkpoint = util.util.load_checkpoint(
+            self.options.reconstructor_path
+        )
         self._reconstructor = models.reconstruction.ReconstructorNetwork(
             number_of_cascade_blocks=reconstructor_checkpoint[
                 "options"
@@ -230,8 +256,14 @@ class ReconstructionEnv(gym.Env):
         )
         self._reconstructor.eval()
         self._reconstructor.to(device)
+
+        self.metadata = {
+            "mask_embed_dim": reconstructor_checkpoint["options"].mask_embed_dim
+        }
+
         logging.info("Loaded reconstructor and original options from checkpoint.")
 
+    def _setup_observations_and_actions(self):
         self.observation_space = (
             None  # The observation is a dict unless `obs_to_numpy` is used
         )
@@ -245,14 +277,10 @@ class ReconstructionEnv(gym.Env):
                 low=-50000, high=50000, shape=obs_shape
             )
 
-        self.metadata = {
-            "mask_embed_dim": reconstructor_checkpoint["options"].mask_embed_dim
-        }
-
         # Setting up valid actions
         factor = 2 if self.conjugate_symmetry else 1
         num_actions = (
-            self.image_width - 2 * options.initial_num_lines_per_side
+            self.image_width - 2 * self.options.initial_num_lines_per_side
         ) // factor
         self.valid_actions = list(range(num_actions))
         if self.options.dataroot == "KNEE_RAW":
@@ -267,18 +295,6 @@ class ReconstructionEnv(gym.Env):
             )
             self.valid_actions = np.setdiff1d(self.valid_actions, invalid_actions)
         self.action_space = gym.spaces.Discrete(len(self.valid_actions))
-
-        self._initial_mask = self._generate_initial_lowf_mask().to(device)
-        self._ground_truth = None
-        self._current_reconstruction = None
-        self._k_space = None
-        self._current_mask = None
-        self._current_score = None
-        self._initial_score_episode = None
-        self._scans_left = None
-        self._reference_mean_for_reward = None
-        self._reference_std_for_reward = None
-        self._max_cols_cutoff = None
 
     def _generate_initial_lowf_mask(self):
         mask = torch.zeros(1, 1, 1, self.image_width)
