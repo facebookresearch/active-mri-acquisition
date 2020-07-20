@@ -649,7 +649,6 @@ class DQNTester:
         torch.save({"dqn_weights": self.policy.state_dict(), "episode": episode,}, path)
 
 
-# TODO Clean up initialization
 class DQNTrainer:
     def __init__(
         self, options, env=None, writer=None, logger=None, load_replay_mem=True
