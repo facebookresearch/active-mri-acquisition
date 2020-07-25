@@ -1,20 +1,21 @@
 import importlib
 import json
 
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import gym
 import numpy as np
 import torch
 
 
+# TODO Add option to resize default img size
 class ActiveMRIEnv(gym.Env):
     def __init__(self):
-        self._config_file = None
         self._dataset_location = None
         self._reconstructor = None
-        self._device = None
-        pass
+        self._device = torch.device("cpu")
+        self._img_width = None
+        self._img_height = None
 
     def reset(self,) -> Dict[str, np.ndarray]:
         pass
@@ -27,21 +28,25 @@ class ActiveMRIEnv(gym.Env):
     def render(self, mode="human"):
         pass
 
-    def _read_config_file(self):
-        with open(self._config_file, "rb") as f:
-            config = json.load(f)
+    def _init_from_dict(self, config: Dict[str, Any]):
         self._dataset_location = config["dataset_location"]
+
+        # Instantiating reconstructor
         module = importlib.import_module(config["reconstructor_module"])
         reconstructor_cls = getattr(module, config["reconstructor_cls"])
         self._reconstructor = reconstructor_cls(**config["reconstructor_options"])
-        self._device = torch.cuda.device(config["device"])
+
+    def _init_from_config_file(self, config_filename: str):
+        with open(config_filename, "rb") as f:
+            self._init_from_dict(json.load(f))
 
 
 class SingleCoilKneeRAWEnv(ActiveMRIEnv):
     def __init__(self):
         ActiveMRIEnv.__init__(self)
-        self._config_file = "configs/single-coil-knee-raw.json"
-        self._read_config_file()
+        self._init_from_config_file("configs/single-coil-knee-raw.json")
+        self._img_width = 368
+        self._img_height = 640
 
     def reset(self) -> Dict[str, np.ndarray]:
         pass

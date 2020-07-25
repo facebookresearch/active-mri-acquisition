@@ -17,3 +17,4 @@ dependencies:
   - filelock
   - ignite==0.2.0
   - tqdm
+  - pytest
