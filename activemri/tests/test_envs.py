@@ -31,6 +31,16 @@ def test_update_masks_from_indices():
     assert (mask - expected).sum().item() == 0
 
 
+def test_random_cyclic_sampler():
+    alist = [0, 1, 2]
+    sampler = envs.CyclicSampler(alist, None, loops=10)
+    cnt = 0
+    for i, x in enumerate(sampler):
+        assert x == i % 3
+        cnt += 1
+    assert cnt == 30
+
+
 # noinspection PyProtectedMember
 class TestActiveMRIEnv:
     mock_config_json_str = """
@@ -51,7 +61,7 @@ class TestActiveMRIEnv:
     mock_config_dict = json.loads(mock_config_json_str)
 
     def test_init_from_dict(self):
-        env = envs.envs.ActiveMRIEnv()
+        env = envs.ActiveMRIEnv()
         env._init_from_dict(self.mock_config_dict)
         assert type(env._reconstructor) == MockReconstructor
         assert env._reconstructor.option1 == 1

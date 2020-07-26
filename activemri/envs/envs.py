@@ -2,11 +2,12 @@ import importlib
 import json
 import pathlib
 
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Tuple, Optional, Sized
 
 import gym
 import numpy as np
 import torch
+import torch.utils.data
 
 import activemri.data.singlecoil_knee_data as scknee_data
 import activemri.data.transforms
@@ -28,13 +29,46 @@ def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
     return masks
 
 
+def _infinite_generator(a_list):
+    while True:
+        for j in a_list:
+            yield j
+
+
+class CyclicSampler(torch.utils.data.Sampler):
+    def __init__(
+        self,
+        data_source: Sized,
+        rng: Optional[np.random.RandomState] = None,
+        loops: int = 1000,
+    ):
+        torch.utils.data.Sampler.__init__(self, data_source)
+        assert loops > 0
+        self.data_source = data_source
+        self.order = (
+            rng.permutation(len(self.data_source))
+            if rng
+            else range(len(self.data_source))
+        )
+        self.loops = loops
+
+    def __iter__(self):
+        return iter(_infinite_generator(self.order))
+
+    def __len__(self):
+        return len(self.data_source) * self.loops
+
+
 # TODO Add option to resize default img size
+# TODO Add option to control batch size (default 1)
+# TODO See if there is a clean way to have access to current image indices from the env
+# TODO Add code to restart data loaders
 class ActiveMRIEnv(gym.Env):
     def __init__(self):
         self._data_location = None
         self._reconstructor = None
         self._train_data_loader = None
-        self._valid_data_loader = None
+        self._val_data_loader = None
         self._test_data_loader = None
         self._device = torch.device("cpu")
         self._img_width = None
@@ -47,7 +81,7 @@ class ActiveMRIEnv(gym.Env):
         self.rng = np.random.RandomState()
 
     # -------------------------------------------------------------------------
-    # Private methods
+    # Protected methods
     # -------------------------------------------------------------------------
     def _init_from_dict(self, config: Dict[str, Any]):
         self._data_location = config["data_location"]
@@ -110,17 +144,37 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         self._init_from_config_file("configs/single-coil-knee-raw.json")
         self._img_width = 368
         self._img_height = 640
+        self.__setup_dataloaders()
 
+    # -------------------------------------------------------------------------
+    # Private methods
+    # -------------------------------------------------------------------------
+    def __setup_dataloaders(self):
         root_path = pathlib.Path(self._data_location)
         train_path = root_path.joinpath("knee_singlecoil_train")
         val_and_test_path = root_path.joinpath("knee_singlecoil_val")
         transform = activemri.data.transforms.raw_transform_miccai20
-        self.__train_data = scknee_data.RawSliceData(train_path, transform)
-        self.__val_data = scknee_data.RawSliceData(
+        # Setting up training data loader
+        train_data = scknee_data.RawSliceData(train_path, transform)
+        train_sampler = CyclicSampler(train_data, self.rng)
+        self._train_data_loader = torch.utils.data.DataLoader(
+            train_data, batch_size=1, sampler=train_sampler
+        )
+        # Setting up val data loader
+        val_data = scknee_data.RawSliceData(
             val_and_test_path, transform, custom_split="val"
         )
-        self.__test_data = scknee_data.RawSliceData(
+        val_sampler = CyclicSampler(val_data, self.rng, loops=1)
+        self._val_data_loader = torch.utils.data.DataLoader(
+            val_data, batch_size=1, sampler=val_sampler
+        )
+        # Setting up test data loader
+        test_data = scknee_data.RawSliceData(
             val_and_test_path, transform, custom_split="test"
+        )
+        test_sampler = CyclicSampler(test_data, self.rng, loops=1)
+        self._test_data_loader = torch.utils.data.DataLoader(
+            test_data, batch_size=1, sampler=test_sampler
         )
 
     def reset(self) -> Dict[str, np.ndarray]:

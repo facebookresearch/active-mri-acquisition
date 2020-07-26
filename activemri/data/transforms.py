@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 
-def raw_transform_miccai20(data):
+def raw_transform_miccai20(data, *_):
     kspace = torch.from_numpy(np.stack([data.real, data.imag], axis=-1))
     kspace = fastmri_transforms.ifftshift(kspace, dim=(0, 1))
     image = torch.ifft(kspace, 2, normalized=False)
