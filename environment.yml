@@ -4,6 +4,7 @@ channels:
   - anaconda
   - conda-forge
   - defaults
+  - inati
 dependencies:
   - numpy
   - tensorboardX

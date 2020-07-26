@@ -1,5 +1,6 @@
 import importlib
 import json
+import pathlib
 
 from typing import Any, Dict, Tuple, Optional
 
@@ -7,6 +8,8 @@ import gym
 import numpy as np
 import torch
 
+import data.singlecoil_knee_data as scknee_data
+import data.transforms
 
 # noinspection PyUnusedLocal
 class NullReconstructor(torch.nn.Module):
@@ -27,7 +30,7 @@ def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
 # TODO Add option to resize default img size
 class ActiveMRIEnv(gym.Env):
     def __init__(self):
-        self._dataset_location = None
+        self._data_location = None
         self._reconstructor = None
         self._train_data_loader = None
         self._valid_data_loader = None
@@ -46,7 +49,7 @@ class ActiveMRIEnv(gym.Env):
     # Private methods
     # -------------------------------------------------------------------------
     def _init_from_dict(self, config: Dict[str, Any]):
-        self._dataset_location = config["dataset_location"]
+        self._data_location = config["data_location"]
 
         # Instantiating reconstructor
         module = importlib.import_module(config["reconstructor_module"])
@@ -90,6 +93,18 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         self._init_from_config_file("configs/single-coil-knee-raw.json")
         self._img_width = 368
         self._img_height = 640
+
+        root_path = pathlib.Path(self._data_location)
+        train_path = root_path.joinpath("knee_singlecoil_train")
+        val_and_test_path = root_path.joinpath("knee_singlecoil_val")
+        transform = data.transforms.raw_transform_miccai20
+        self.__train_data = scknee_data.RawSliceData(train_path, transform)
+        self.__val_data = scknee_data.RawSliceData(
+            val_and_test_path, transform, custom_split="val"
+        )
+        self.__test_data = scknee_data.RawSliceData(
+            val_and_test_path, transform, custom_split="test"
+        )
 
     def reset(self) -> Dict[str, np.ndarray]:
         pass

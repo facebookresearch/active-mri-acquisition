@@ -1,9 +1,9 @@
 import json
 
-import numpy as np
-
 # noinspection PyUnresolvedReferences
 import pytest
+
+import numpy as np
 import torch
 
 import actmri.envs
@@ -35,7 +35,7 @@ def test_update_masks_from_indices():
 class TestActiveMRIEnv:
     mock_config_json_str = """
     {
-        "dataset_location": "dummy_location",
+        "data_location": "dummy_location",
         "reconstructor_module": "tests",
         "reconstructor_cls": "MockReconstructor",
         "reconstructor_options": {

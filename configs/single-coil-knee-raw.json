@@ -1,5 +1,5 @@
 {
-  "dataset_location": "/private/home/lep/fastmri/singlecoil_knee_raw",
+  "data_location": "/private/home/lep/fastmri",
   "reconstructor_module": "actmri.envs",
   "reconstructor_cls": "NullReconstructor",
   "reconstructor_options": {

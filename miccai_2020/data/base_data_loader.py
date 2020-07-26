@@ -60,7 +60,7 @@ def get_train_valid_loader(
             mask_func, fixed_seed=None, seed_per_image=False
         )
         train_data = raw_data_loader.RawSliceData(
-            raw_root + "/singlecoil_train",
+            os.path.join(raw_root, "singlecoil_train"),
             transform=data_transform,
             num_cols=368,
             num_volumes=num_volumes_train,
@@ -69,7 +69,7 @@ def get_train_valid_loader(
             mask_func, fixed_seed=None, seed_per_image=True
         )
         valid_data = raw_data_loader.RawSliceData(
-            raw_root + "/singlecoil_val",
+            os.path.join(raw_root, "singlecoil_val"),
             transform=data_transform,
             num_cols=368,
             num_volumes=num_volumes_val,
