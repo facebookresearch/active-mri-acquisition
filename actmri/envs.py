@@ -1,7 +1,7 @@
 import importlib
 import json
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Optional
 
 import gym
 import numpy as np
@@ -13,21 +13,22 @@ class ActiveMRIEnv(gym.Env):
     def __init__(self):
         self._dataset_location = None
         self._reconstructor = None
+        self._train_data_loader = None
+        self._valid_data_loader = None
+        self._test_data_loader = None
         self._device = torch.device("cpu")
         self._img_width = None
         self._img_height = None
+        self._idx_img_train = 0
+        self._idx_img_valid = 0
+        self._idx_img_test = 0
 
-    def reset(self,) -> Dict[str, np.ndarray]:
-        pass
+        self.horizon = None
+        self.rng = np.random.RandomState()
 
-    def step(
-        self, action: int
-    ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], float, bool]:
-        pass
-
-    def render(self, mode="human"):
-        pass
-
+    # -------------------------------------------------------------------------
+    # Private methods
+    # -------------------------------------------------------------------------
     def _init_from_dict(self, config: Dict[str, Any]):
         self._dataset_location = config["dataset_location"]
 
@@ -39,6 +40,32 @@ class ActiveMRIEnv(gym.Env):
     def _init_from_config_file(self, config_filename: str):
         with open(config_filename, "rb") as f:
             self._init_from_dict(json.load(f))
+
+    # -------------------------------------------------------------------------
+    # Public methods
+    # -------------------------------------------------------------------------
+    def reset(self,) -> Dict[str, np.ndarray]:
+        pass
+
+    def step(
+        self, action: int
+    ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], float, bool]:
+        pass
+
+    def render(self, mode="human"):
+        pass
+
+    def seed(self, seed: Optional[int] = None):
+        self.rng = np.random.RandomState(seed)
+
+    def restart_train_data_loader(self):
+        self._idx_img_train = 0
+
+    def restart_valid_data_loader(self):
+        self._idx_img_valid = 0
+
+    def restart_test_data_loader(self):
+        self._idx_img_test = 0
 
 
 class SingleCoilKneeRAWEnv(ActiveMRIEnv):
