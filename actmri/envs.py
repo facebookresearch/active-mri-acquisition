@@ -17,6 +17,13 @@ class NullReconstructor(torch.nn.Module):
         return {"reconstruction": zero_filled_image, "return_vars": {"mask": mask}}
 
 
+def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
+    assert masks.shape[0] == indices.size
+    for i, index in enumerate(indices):
+        masks[i, :, index] = 1
+    return masks
+
+
 # TODO Add option to resize default img size
 class ActiveMRIEnv(gym.Env):
     def __init__(self):

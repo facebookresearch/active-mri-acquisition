@@ -1,7 +1,10 @@
 import json
 
+import numpy as np
+
 # noinspection PyUnresolvedReferences
 import pytest
+import torch
 
 import actmri.envs
 
@@ -12,6 +15,20 @@ class MockReconstructor:
         self.option2 = kwargs["option2"]
         self.option3 = kwargs["option3"]
         self.option4 = kwargs["option4"]
+
+
+def test_update_masks_from_indices():
+    mask_1 = torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]], dtype=torch.uint8)
+    mask_2 = torch.tensor([[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]], dtype=torch.uint8)
+    mask = torch.stack([mask_1, mask_2])
+    mask = actmri.envs.update_masks_from_indices(mask, np.array([2, 0]))
+    assert mask.shape == torch.Size([2, 3, 4])
+
+    expected = torch.tensor(
+        [[1, 0, 1, 0], [1, 0, 1, 0], [1, 0, 1, 0]], dtype=torch.uint8
+    ).repeat(2, 1, 1)
+    print(mask, expected, flush=True)
+    assert (mask - expected).sum().item() == 0
 
 
 # noinspection PyProtectedMember
