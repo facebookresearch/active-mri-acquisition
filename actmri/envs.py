@@ -11,6 +11,7 @@ import torch
 import data.singlecoil_knee_data as scknee_data
 import data.transforms
 
+
 # noinspection PyUnusedLocal
 class NullReconstructor(torch.nn.Module):
     def __init__(self, **kwargs):
@@ -76,6 +77,22 @@ class ActiveMRIEnv(gym.Env):
 
     def seed(self, seed: Optional[int] = None):
         self.rng = np.random.RandomState(seed)
+
+    def reset_val(self,) -> Dict[str, np.ndarray]:
+        pass
+
+    def step_val(
+        self, action: int
+    ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], float, bool]:
+        pass
+
+    def reset_test(self,) -> Dict[str, np.ndarray]:
+        pass
+
+    def step_test(
+        self, action: int
+    ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], float, bool]:
+        pass
 
     def restart_train_data_loader(self):
         self._idx_img_train = 0
