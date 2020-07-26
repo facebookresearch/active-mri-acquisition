@@ -8,8 +8,8 @@ import gym
 import numpy as np
 import torch
 
-import data.singlecoil_knee_data as scknee_data
-import data.transforms
+import activemri.data.singlecoil_knee_data as scknee_data
+import activemri.data.transforms
 
 
 # noinspection PyUnusedLocal
@@ -114,7 +114,7 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         root_path = pathlib.Path(self._data_location)
         train_path = root_path.joinpath("knee_singlecoil_train")
         val_and_test_path = root_path.joinpath("knee_singlecoil_val")
-        transform = data.transforms.raw_transform_miccai20
+        transform = activemri.data.transforms.raw_transform_miccai20
         self.__train_data = scknee_data.RawSliceData(train_path, transform)
         self.__val_data = scknee_data.RawSliceData(
             val_and_test_path, transform, custom_split="val"

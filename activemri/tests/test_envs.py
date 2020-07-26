@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 import torch
 
-import actmri.envs
+import activemri.envs as envs
 
 
 class MockReconstructor:
@@ -21,7 +21,7 @@ def test_update_masks_from_indices():
     mask_1 = torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]], dtype=torch.uint8)
     mask_2 = torch.tensor([[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]], dtype=torch.uint8)
     mask = torch.stack([mask_1, mask_2])
-    mask = actmri.envs.update_masks_from_indices(mask, np.array([2, 0]))
+    mask = envs.envs.update_masks_from_indices(mask, np.array([2, 0]))
     assert mask.shape == torch.Size([2, 3, 4])
 
     expected = torch.tensor(
@@ -36,7 +36,7 @@ class TestActiveMRIEnv:
     mock_config_json_str = """
     {
         "data_location": "dummy_location",
-        "reconstructor_module": "tests",
+        "reconstructor_module": "activemri.tests",
         "reconstructor_cls": "MockReconstructor",
         "reconstructor_options": {
             "option1": 1,
@@ -51,7 +51,7 @@ class TestActiveMRIEnv:
     mock_config_dict = json.loads(mock_config_json_str)
 
     def test_init_from_dict(self):
-        env = actmri.envs.ActiveMRIEnv()
+        env = envs.envs.ActiveMRIEnv()
         env._init_from_dict(self.mock_config_dict)
         assert type(env._reconstructor) == MockReconstructor
         assert env._reconstructor.option1 == 1
