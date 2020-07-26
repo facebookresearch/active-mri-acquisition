@@ -8,6 +8,15 @@ import numpy as np
 import torch
 
 
+# noinspection PyUnusedLocal
+class NullReconstructor(torch.nn.Module):
+    def __init__(self, **kwargs):
+        torch.nn.Module.__init__(self)
+
+    def forward(self, zero_filled_image, mask, **kwargs):
+        return {"reconstruction": zero_filled_image, "return_vars": {"mask": mask}}
+
+
 # TODO Add option to resize default img size
 class ActiveMRIEnv(gym.Env):
     def __init__(self):
