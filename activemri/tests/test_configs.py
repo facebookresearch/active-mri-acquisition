@@ -25,3 +25,4 @@ def test_all_configs():
             assert "cls" in reconstructor_cfg
             assert getattr(module, reconstructor_cfg["cls"])
             assert "options" in reconstructor_cfg
+            assert "checkpoint_path" in reconstructor_cfg

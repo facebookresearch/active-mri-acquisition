@@ -14,12 +14,15 @@ import activemri.data.transforms
 
 
 # noinspection PyUnusedLocal
-class NullReconstructor(torch.nn.Module):
+class Reconstructor(torch.nn.Module):
     def __init__(self, **kwargs):
         torch.nn.Module.__init__(self)
 
     def forward(self, zero_filled_image, mask, **kwargs):
         return {"reconstruction": zero_filled_image, "return_vars": {"mask": mask}}
+
+    def load_from_checkpoint(self, filename):
+        pass
 
 
 def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
@@ -96,10 +99,14 @@ class ActiveMRIEnv(gym.Env):
         self._data_location = config["data_location"]
 
         # Instantiating reconstructor
-        reconstructor_config = config["reconstructor"]
-        module = importlib.import_module(reconstructor_config["module"])
-        reconstructor_cls = getattr(module, reconstructor_config["cls"])
-        self._reconstructor = reconstructor_cls(**reconstructor_config["options"])
+        reconstructor_cfg = config["reconstructor"]
+        module = importlib.import_module(reconstructor_cfg["module"])
+        reconstructor_cls = getattr(module, reconstructor_cfg["cls"])
+        self._reconstructor = reconstructor_cls(**reconstructor_cfg["options"])
+        if reconstructor_cfg["checkpoint_path"]:
+            self._reconstructor.load_from_checkpoint(
+                reconstructor_cfg["checkpoint_path"]
+            )
 
     def _init_from_config_file(self, config_filename: str):
         with open(config_filename, "rb") as f:
@@ -151,7 +158,8 @@ class ActiveMRIEnv(gym.Env):
 class SingleCoilKneeRAWEnv(ActiveMRIEnv):
     def __init__(self):
         ActiveMRIEnv.__init__(self)
-        self._init_from_config_file("configs/single-coil-knee-raw.json")
+        # self._init_from_config_file("configs/single-coil-knee-raw.json")
+        self._init_from_config_file("configs/miccai_raw.json")
         self._img_width = 368
         self._img_height = 640
         self.__setup_data_handlers()

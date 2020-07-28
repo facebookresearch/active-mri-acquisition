@@ -2,9 +2,10 @@
   "data_location": "/private/home/lep/fastmri",
   "reconstructor": {
     "module": "activemri.envs",
-    "cls": "NullReconstructor",
+    "cls": "Reconstructor",
     "options": {
-    }
+    },
+    "checkpoint_path": ""
   },
   "device": "cuda:0"
 }

@@ -15,7 +15,8 @@
       "n_downsampling": 3,
       "img_width": 128,
       "use_deconv": true
-    }
+    },
+    "checkpoint_path": "/private/home/lep/tmp/singlecoil_knee.pth"
   },
   "device": "cuda:0"
 }

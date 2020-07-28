@@ -2,14 +2,14 @@ from .envs import (
     ActiveMRIEnv,
     CyclicSampler,
     DataHandler,
-    NullReconstructor,
     SingleCoilKneeRAWEnv,
+    Reconstructor,
 )
 
 __all__ = [
     "ActiveMRIEnv",
     "CyclicSampler",
     "DataHandler",
-    "NullReconstructor",
     "SingleCoilKneeRAWEnv",
+    "Reconstructor",
 ]
