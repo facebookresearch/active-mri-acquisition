@@ -4,16 +4,13 @@
     "module": "miccai_2020.models.reconstruction",
     "cls": "ReconstructorNetwork",
     "options": {
-      "number_of_encoder_input_channels": 2,
-      "number_of_decoder_output_channels": 3,
-      "number_of_filters": 128,
-      "dropout_probability": 0.0,
-      "number_of_layers_residual_bottleneck": 6,
-      "number_of_cascade_blocks": 3,
-      "mask_embed_dim" :6,
-      "padding_type": "reflect",
+      "number_of_filters": 256,
+      "dropout_probability": 0.2,
+      "number_of_layers_residual_bottleneck": 3,
+      "number_of_cascade_blocks": 4,
+      "mask_embed_dim": 0,
       "n_downsampling": 3,
-      "img_width": 128,
+      "img_width": 368,
       "use_deconv": true
     },
     "checkpoint_path": "/private/home/lep/tmp/singlecoil_knee.pth"

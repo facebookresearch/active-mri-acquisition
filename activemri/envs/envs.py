@@ -14,6 +14,13 @@ import activemri.data.singlecoil_knee_data as scknee_data
 import activemri.data.transforms
 
 
+def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
+    assert masks.shape[0] == indices.size
+    for i, index in enumerate(indices):
+        masks[i, :, index] = 1
+    return masks
+
+
 # noinspection PyUnusedLocal
 class Reconstructor(torch.nn.Module):
     def __init__(self, **kwargs):
@@ -26,13 +33,6 @@ class Reconstructor(torch.nn.Module):
 
     def load_from_checkpoint(self, filename: str) -> Optional[Dict[str, Any]]:
         pass
-
-
-def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
-    assert masks.shape[0] == indices.size
-    for i, index in enumerate(indices):
-        masks[i, :, index] = 1
-    return masks
 
 
 class CyclicSampler(torch.utils.data.Sampler):
@@ -177,11 +177,9 @@ class ActiveMRIEnv(gym.Env):
 
 class SingleCoilKneeRAWEnv(ActiveMRIEnv):
     def __init__(self):
-        ActiveMRIEnv.__init__(self)
+        ActiveMRIEnv.__init__(self, 368, 640)
         # self._init_from_config_file("configs/single-coil-knee-raw.json")
         self._init_from_config_file("configs/miccai_raw.json")
-        self._img_width = 368
-        self._img_height = 640
         self.__setup_data_handlers()
 
     # -------------------------------------------------------------------------
