@@ -31,14 +31,39 @@ def test_update_masks_from_indices():
     assert (mask - expected).sum().item() == 0
 
 
-def test_random_cyclic_sampler():
+def test_random_cyclic_sampler_default_order():
     alist = [0, 1, 2]
     sampler = envs.CyclicSampler(alist, None, loops=10)
     cnt = 0
     for i, x in enumerate(sampler):
-        assert x == i % 3
+        assert alist[x] == i % 3
         cnt += 1
     assert cnt == 30
+
+
+def test_random_cyclic_sampler_default_given_order():
+    alist = [1, 2, 0]
+    sampler = envs.CyclicSampler(alist, order=[2, 0, 1], loops=10)
+    cnt = 0
+    for i, x in enumerate(sampler):
+        assert alist[x] == i % 3
+        cnt += 1
+    assert cnt == 30
+
+
+def test_data_handler():
+    data = list(range(10))
+    batch_size = 2
+    loops = 3
+    handler = envs.DataHandler(data, None, batch_size=batch_size, loops=loops)
+    cnt = dict([(x, 0) for x in data])
+    for x in handler:
+        assert len(x) == batch_size
+        for t in x:
+            v = t.item()
+            cnt[v] = cnt[v] + 1
+    for x in cnt:
+        assert cnt[x] == loops
 
 
 # noinspection PyProtectedMember
