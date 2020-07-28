@@ -71,13 +71,15 @@ class TestActiveMRIEnv:
     mock_config_json_str = """
     {
         "data_location": "dummy_location",
-        "reconstructor_module": "activemri.tests",
-        "reconstructor_cls": "MockReconstructor",
-        "reconstructor_options": {
-            "option1": 1,
-            "option2": 0.5,
-            "option3": "dummy",
-            "option4": true
+        "reconstructor": {
+            "module": "activemri.tests",
+            "cls": "MockReconstructor",
+            "options": {
+                "option1": 1,
+                "option2": 0.5,
+                "option3": "dummy",
+                "option4": true
+            }
         },
         "device": "cpu"
     }

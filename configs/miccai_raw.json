@@ -1,18 +1,21 @@
 {
   "data_location": "/private/home/lep/fastmri",
-  "reconstructor_module": "miccai_2020.models.reconstruction",
-  "reconstructor_cls": "ReconstructorNetwork",
-  "reconstructor_options": {
-    "number_of_encoder_input_channels": 2,
-    "number_of_decoder_output_channels": 3,
-    "number_of_filters": 128,
-    "dropout_probability": 0.0,
-    "number_of_layers_residual_bottleneck": 6,
-    "number_of_cascade_blocks": 3,
-    "mask_embed_dim" :6,
-    "padding_type": "reflect",
-    "n_downsampling": 3,
-    "img_width": 128,
-    "use_deconv": true
-  }
+  "reconstructor": {
+    "module": "miccai_2020.models.reconstruction",
+    "cls": "ReconstructorNetwork",
+    "options": {
+      "number_of_encoder_input_channels": 2,
+      "number_of_decoder_output_channels": 3,
+      "number_of_filters": 128,
+      "dropout_probability": 0.0,
+      "number_of_layers_residual_bottleneck": 6,
+      "number_of_cascade_blocks": 3,
+      "mask_embed_dim" :6,
+      "padding_type": "reflect",
+      "n_downsampling": 3,
+      "img_width": 128,
+      "use_deconv": true
+    }
+  },
+  "device": "cuda:0"
 }

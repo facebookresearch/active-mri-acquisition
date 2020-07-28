@@ -75,7 +75,6 @@ class DataHandler:
 # TODO Add option to resize default img size
 # TODO Add option to control batch size (default 1)
 # TODO See if there is a clean way to have access to current image indices from the env
-# TODO Add code to restart data loaders
 class ActiveMRIEnv(gym.Env):
     def __init__(self):
         self._data_location = None
@@ -86,9 +85,6 @@ class ActiveMRIEnv(gym.Env):
         self._device = torch.device("cpu")
         self._img_width = None
         self._img_height = None
-        self._idx_img_train = 0
-        self._idx_img_valid = 0
-        self._idx_img_test = 0
 
         self.horizon = None
         self.seed = None
@@ -100,9 +96,10 @@ class ActiveMRIEnv(gym.Env):
         self._data_location = config["data_location"]
 
         # Instantiating reconstructor
-        module = importlib.import_module(config["reconstructor_module"])
-        reconstructor_cls = getattr(module, config["reconstructor_cls"])
-        self._reconstructor = reconstructor_cls(**config["reconstructor_options"])
+        reconstructor_config = config["reconstructor"]
+        module = importlib.import_module(reconstructor_config["module"])
+        reconstructor_cls = getattr(module, reconstructor_config["cls"])
+        self._reconstructor = reconstructor_cls(**reconstructor_config["options"])
 
     def _init_from_config_file(self, config_filename: str):
         with open(config_filename, "rb") as f:
