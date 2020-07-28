@@ -7,26 +7,14 @@ import numpy as np
 import torch
 
 import activemri.envs as envs
+import activemri.envs.util as util
 
 
-class MockReconstructor:
-    def __init__(self, **kwargs):
-        self.option1 = kwargs["option1"]
-        self.option2 = kwargs["option2"]
-        self.option3 = kwargs["option3"]
-        self.option4 = kwargs["option4"]
-        self.weights = None
-        self._eval = None
-        self.device = None
-
-    def init_from_checkpoint(self, checkpoint):
-        self.weights = "init"
-
-    def eval(self):
-        self._eval = True
-
-    def to(self, device):
-        self.device = device
+def test_import_object_from_str():
+    ceil = util.import_object_from_str("math.ceil")
+    assert 3 == ceil(2.5)
+    det = util.import_object_from_str("numpy.linalg.det")
+    assert det(np.array([[1, 0], [0, 1]])) == 1
 
 
 def test_update_masks_from_indices():
@@ -75,6 +63,26 @@ def test_data_handler():
             cnt[v] = cnt[v] + 1
     for x in cnt:
         assert cnt[x] == loops
+
+
+class MockReconstructor:
+    def __init__(self, **kwargs):
+        self.option1 = kwargs["option1"]
+        self.option2 = kwargs["option2"]
+        self.option3 = kwargs["option3"]
+        self.option4 = kwargs["option4"]
+        self.weights = None
+        self._eval = None
+        self.device = None
+
+    def init_from_checkpoint(self, checkpoint):
+        self.weights = "init"
+
+    def eval(self):
+        self._eval = True
+
+    def to(self, device):
+        self.device = device
 
 
 # noinspection PyProtectedMember

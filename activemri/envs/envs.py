@@ -92,7 +92,6 @@ class ActiveMRIEnv(gym.Env):
         self._train_data_handler = None
         self._val_data_handler = None
         self._test_data_handler = None
-        self._preprocess_func = None
         self._device = torch.device("cpu")
 
         self.horizon = None
