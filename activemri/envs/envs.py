@@ -12,6 +12,7 @@ import torch.utils.data
 
 import activemri.data.singlecoil_knee_data as scknee_data
 import activemri.data.transforms
+import activemri.envs.util
 
 
 def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
@@ -91,6 +92,7 @@ class ActiveMRIEnv(gym.Env):
         self._train_data_handler = None
         self._val_data_handler = None
         self._test_data_handler = None
+        self._preprocess_func = None
         self._device = torch.device("cpu")
 
         self.horizon = None

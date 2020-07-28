@@ -1,8 +1,7 @@
 {
   "data_location": "/private/home/lep/fastmri",
   "reconstructor": {
-    "module": "miccai_2020.models.reconstruction",
-    "cls": "ReconstructorNetwork",
+    "cls": "miccai_2020.models.reconstruction.ReconstructorNetwork",
     "options": {
       "number_of_filters": 256,
       "dropout_probability": 0.2,

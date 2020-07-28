@@ -1,8 +1,7 @@
 {
   "data_location": "/private/home/lep/fastmri",
   "reconstructor": {
-    "module": "activemri.envs",
-    "cls": "Reconstructor",
+    "cls": "activemri.envs.Reconstructor",
     "options": {
     },
     "checkpoint_path": ""

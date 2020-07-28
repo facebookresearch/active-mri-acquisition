@@ -1,9 +1,10 @@
-import importlib
 import json
 import os
 
 # noinspection PyUnresolvedReferences
 import pytest
+
+import activemri.envs.util
 
 
 def test_all_configs():
@@ -16,13 +17,11 @@ def test_all_configs():
             assert "device" in data
             assert "reconstructor" in data
             reconstructor_cfg = data["reconstructor"]
-            assert "module" in reconstructor_cfg
-            try:
-                module = importlib.import_module(reconstructor_cfg["module"])
-            except ModuleNotFoundError:
-                print(f"Reconstructor module in config file {fname} was not found.")
-                assert False
             assert "cls" in reconstructor_cfg
-            assert getattr(module, reconstructor_cfg["cls"])
+            try:
+                _ = activemri.envs.util.import_object_from_str(reconstructor_cfg["cls"])
+            except ModuleNotFoundError:
+                print(f"Reconstructor class in config file {fname} was not found.")
+                assert False
             assert "options" in reconstructor_cfg
             assert "checkpoint_path" in reconstructor_cfg
