@@ -8,9 +8,10 @@ import logging
 import numpy as np
 import torch.nn.functional
 
-import models.evaluator
-import rl_env
-import common.util
+import miccai_2020.models.evaluator as m20_evaluator
+import miccai_2020.rl_env as rl_env
+import miccai_2020.util.common as m20_common
+
 from . import Policy
 
 from typing import Dict, Optional
@@ -256,13 +257,13 @@ class EvaluatorPolicy(Policy):
         self.add_mask_eval = add_mask_eval
         self.initial_num_lines_per_side = initial_num_lines_per_side
         self.device = device
-        evaluator_checkpoint = common.util.load_checkpoint(evaluator_path)
+        evaluator_checkpoint = m20_common.util.load_checkpoint(evaluator_path)
         assert (
             evaluator_checkpoint is not None
             and evaluator_checkpoint["evaluator"] is not None
         )
 
-        self._evaluator = models.evaluator.EvaluatorNetwork(
+        self._evaluator = m20_evaluator.EvaluatorNetwork(
             number_of_filters=evaluator_checkpoint[
                 "options"
             ].number_of_evaluator_filters,

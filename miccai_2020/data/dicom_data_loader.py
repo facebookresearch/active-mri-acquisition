@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.utils.data
 
-import models.fft_utils
+import miccai_2020.models.fft_utils as fft_utils
 
 
 class Slice(torch.utils.data.Dataset):
@@ -63,7 +63,7 @@ class DicomDataTransform:
     def __call__(self, image, mean, std):
         image = (image - mean) / (std + 1e-12)
         image = torch.from_numpy(image)
-        image = models.fft_utils.dicom_to_0_1_range(image)
+        image = fft_utils.dicom_to_0_1_range(image)
         shape = np.array(image.shape)
         seed = (
             int(1009 * image.sum().abs())

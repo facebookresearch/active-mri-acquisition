@@ -22,10 +22,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-import models.evaluator
-import rl_env
-import common.rl.replay_buffer
-import common.rl.evaluation
+import miccai_2020.models.evaluator as m20_evaluator
+import miccai_2020.rl_env as rl_env
+import replay_buffer
+import evaluation
+from . import Policy
 
 from typing import Any, Dict, Optional
 
@@ -157,7 +158,7 @@ class EvaluatorBasedValueNetwork(nn.Module):
     ):
         super(EvaluatorBasedValueNetwork, self).__init__()
         num_actions = image_width - 2 * initial_num_lines_per_side
-        self.evaluator = models.evaluator.EvaluatorNetwork(
+        self.evaluator = m20_evaluator.EvaluatorNetwork(
             number_of_filters=128,
             number_of_conv_layers=4,
             use_sigmoid=False,
@@ -249,7 +250,7 @@ def _get_model(options):
     raise ValueError("Unknown model specified for DQN.")
 
 
-class DDQN(nn.Module, common.rl.Policy):
+class DDQN(nn.Module, Policy):
     """ Double-DQN implementation.
 
         Args:
@@ -281,7 +282,7 @@ class DDQN(nn.Module, common.rl.Policy):
         self,
         num_actions: int,
         device: torch.device,
-        memory: Optional[common.rl.replay_buffer.ReplayMemory],
+        memory: Optional[replay_buffer.ReplayMemory],
         opts: types.SimpleNamespace,
     ):
         super(DDQN, self).__init__()
@@ -582,7 +583,7 @@ class DQNTester:
                 f"Found a new checkpoint with timestamp {timestamp}, "
                 f"I will start evaluation now."
             )
-            test_score, _ = common.rl.evaluation.test_policy(
+            test_score, _ = evaluation.test_policy(
                 self.env,
                 self.policy,
                 self.writer,
@@ -709,7 +710,7 @@ class DQNTrainer:
             else self._max_replay_buffer_size()
         )
         self.logger.info(f"Creating replay buffer with capacity {mem_capacity}.")
-        self.replay_memory = common.rl.replay_buffer.ReplayMemory(
+        self.replay_memory = replay_buffer.ReplayMemory(
             mem_capacity,
             self.env.observation_space.shape,
             self.options.rl_batch_size,
@@ -828,7 +829,7 @@ class DQNTrainer:
                         f"capacity {mem_capacity}."
                     )
 
-                    self.replay_memory = common.rl.replay_buffer.ReplayMemory(
+                    self.replay_memory = replay_buffer.ReplayMemory(
                         mem_capacity,
                         self.env.observation_space.shape,
                         self.options.rl_batch_size,
@@ -853,7 +854,7 @@ class DQNTrainer:
             if self.options.dqn_test_episode_freq is not None and (
                 self.episode % self.options.dqn_test_episode_freq == 0
             ):
-                test_score, _ = common.rl.evaluation.test_policy(
+                test_score, _ = evaluation.test_policy(
                     self.env,
                     self.policy,
                     self.writer,
@@ -877,7 +878,7 @@ class DQNTrainer:
                 and (self.episode % self.options.dqn_eval_train_set_episode_freq == 0)
                 and (self.options.num_train_images <= 1000)
             ):
-                common.rl.evaluation.test_policy(
+                evaluation.test_policy(
                     self.env,
                     self.policy,
                     self.writer,
