@@ -1,6 +1,7 @@
 import importlib
 import json
 import pathlib
+import warnings
 
 from typing import Any, Dict, Tuple, Optional, Sized
 
@@ -77,7 +78,7 @@ class DataHandler:
         return self.__data_loader
 
 
-# TODO Add option to resize default img size
+# TODO Add option to resize default img size (need to pass this option to reconstructor)
 # TODO Add option to control batch size (default 1)
 # TODO See if there is a clean way to have access to current image indices from the env
 class ActiveMRIEnv(gym.Env):
@@ -108,10 +109,17 @@ class ActiveMRIEnv(gym.Env):
         checkpoint = torch.load(checkpoint_path) if checkpoint_path.is_file() else None
         options = reconstructor_cfg["options"]
         if checkpoint and "options" in checkpoint:
+            msg = (
+                f"Checkpoint at {checkpoint_path.name} has an 'options' field. "
+                f"This will override the options defined in configuration file."
+            )
+            warnings.warn(msg)
             options = checkpoint["options"]
             assert isinstance(options, dict)
         self._reconstructor = reconstructor_cls(**options)
         self._reconstructor.init_from_checkpoint(checkpoint)
+        self._reconstructor.eval()
+        self._reconstructor.to(self._device)
 
     def _init_from_config_file(self, config_filename: str):
         with open(config_filename, "rb") as f:
@@ -177,12 +185,12 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         train_path = root_path.joinpath("knee_singlecoil_train")
         val_and_test_path = root_path.joinpath("knee_singlecoil_val")
         transform = activemri.data.transforms.raw_transform_miccai20
+
         # Setting up training data loader
         train_data = scknee_data.RawSliceData(train_path, transform)
         self._train_data_handler = DataHandler(
             train_data, self.seed, batch_size=1, loops=1000
         )
-
         # Setting up val data loader
         val_data = scknee_data.RawSliceData(
             val_and_test_path, transform, custom_split="val"

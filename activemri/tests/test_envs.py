@@ -16,9 +16,17 @@ class MockReconstructor:
         self.option3 = kwargs["option3"]
         self.option4 = kwargs["option4"]
         self.weights = None
+        self._eval = None
+        self.device = None
 
     def init_from_checkpoint(self, checkpoint):
         self.weights = "init"
+
+    def eval(self):
+        self._eval = True
+
+    def to(self, device):
+        self.device = device
 
 
 def test_update_masks_from_indices():
@@ -31,7 +39,6 @@ def test_update_masks_from_indices():
     expected = torch.tensor(
         [[1, 0, 1, 0], [1, 0, 1, 0], [1, 0, 1, 0]], dtype=torch.uint8
     ).repeat(2, 1, 1)
-    print(mask, expected, flush=True)
     assert (mask - expected).sum().item() == 0
 
 
@@ -83,7 +90,8 @@ class TestActiveMRIEnv:
                 "option2": 0.5,
                 "option3": "dummy",
                 "option4": true
-            }
+            },
+            "checkpoint_path": "null"
         },
         "device": "cpu"
     }
@@ -100,3 +108,5 @@ class TestActiveMRIEnv:
         assert env._reconstructor.option3 == "dummy"
         assert env._reconstructor.option4
         assert env._reconstructor.weights == "init"
+        assert env._reconstructor._eval
+        assert env._reconstructor.device == torch.device("cpu")
