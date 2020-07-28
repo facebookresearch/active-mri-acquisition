@@ -17,8 +17,8 @@ class MockReconstructor:
         self.option4 = kwargs["option4"]
         self.weights = None
 
-    def load_from_checkpoint(self, filename):
-        self.weights = filename
+    def init_from_checkpoint(self, checkpoint):
+        self.weights = "init"
 
 
 def test_update_masks_from_indices():
@@ -83,8 +83,7 @@ class TestActiveMRIEnv:
                 "option2": 0.5,
                 "option3": "dummy",
                 "option4": true
-            },
-            "checkpoint_path": "path"
+            }
         },
         "device": "cpu"
     }
@@ -92,12 +91,12 @@ class TestActiveMRIEnv:
 
     mock_config_dict = json.loads(mock_config_json_str)
 
-    def test_init_from_dict(self):
+    def test_init_from_config_dict(self):
         env = envs.ActiveMRIEnv()
-        env._init_from_dict(self.mock_config_dict)
+        env._init_from_config_dict(self.mock_config_dict)
         assert type(env._reconstructor) == MockReconstructor
         assert env._reconstructor.option1 == 1
         assert env._reconstructor.option2 == 0.5
         assert env._reconstructor.option3 == "dummy"
         assert env._reconstructor.option4
-        assert env._reconstructor.weights == "path"
+        assert env._reconstructor.weights == "init"

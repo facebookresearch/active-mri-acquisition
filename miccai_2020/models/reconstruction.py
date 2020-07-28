@@ -338,8 +338,7 @@ class ReconstructorNetwork(nn.Module):
 
         return reconstructed_image, uncertainty_map, mask_embedding
 
-    def load_from_checkpoint(self, filename):
-        checkpoint = torch.load(filename)
+    def init_from_checkpoint(self, checkpoint):
 
         if not isinstance(self, nn.DataParallel):
             self.load_state_dict(
@@ -351,3 +350,4 @@ class ReconstructorNetwork(nn.Module):
             )
         else:
             self.load_state_dict(checkpoint["reconstructor"])
+        return checkpoint["options"]

@@ -18,10 +18,12 @@ class Reconstructor(torch.nn.Module):
     def __init__(self, **kwargs):
         torch.nn.Module.__init__(self)
 
-    def forward(self, zero_filled_image, mask, **kwargs):
+    def forward(
+        self, zero_filled_image: torch.Tensor, mask: torch.Tensor, **kwargs
+    ) -> Dict[str, Any]:
         return {"reconstruction": zero_filled_image, "return_vars": {"mask": mask}}
 
-    def load_from_checkpoint(self, filename):
+    def load_from_checkpoint(self, filename: str) -> Optional[Dict[str, Any]]:
         pass
 
 
@@ -95,22 +97,25 @@ class ActiveMRIEnv(gym.Env):
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
-    def _init_from_dict(self, config: Dict[str, Any]):
+    def _init_from_config_dict(self, config: Dict[str, Any]):
         self._data_location = config["data_location"]
 
         # Instantiating reconstructor
         reconstructor_cfg = config["reconstructor"]
         module = importlib.import_module(reconstructor_cfg["module"])
         reconstructor_cls = getattr(module, reconstructor_cfg["cls"])
-        self._reconstructor = reconstructor_cls(**reconstructor_cfg["options"])
-        if reconstructor_cfg["checkpoint_path"]:
-            self._reconstructor.load_from_checkpoint(
-                reconstructor_cfg["checkpoint_path"]
-            )
+        checkpoint_path = pathlib.Path(reconstructor_cfg["checkpoint_path"])
+        checkpoint = torch.load(checkpoint_path) if checkpoint_path.is_file() else None
+        options = reconstructor_cfg["options"]
+        if checkpoint and "options" in checkpoint:
+            options = checkpoint["options"]
+            assert isinstance(options, dict)
+        self._reconstructor = reconstructor_cls(**options)
+        self._reconstructor.init_from_checkpoint(checkpoint)
 
     def _init_from_config_file(self, config_filename: str):
         with open(config_filename, "rb") as f:
-            self._init_from_dict(json.load(f))
+            self._init_from_config_dict(json.load(f))
 
     # -------------------------------------------------------------------------
     # Public methods
