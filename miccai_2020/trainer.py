@@ -20,7 +20,7 @@ import models.evaluator
 import models.fft_utils
 import models.reconstruction
 import options.train_options
-import util.util
+import common.util
 
 
 def run_validation_and_update_best_checkpoint(
@@ -420,7 +420,7 @@ class Trainer:
         validation_mse.attach(val_engine, name="mse")
 
         validation_ssim = Loss(
-            loss_fn=util.util.compute_ssims,
+            loss_fn=common.util.compute_ssims,
             output_transform=lambda x: (
                 x["reconstructed_image_magnitude"],
                 x["ground_truth_magnitude"],
@@ -498,27 +498,29 @@ class Trainer:
             difference = torch.abs(ground_truth - reconstructed_image)
 
             # Create plots
-            ground_truth = util.util.create_grid_from_tensor(ground_truth)
+            ground_truth = common.util.create_grid_from_tensor(ground_truth)
             writer.add_image(
                 "validation_images/ground_truth", ground_truth, self.completed_epochs
             )
 
-            zero_filled_image = util.util.create_grid_from_tensor(zero_filled_image)
+            zero_filled_image = common.util.create_grid_from_tensor(zero_filled_image)
             writer.add_image(
                 "validation_images/zero_filled_image",
                 zero_filled_image,
                 self.completed_epochs,
             )
 
-            reconstructed_image = util.util.create_grid_from_tensor(reconstructed_image)
+            reconstructed_image = common.util.create_grid_from_tensor(
+                reconstructed_image
+            )
             writer.add_image(
                 "validation_images/reconstructed_image",
                 reconstructed_image,
                 self.completed_epochs,
             )
 
-            uncertainty_map = util.util.gray2heatmap(
-                util.util.create_grid_from_tensor(uncertainty_map.exp()), cmap="jet"
+            uncertainty_map = common.util.gray2heatmap(
+                common.util.create_grid_from_tensor(uncertainty_map.exp()), cmap="jet"
             )
             writer.add_image(
                 "validation_images/uncertainty_map",
@@ -526,13 +528,13 @@ class Trainer:
                 self.completed_epochs,
             )
 
-            difference = util.util.create_grid_from_tensor(difference)
-            difference = util.util.gray2heatmap(difference, cmap="gray")
+            difference = common.util.create_grid_from_tensor(difference)
+            difference = common.util.gray2heatmap(difference, cmap="gray")
             writer.add_image(
                 "validation_images/difference", difference, self.completed_epochs
             )
 
-            mask = util.util.create_grid_from_tensor(
+            mask = common.util.create_grid_from_tensor(
                 val_engine.state.output["mask"].repeat(
                     1, 1, val_engine.state.output["mask"].shape[3], 1
                 )

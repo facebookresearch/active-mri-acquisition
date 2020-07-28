@@ -12,11 +12,10 @@ import numpy as np
 import torch
 from typing import Dict, List, Optional, Tuple, Union
 
-import data
-import models.fft_utils
-import models.reconstruction
-import util.util
-import util.rl.evaluation
+import miccai_2020.data as m20_data
+import miccai_2020.models.fft_utils as fft_utils
+import miccai_2020.models.reconstruction as reconstruction
+import miccai_2020.util.common as m20_common
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -210,10 +209,10 @@ class ReconstructionEnv(gym.Env):
         self._maybe_assign_option_default("reward_scaling", 1.0)
 
     def _setup_dataset(self):
-        train_loader, valid_loader = data.create_data_loaders(
+        train_loader, valid_loader = m20_data.create_data_loaders(
             self.options, is_test=False
         )
-        test_loader = data.create_data_loaders(self.options, is_test=True)
+        test_loader = m20_data.create_data_loaders(self.options, is_test=True)
         self._dataset_train = train_loader.dataset
         if self.options.test_set == "train":
             self._dataset_test = train_loader.dataset
@@ -246,10 +245,10 @@ class ReconstructionEnv(gym.Env):
         self.data_mode = "train"
 
     def _setup_reconstructor(self):
-        reconstructor_checkpoint = util.util.load_checkpoint(
+        reconstructor_checkpoint = m20_common.load_checkpoint(
             self.options.reconstructor_path
         )
-        self._reconstructor = models.reconstruction.ReconstructorNetwork(
+        self._reconstructor = reconstruction.ReconstructorNetwork(
             number_of_cascade_blocks=reconstructor_checkpoint[
                 "options"
             ].number_of_cascade_blocks,
@@ -329,7 +328,7 @@ class ReconstructionEnv(gym.Env):
             if self.options.keep_prev_reconstruction
             else None
         )
-        reconstructor_input, _, mask_to_use = models.fft_utils.preprocess_inputs(
+        reconstructor_input, _, mask_to_use = fft_utils.preprocess_inputs(
             (self._current_mask, self._ground_truth, self._k_space),
             self.options.dataroot,
             device,
@@ -351,20 +350,20 @@ class ReconstructionEnv(gym.Env):
         reconstruction: torch.Tensor, ground_truth: torch.Tensor, is_raw: bool
     ) -> Dict[str, torch.Tensor]:
         # Compute magnitude (for metrics)
-        reconstruction = models.fft_utils.to_magnitude(reconstruction)
-        ground_truth = models.fft_utils.to_magnitude(ground_truth)
+        reconstruction = fft_utils.to_magnitude(reconstruction)
+        ground_truth = fft_utils.to_magnitude(ground_truth)
         if is_raw:  # crop data
-            reconstruction = models.fft_utils.center_crop(
+            reconstruction = fft_utils.center_crop(
                 reconstruction, [RAW_CENTER_CROP_SIZE, RAW_CENTER_CROP_SIZE]
             )
-            ground_truth = models.fft_utils.center_crop(
+            ground_truth = fft_utils.center_crop(
                 ground_truth, [RAW_CENTER_CROP_SIZE, RAW_CENTER_CROP_SIZE]
             )
 
-        mse = util.util.compute_mse(reconstruction, ground_truth)
-        nmse = util.util.compute_nmse(reconstruction, ground_truth)
-        ssim = util.util.compute_ssims(reconstruction, ground_truth)
-        psnr = util.util.compute_psnrs(reconstruction, ground_truth)
+        mse = m20_common.compute_mse(reconstruction, ground_truth)
+        nmse = m20_common.compute_nmse(reconstruction, ground_truth)
+        ssim = m20_common.compute_ssims(reconstruction, ground_truth)
+        psnr = m20_common.compute_psnrs(reconstruction, ground_truth)
 
         score = {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
 
@@ -390,7 +389,7 @@ class ReconstructionEnv(gym.Env):
                 return observation, score
 
             if self.options.obs_type == "fourier_space":
-                reconstruction = models.fft_utils.fft(reconstruction)
+                reconstruction = fft_utils.fft(reconstruction)
 
             self._current_reconstruction = reconstruction
             observation = {
@@ -592,7 +591,7 @@ class ReconstructionEnv(gym.Env):
             prev_reconstruction = (
                 self._current_reconstruction if keep_prev_reconstruction else None
             )
-            image, _, mask_to_use = models.fft_utils.preprocess_inputs(
+            image, _, mask_to_use = fft_utils.preprocess_inputs(
                 (mask_to_use, ground_truth, k_space),
                 self.options.dataroot,
                 device,

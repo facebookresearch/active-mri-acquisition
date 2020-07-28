@@ -10,7 +10,7 @@ import torch.nn.functional
 
 import models.evaluator
 import rl_env
-import util.util
+import common.util
 from . import Policy
 
 from typing import Dict, Optional
@@ -256,7 +256,7 @@ class EvaluatorPolicy(Policy):
         self.add_mask_eval = add_mask_eval
         self.initial_num_lines_per_side = initial_num_lines_per_side
         self.device = device
-        evaluator_checkpoint = util.util.load_checkpoint(evaluator_path)
+        evaluator_checkpoint = common.util.load_checkpoint(evaluator_path)
         assert (
             evaluator_checkpoint is not None
             and evaluator_checkpoint["evaluator"] is not None

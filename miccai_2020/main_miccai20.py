@@ -16,10 +16,10 @@ import torch
 
 import options.rl_options
 import rl_env
-import util.rl.dqn
-import util.rl.replay_buffer
-import util.rl.simple_baselines
-import util.rl.evaluation
+import common.rl.dqn
+import common.rl.replay_buffer
+import common.rl.simple_baselines
+import common.rl.evaluation
 
 
 def get_experiment_str(options_):
@@ -48,17 +48,17 @@ def get_policy(env, writer, logger, options_):
     # (whether it passes through reconstruction network or not after a new col. is scanned)
     logger.info(f"Use reconstructions is {options_.use_reconstructions}")
     if options_.policy == "random":
-        policy = util.rl.simple_baselines.RandomPolicy(valid_actions)
+        policy = common.rl.simple_baselines.RandomPolicy(valid_actions)
     elif options_.policy == "lowfirst":
-        policy = util.rl.simple_baselines.NextIndexPolicy(
+        policy = common.rl.simple_baselines.NextIndexPolicy(
             valid_actions, not env.conjugate_symmetry
         )
     elif options_.policy == "random_low_bias":
-        policy = util.rl.simple_baselines.RandomLowBiasPolicy(
+        policy = common.rl.simple_baselines.RandomLowBiasPolicy(
             options_.initial_num_lines_per_side
         )
     elif options_.policy == "one_step_greedy":
-        policy = util.rl.simple_baselines.OneStepGreedy(
+        policy = common.rl.simple_baselines.OneStepGreedy(
             env,
             options_.reward_metric,
             max_actions_to_eval=options_.greedy_max_num_actions,
@@ -67,7 +67,7 @@ def get_policy(env, writer, logger, options_):
         assert options_.obs_type == "image_space"
         # At the moment, Evaluator gets valid actions in a mask - preprocess data function.
         # So, no need to pass `valid_actions`
-        policy = util.rl.simple_baselines.EvaluatorPolicy(
+        policy = common.rl.simple_baselines.EvaluatorPolicy(
             options_.evaluator_path,
             options_.dataroot == "KNEE_RAW",
             options_.add_mask_eval,
@@ -76,7 +76,7 @@ def get_policy(env, writer, logger, options_):
         )
     elif "dqn" in options_.policy:
         assert options_.obs_to_numpy
-        dqn_trainer = util.rl.dqn.DQNTrainer(options_, env, writer, logger)
+        dqn_trainer = common.rl.dqn.DQNTrainer(options_, env, writer, logger)
         dqn_trainer()
         policy = dqn_trainer.policy
     else:
@@ -94,7 +94,7 @@ def main(options_, logger):
     policy = get_policy(env, writer, logger, options_)  # Trains if necessary
     logger.info(f"Created environment with {env.action_space.n} actions")
     env.set_testing()
-    util.rl.evaluation.test_policy(env, policy, writer, logger, 0, options_)
+    common.rl.evaluation.test_policy(env, policy, writer, logger, 0, options_)
 
 
 if __name__ == "__main__":

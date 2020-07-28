@@ -24,8 +24,8 @@ import torch.optim as optim
 
 import models.evaluator
 import rl_env
-import util.rl.replay_buffer
-import util.rl.evaluation
+import common.rl.replay_buffer
+import common.rl.evaluation
 
 from typing import Any, Dict, Optional
 
@@ -249,7 +249,7 @@ def _get_model(options):
     raise ValueError("Unknown model specified for DQN.")
 
 
-class DDQN(nn.Module, util.rl.Policy):
+class DDQN(nn.Module, common.rl.Policy):
     """ Double-DQN implementation.
 
         Args:
@@ -281,7 +281,7 @@ class DDQN(nn.Module, util.rl.Policy):
         self,
         num_actions: int,
         device: torch.device,
-        memory: Optional[util.rl.replay_buffer.ReplayMemory],
+        memory: Optional[common.rl.replay_buffer.ReplayMemory],
         opts: types.SimpleNamespace,
     ):
         super(DDQN, self).__init__()
@@ -582,7 +582,7 @@ class DQNTester:
                 f"Found a new checkpoint with timestamp {timestamp}, "
                 f"I will start evaluation now."
             )
-            test_score, _ = util.rl.evaluation.test_policy(
+            test_score, _ = common.rl.evaluation.test_policy(
                 self.env,
                 self.policy,
                 self.writer,
@@ -709,7 +709,7 @@ class DQNTrainer:
             else self._max_replay_buffer_size()
         )
         self.logger.info(f"Creating replay buffer with capacity {mem_capacity}.")
-        self.replay_memory = util.rl.replay_buffer.ReplayMemory(
+        self.replay_memory = common.rl.replay_buffer.ReplayMemory(
             mem_capacity,
             self.env.observation_space.shape,
             self.options.rl_batch_size,
@@ -828,7 +828,7 @@ class DQNTrainer:
                         f"capacity {mem_capacity}."
                     )
 
-                    self.replay_memory = util.rl.replay_buffer.ReplayMemory(
+                    self.replay_memory = common.rl.replay_buffer.ReplayMemory(
                         mem_capacity,
                         self.env.observation_space.shape,
                         self.options.rl_batch_size,
@@ -853,7 +853,7 @@ class DQNTrainer:
             if self.options.dqn_test_episode_freq is not None and (
                 self.episode % self.options.dqn_test_episode_freq == 0
             ):
-                test_score, _ = util.rl.evaluation.test_policy(
+                test_score, _ = common.rl.evaluation.test_policy(
                     self.env,
                     self.policy,
                     self.writer,
@@ -877,7 +877,7 @@ class DQNTrainer:
                 and (self.episode % self.options.dqn_eval_train_set_episode_freq == 0)
                 and (self.options.num_train_images <= 1000)
             ):
-                util.rl.evaluation.test_policy(
+                common.rl.evaluation.test_policy(
                     self.env,
                     self.policy,
                     self.writer,

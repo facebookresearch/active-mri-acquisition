@@ -337,3 +337,17 @@ class ReconstructorNetwork(nn.Module):
                 encoder_input = reconstructed_image
 
         return reconstructed_image, uncertainty_map, mask_embedding
+
+    def load_from_checkpoint(self, filename):
+        checkpoint = torch.load(filename)
+
+        if not isinstance(self, nn.DataParallel):
+            self.load_state_dict(
+                {
+                    # This assumes that environment code runs in a single GPU
+                    key.replace("module.", ""): val
+                    for key, val in checkpoint["reconstructor"].items()
+                }
+            )
+        else:
+            self.load_state_dict(checkpoint["reconstructor"])
