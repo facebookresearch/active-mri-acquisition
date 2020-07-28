@@ -3,7 +3,7 @@ import json
 import pathlib
 import warnings
 
-from typing import Any, Dict, Tuple, Optional, Sized
+from typing import Any, Dict, List, Mapping, Tuple, Optional, Sized
 
 import gym
 import numpy as np
@@ -82,23 +82,27 @@ class DataHandler:
 # TODO Add option to control batch size (default 1)
 # TODO See if there is a clean way to have access to current image indices from the env
 class ActiveMRIEnv(gym.Env):
-    def __init__(self):
+    def __init__(self, img_width, img_height):
+        self._img_width = img_width
+        self._img_height = img_height
+
         self._data_location = None
         self._reconstructor = None
         self._train_data_handler = None
         self._val_data_handler = None
         self._test_data_handler = None
         self._device = torch.device("cpu")
-        self._img_width = None
-        self._img_height = None
 
         self.horizon = None
         self.seed = None
 
+        self.observation_space = None  # Observation will be a dictionary
+        self.action_space = gym.spaces.Discrete(img_width)
+
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
-    def _init_from_config_dict(self, config: Dict[str, Any]):
+    def _init_from_config_dict(self, config: Mapping[str, Any]):
         self._data_location = config["data_location"]
 
         # Instantiating reconstructor
@@ -166,6 +170,9 @@ class ActiveMRIEnv(gym.Env):
 
     def restart_test(self):
         self._test_data_handler.reset()
+
+    def valid_actions(self) -> List[int]:
+        pass
 
 
 class SingleCoilKneeRAWEnv(ActiveMRIEnv):

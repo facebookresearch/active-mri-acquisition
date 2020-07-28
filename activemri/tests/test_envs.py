@@ -100,7 +100,7 @@ class TestActiveMRIEnv:
     mock_config_dict = json.loads(mock_config_json_str)
 
     def test_init_from_config_dict(self):
-        env = envs.ActiveMRIEnv()
+        env = envs.ActiveMRIEnv(32, 64)
         env._init_from_config_dict(self.mock_config_dict)
         assert type(env._reconstructor) == MockReconstructor
         assert env._reconstructor.option1 == 1
@@ -110,3 +110,9 @@ class TestActiveMRIEnv:
         assert env._reconstructor.weights == "init"
         assert env._reconstructor._eval
         assert env._reconstructor.device == torch.device("cpu")
+
+    def test_init_sets_action_space(self):
+        env = envs.ActiveMRIEnv(32, 64)
+        for i in range(32):
+            assert env.action_space.contains(i)
+        assert env.action_space.n == 32
