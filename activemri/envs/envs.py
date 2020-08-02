@@ -11,7 +11,6 @@ import torch
 import torch.utils.data
 
 import activemri.data.singlecoil_knee_data as scknee_data
-import activemri.data.transforms
 import activemri.envs.util
 
 
@@ -20,20 +19,6 @@ def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
     for i, index in enumerate(indices):
         masks[i, :, index] = 1
     return masks
-
-
-# noinspection PyUnusedLocal
-class Reconstructor(torch.nn.Module):
-    def __init__(self, **kwargs):
-        torch.nn.Module.__init__(self)
-
-    def forward(
-        self, zero_filled_image: torch.Tensor, mask: torch.Tensor, **kwargs
-    ) -> Dict[str, Any]:
-        return {"reconstruction": zero_filled_image, "return_vars": {"mask": mask}}
-
-    def load_from_checkpoint(self, filename: str) -> Optional[Dict[str, Any]]:
-        pass
 
 
 class CyclicSampler(torch.utils.data.Sampler):
@@ -89,6 +74,7 @@ class ActiveMRIEnv(gym.Env):
 
         self._data_location = None
         self._reconstructor = None
+        self._transform = None
         self._train_data_handler = None
         self._val_data_handler = None
         self._test_data_handler = None
@@ -108,8 +94,9 @@ class ActiveMRIEnv(gym.Env):
 
         # Instantiating reconstructor
         reconstructor_cfg = config["reconstructor"]
-        module = importlib.import_module(reconstructor_cfg["module"])
-        reconstructor_cls = getattr(module, reconstructor_cfg["cls"])
+        reconstructor_cls = activemri.envs.util.import_object_from_str(
+            reconstructor_cfg["cls"]
+        )
         checkpoint_path = pathlib.Path(reconstructor_cfg["checkpoint_path"])
         checkpoint = torch.load(checkpoint_path) if checkpoint_path.is_file() else None
         options = reconstructor_cfg["options"]
@@ -125,6 +112,9 @@ class ActiveMRIEnv(gym.Env):
         self._reconstructor.init_from_checkpoint(checkpoint)
         self._reconstructor.eval()
         self._reconstructor.to(self._device)
+        self._transform = activemri.envs.util.import_object_from_str(
+            reconstructor_cfg["transform"]
+        )
 
     def _init_from_config_file(self, config_filename: str):
         with open(config_filename, "rb") as f:
@@ -190,23 +180,23 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         root_path = pathlib.Path(self._data_location)
         train_path = root_path.joinpath("knee_singlecoil_train")
         val_and_test_path = root_path.joinpath("knee_singlecoil_val")
-        transform = activemri.data.transforms.raw_transform_miccai20
+        # transform = singlecoil_knee_transforms.raw_transform_miccai20
 
         # Setting up training data loader
-        train_data = scknee_data.RawSliceData(train_path, transform)
+        train_data = scknee_data.RawSliceData(train_path, self._transform)
         self._train_data_handler = DataHandler(
             train_data, self.seed, batch_size=1, loops=1000
         )
         # Setting up val data loader
         val_data = scknee_data.RawSliceData(
-            val_and_test_path, transform, custom_split="val"
+            val_and_test_path, self._transform, custom_split="val"
         )
         self._val_data_handler = DataHandler(
             val_data, self.seed + 1 if self.seed else None, batch_size=1, loops=1
         )
         # Setting up test data loader
         test_data = scknee_data.RawSliceData(
-            val_and_test_path, transform, custom_split="test"
+            val_and_test_path, self._transform, custom_split="test"
         )
         self._test_data_handler = DataHandler(
             test_data, self.seed + 2 if self.seed else None, batch_size=1, loops=1

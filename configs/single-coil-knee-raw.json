@@ -4,7 +4,8 @@
     "cls": "activemri.envs.Reconstructor",
     "options": {
     },
-    "checkpoint_path": ""
+    "checkpoint_path": "",
+    "transform": "activemri.envs.transform"
   },
   "device": "cuda:0"
 }

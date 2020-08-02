@@ -85,21 +85,25 @@ class MockReconstructor:
         self.device = device
 
 
+def mock_transform(data):
+    return data
+
+
 # noinspection PyProtectedMember
 class TestActiveMRIEnv:
     mock_config_json_str = """
     {
         "data_location": "dummy_location",
         "reconstructor": {
-            "module": "activemri.tests",
-            "cls": "MockReconstructor",
+            "cls": "activemri.tests.MockReconstructor",
             "options": {
                 "option1": 1,
                 "option2": 0.5,
                 "option3": "dummy",
                 "option4": true
             },
-            "checkpoint_path": "null"
+            "checkpoint_path": "null",
+            "transform": "activemri.tests.mock_transform"
         },
         "device": "cpu"
     }
@@ -118,6 +122,7 @@ class TestActiveMRIEnv:
         assert env._reconstructor.weights == "init"
         assert env._reconstructor._eval
         assert env._reconstructor.device == torch.device("cpu")
+        assert env._transform("x") == "x"
 
     def test_init_sets_action_space(self):
         env = envs.ActiveMRIEnv(32, 64)

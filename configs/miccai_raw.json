@@ -12,7 +12,8 @@
       "img_width": 368,
       "use_deconv": true
     },
-    "checkpoint_path": "/private/home/lep/tmp/singlecoil_knee.pth"
+    "checkpoint_path": "/private/home/lep/tmp/singlecoil_knee.pth",
+    "transform": "activemri.models.singlecoil_knee_transforms.raw_transform_miccai20"
   },
   "device": "cuda:0"
 }
