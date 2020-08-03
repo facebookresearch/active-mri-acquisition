@@ -1,6 +1,6 @@
 import torch
 
-from typing import Any, Dict, List, Mapping, Tuple, Optional, Sized
+from typing import Any, Dict, Optional
 
 from .envs import (
     ActiveMRIEnv,
@@ -33,5 +33,5 @@ class Reconstructor(torch.nn.Module):
 
 
 # noinspection PyUnusedLocal
-def transform(data: torch.Tensor, *args):
+def transform(kspace: torch.Tensor, maak: torch.Tensor, target: torch.Tensor, *args):
     pass

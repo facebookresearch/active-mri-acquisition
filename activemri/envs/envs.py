@@ -1,4 +1,3 @@
-import importlib
 import json
 import pathlib
 import warnings
@@ -91,6 +90,7 @@ class ActiveMRIEnv(gym.Env):
     # -------------------------------------------------------------------------
     def _init_from_config_dict(self, config: Mapping[str, Any]):
         self._data_location = config["data_location"]
+        self._device = torch.device(config["device"])
 
         # Instantiating reconstructor
         reconstructor_cfg = config["reconstructor"]
@@ -119,6 +119,14 @@ class ActiveMRIEnv(gym.Env):
     def _init_from_config_file(self, config_filename: str):
         with open(config_filename, "rb") as f:
             self._init_from_config_dict(json.load(f))
+
+    def _send_kspace_and_image_to_device(
+        self, kspace: torch.Tensor, _, image: torch.Tensor, *args
+    ) -> Tuple[Any, ...]:
+        ret = [kspace.to(self._device), image.to(self._device)]
+        for arg in args:
+            ret.append(arg)
+        return tuple(ret)
 
     # -------------------------------------------------------------------------
     # Public methods
@@ -180,23 +188,26 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         root_path = pathlib.Path(self._data_location)
         train_path = root_path.joinpath("knee_singlecoil_train")
         val_and_test_path = root_path.joinpath("knee_singlecoil_val")
-        # transform = singlecoil_knee_transforms.raw_transform_miccai20
 
         # Setting up training data loader
-        train_data = scknee_data.RawSliceData(train_path, self._transform)
+        train_data = scknee_data.RawSliceData(
+            train_path, self._send_kspace_and_image_to_device
+        )
         self._train_data_handler = DataHandler(
             train_data, self.seed, batch_size=1, loops=1000
         )
         # Setting up val data loader
         val_data = scknee_data.RawSliceData(
-            val_and_test_path, self._transform, custom_split="val"
+            val_and_test_path, self._send_kspace_and_image_to_device, custom_split="val"
         )
         self._val_data_handler = DataHandler(
             val_data, self.seed + 1 if self.seed else None, batch_size=1, loops=1
         )
         # Setting up test data loader
         test_data = scknee_data.RawSliceData(
-            val_and_test_path, self._transform, custom_split="test"
+            val_and_test_path,
+            self._send_kspace_and_image_to_device,
+            custom_split="test",
         )
         self._test_data_handler = DataHandler(
             test_data, self.seed + 2 if self.seed else None, batch_size=1, loops=1

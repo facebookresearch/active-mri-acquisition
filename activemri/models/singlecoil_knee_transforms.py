@@ -1,17 +1,6 @@
-import fastMRI.data.transforms as fastmri_transforms
-import numpy as np
 import torch
 
-
-def raw_transform_miccai20(data: torch.Tensor, *_):
-    kspace = torch.from_numpy(np.stack([data.real, data.imag], axis=-1))
-    kspace = fastmri_transforms.ifftshift(kspace, dim=(0, 1))
-    image = torch.ifft(kspace, 2, normalized=False)
-    image = fastmri_transforms.ifftshift(image, dim=(0, 1))
-    # Mean k-space of training data
-    image /= 7.072103529760345e-07
-    kspace /= 7.072103529760345e-07
-    return kspace
+import miccai_2020.models.fft_utils
 
 
 def dicom_to_0_1_range(tensor: torch.Tensor):
@@ -24,3 +13,22 @@ def dicom_transform(image: torch.Tensor, mean: float, std: float):
     image = dicom_to_0_1_range(image)
     image = torch.cat([image, torch.zeros_like(image)], dim=0)
     return image
+
+
+def to_magnitude(tensor):
+    tensor = (tensor[:, 0, :, :] ** 2 + tensor[:, 1, :, :] ** 2) ** 0.5
+    return tensor.unsqueeze(1)
+
+
+def raw_transform_miccai20(kspace, mask, target):
+    k_space = kspace.permute(0, 3, 1, 2)
+    # alter mask to always include the highest frequencies that include padding
+    mask = torch.where(
+        to_magnitude(k_space).sum(2).unsqueeze(2) == 0.0, torch.tensor(1.0), mask,
+    )
+    masked_true_k_space = torch.where(mask.byte(), k_space, torch.tensor(0.0))
+    reconstructor_input = miccai_2020.models.fft_utils.ifft(
+        masked_true_k_space, ifft_shift=True
+    )
+    target = target.permute(0, 3, 1, 2)
+    return reconstructor_input, target, mask

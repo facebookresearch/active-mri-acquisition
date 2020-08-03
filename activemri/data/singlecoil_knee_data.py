@@ -1,6 +1,7 @@
 import os
 import pathlib
 
+import fastMRI.data.transforms as fastmri_transforms
 import h5py
 import json
 import numpy as np
@@ -9,6 +10,9 @@ import torch.utils.data
 from typing import Callable, Optional
 
 
+# -----------------------------------------------------------------------------
+#                      RAW DATASET (as used in MICCAI'20)
+# -----------------------------------------------------------------------------
 class RawSliceData(torch.utils.data.Dataset):
     def __init__(
         self,
@@ -65,9 +69,19 @@ class RawSliceData(torch.utils.data.Dataset):
         fname, slice = self.examples[i]
         with h5py.File(fname, "r") as data:
             kspace = data["kspace"][slice]
-            return self.transform(kspace, data.attrs)
+            kspace = torch.from_numpy(np.stack([kspace.real, kspace.imag], axis=-1))
+            kspace = fastmri_transforms.ifftshift(kspace, dim=(0, 1))
+            target = torch.ifft(kspace, 2, normalized=False)
+            target = fastmri_transforms.ifftshift(target, dim=(0, 1))
+            # Normalize using mean of k-space in training data
+            target /= 7.072103529760345e-07
+            kspace /= 7.072103529760345e-07
+            return self.transform(kspace, None, target, data.attrs)
 
 
+# -----------------------------------------------------------------------------
+#                               DICOM DATASET
+# -----------------------------------------------------------------------------
 class Slice(torch.utils.data.Dataset):
     def __init__(
         self,
