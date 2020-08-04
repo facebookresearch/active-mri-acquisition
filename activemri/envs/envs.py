@@ -126,7 +126,7 @@ class ActiveMRIEnv(gym.Env):
         with open(config_filename, "rb") as f:
             self._init_from_config_dict(json.load(f))
 
-    def _send_kspace_and_image_to_device(
+    def _replace_mask__transform__and__send_tensors_to_device(
         self, kspace: torch.Tensor, _, target: torch.Tensor, *args
     ) -> Tuple[Any, ...]:
         # Other mask args are already passed in _init_from_config_dict
@@ -204,7 +204,9 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
 
         # Setting up training data loader
         train_data = scknee_data.RawSliceData(
-            train_path, self._send_kspace_and_image_to_device, num_cols=self.IMAGE_WIDTH
+            train_path,
+            self._replace_mask__transform__and__send_tensors_to_device,
+            num_cols=self.IMAGE_WIDTH,
         )
         self._train_data_handler = DataHandler(
             train_data, self.seed, batch_size=1, loops=1000
@@ -212,7 +214,7 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         # Setting up val data loader
         val_data = scknee_data.RawSliceData(
             val_and_test_path,
-            self._send_kspace_and_image_to_device,
+            self._replace_mask__transform__and__send_tensors_to_device,
             custom_split="val",
             num_cols=self.IMAGE_WIDTH,
         )
@@ -222,7 +224,7 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         # Setting up test data loader
         test_data = scknee_data.RawSliceData(
             val_and_test_path,
-            self._send_kspace_and_image_to_device,
+            self._replace_mask__transform__and__send_tensors_to_device,
             custom_split="test",
         )
         self._test_data_handler = DataHandler(
