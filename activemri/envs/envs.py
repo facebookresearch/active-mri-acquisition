@@ -2,7 +2,7 @@ import json
 import pathlib
 import warnings
 
-from typing import Any, Dict, List, Mapping, Tuple, Optional, Sized
+from typing import Any, Callable, Dict, List, Mapping, Tuple, Optional, Sized
 
 import gym
 import numpy as np
@@ -13,13 +13,9 @@ import activemri.data.singlecoil_knee_data as scknee_data
 import activemri.envs.util
 
 
-def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
-    assert masks.shape[0] == indices.size
-    for i, index in enumerate(indices):
-        masks[i, :, index] = 1
-    return masks
-
-
+# -----------------------------------------------------------------------------
+#                               DATA HANDLING
+# -----------------------------------------------------------------------------
 class CyclicSampler(torch.utils.data.Sampler):
     def __init__(
         self, data_source: Sized, order: Optional[Sized] = None, loops: int = 1,
@@ -59,18 +55,16 @@ class DataHandler:
     def __iter__(self):
         return self.__iter
 
-    def __next__(self):
-        return self.__data_loader
 
-
+# -----------------------------------------------------------------------------
+#                           BASE ACTIVE MRI ENV
+# -----------------------------------------------------------------------------
 # TODO Add option to resize default img size (need to pass this option to reconstructor)
 # TODO Add option to control batch size (default 1)
 # TODO See if there is a clean way to have access to current image indices from the env
 class ActiveMRIEnv(gym.Env):
-    def __init__(self, img_width, img_height):
-        self._img_width = img_width
-        self._img_height = img_height
-
+    def __init__(self, img_width: int, img_height: int):
+        # Default initialization
         self._data_location = None
         self._reconstructor = None
         self._transform = None
@@ -81,19 +75,31 @@ class ActiveMRIEnv(gym.Env):
 
         self.horizon = None
         self.seed = None
+        self.rng = np.random.RandomState()
 
+        # Init from provided configuration
+        self._img_width = img_width
+        self._img_height = img_height
+
+        # Gym init
         self.observation_space = None  # Observation will be a dictionary
         self.action_space = gym.spaces.Discrete(img_width)
 
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
-    def _init_from_config_dict(self, config: Mapping[str, Any]):
-        self._data_location = config["data_location"]
-        self._device = torch.device(config["device"])
+    def _setup(self, cfg_filename: str, data_init_func: Callable):
+        self._init_from_config_file(cfg_filename)
+        data_init_func()
+
+    def _init_from_config_dict(self, cfg: Mapping[str, Any]):
+        self._data_location = cfg["data_location"]
+        self._device = torch.device(cfg["device"])
+        mask_func = activemri.envs.util.import_object_from_str(cfg["mask"]["function"])
+        self._mask_func = lambda rng: mask_func(cfg["mask"]["args"], rng)
 
         # Instantiating reconstructor
-        reconstructor_cfg = config["reconstructor"]
+        reconstructor_cfg = cfg["reconstructor"]
         reconstructor_cls = activemri.envs.util.import_object_from_str(
             reconstructor_cfg["cls"]
         )
@@ -121,12 +127,14 @@ class ActiveMRIEnv(gym.Env):
             self._init_from_config_dict(json.load(f))
 
     def _send_kspace_and_image_to_device(
-        self, kspace: torch.Tensor, _, image: torch.Tensor, *args
+        self, kspace: torch.Tensor, _, target: torch.Tensor, *args
     ) -> Tuple[Any, ...]:
-        ret = [kspace.to(self._device), image.to(self._device)]
+        # Other mask args are already passed in _init_from_config_dict
+        mask = self._mask_func(self.rng)
+        ret = [kspace.to(self._device), mask.to(self._device), target.to(self._device)]
         for arg in args:
             ret.append(arg)
-        return tuple(ret)
+        return self._transform(*ret)
 
     # -------------------------------------------------------------------------
     # Public methods
@@ -144,6 +152,7 @@ class ActiveMRIEnv(gym.Env):
 
     def seed(self, seed: Optional[int] = None):
         self.seed = seed
+        self.rng = np.random.RandomState(seed)
 
     def reset_val(self,) -> Dict[str, np.ndarray]:
         pass
@@ -174,12 +183,16 @@ class ActiveMRIEnv(gym.Env):
         pass
 
 
+# -----------------------------------------------------------------------------
+#                             CUSTOM ENVIRONMENTS
+# -----------------------------------------------------------------------------
 class SingleCoilKneeRAWEnv(ActiveMRIEnv):
+    IMAGE_WIDTH = 368
+    IMAGE_HEIGHT = 640
+
     def __init__(self):
-        ActiveMRIEnv.__init__(self, 368, 640)
-        # self._init_from_config_file("configs/single-coil-knee-raw.json")
-        self._init_from_config_file("configs/miccai_raw.json")
-        self.__setup_data_handlers()
+        ActiveMRIEnv.__init__(self, self.IMAGE_WIDTH, self.IMAGE_HEIGHT)
+        self._setup("configs/miccai_raw.json", self.__setup_data_handlers)
 
     # -------------------------------------------------------------------------
     # Private methods
@@ -191,14 +204,17 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
 
         # Setting up training data loader
         train_data = scknee_data.RawSliceData(
-            train_path, self._send_kspace_and_image_to_device
+            train_path, self._send_kspace_and_image_to_device, num_cols=self.IMAGE_WIDTH
         )
         self._train_data_handler = DataHandler(
             train_data, self.seed, batch_size=1, loops=1000
         )
         # Setting up val data loader
         val_data = scknee_data.RawSliceData(
-            val_and_test_path, self._send_kspace_and_image_to_device, custom_split="val"
+            val_and_test_path,
+            self._send_kspace_and_image_to_device,
+            custom_split="val",
+            num_cols=self.IMAGE_WIDTH,
         )
         self._val_data_handler = DataHandler(
             val_data, self.seed + 1 if self.seed else None, batch_size=1, loops=1
@@ -223,11 +239,3 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
 
     def render(self, mode="human"):
         pass
-
-
-if __name__ == "__main__":
-    import sys
-
-    sys.path.append("/private/home/lep/code/Active_Acquisition")
-    foo = SingleCoilKneeRAWEnv()
-    print("boo")

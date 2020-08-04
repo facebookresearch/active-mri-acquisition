@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 from typing import Any, Dict, Optional
@@ -34,4 +35,9 @@ class Reconstructor(torch.nn.Module):
 
 # noinspection PyUnusedLocal
 def transform(kspace: torch.Tensor, maak: torch.Tensor, target: torch.Tensor, *args):
+    pass
+
+
+# noinspection PyUnusedLocal
+def mask_function(mask_cfg: Dict[str, Any], rng: np.random.RandomState) -> np.ndarray:
     pass

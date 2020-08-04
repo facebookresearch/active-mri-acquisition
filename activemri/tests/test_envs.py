@@ -7,6 +7,7 @@ import numpy as np
 import torch
 
 import activemri.envs as envs
+import activemri.envs.mask_functions as masks
 import activemri.envs.util as util
 
 
@@ -21,7 +22,7 @@ def test_update_masks_from_indices():
     mask_1 = torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]], dtype=torch.uint8)
     mask_2 = torch.tensor([[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]], dtype=torch.uint8)
     mask = torch.stack([mask_1, mask_2])
-    mask = envs.envs.update_masks_from_indices(mask, np.array([2, 0]))
+    mask = masks.update_masks_from_indices(mask, np.array([2, 0]))
     assert mask.shape == torch.Size([2, 3, 4])
 
     expected = torch.tensor(
@@ -89,8 +90,12 @@ def mock_transform(data):
     return data
 
 
+def mock_mask_func(args, rng):
+    return args, rng
+
+
 # noinspection PyProtectedMember
-class TestActiveMRIEnv:
+class TestMRIEnvs:
     mock_config_json_str = """
     {
         "data_location": "dummy_location",
@@ -104,6 +109,13 @@ class TestActiveMRIEnv:
             },
             "checkpoint_path": "null",
             "transform": "activemri.tests.mock_transform"
+        },
+        "mask": {
+            "function": "activemri.tests.mock_mask_func",
+            "args": {
+                "a":0, 
+                "b":1
+            }
         },
         "device": "cpu"
     }
@@ -124,8 +136,19 @@ class TestActiveMRIEnv:
         assert env._reconstructor.device == torch.device("cpu")
         assert env._transform("x") == "x"
 
+        args, rng = env._mask_func("rng")
+        assert args["a"] == 0 and args["b"] == 1 and rng == "rng"
+
     def test_init_sets_action_space(self):
         env = envs.ActiveMRIEnv(32, 64)
         for i in range(32):
             assert env.action_space.contains(i)
         assert env.action_space.n == 32
+
+    def test_singlecoil_raw_env(self):
+        env = envs.SingleCoilKneeRAWEnv()
+        for batch in env._train_data_handler:
+            assert batch[0].shape == (1, 2, 640, 368)  # reconstruction input
+            assert batch[1].shape == (1, 2, 640, 368)  # target image
+            assert batch[2].shape == (1, 1, 1, 368)  # mask
+            break

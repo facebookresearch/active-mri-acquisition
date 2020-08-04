@@ -15,6 +15,14 @@ def test_all_configs():
             cfg = json.load(f)
             assert "data_location" in cfg
             assert "device" in cfg
+            assert "mask" in cfg
+            mask_cfg = cfg["mask"]
+            try:
+                _ = activemri.envs.util.import_object_from_str(mask_cfg["function"])
+            except ModuleNotFoundError:
+                print(f"Mask function in config file {fname} was not found.")
+                assert False
+            assert "args" in mask_cfg and isinstance(mask_cfg["args"], dict)
             assert "reconstructor" in cfg
             reconstructor_cfg = cfg["reconstructor"]
             assert "cls" in reconstructor_cfg

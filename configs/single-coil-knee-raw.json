@@ -7,5 +7,9 @@
     "checkpoint_path": "",
     "transform": "activemri.envs.transform"
   },
+  "mask": {
+    "function": "activemri.envs.mask_functions.sample_low_frequency_mask",
+    "args": {}
+  },
   "device": "cuda:0"
 }
