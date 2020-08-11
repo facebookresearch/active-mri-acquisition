@@ -39,14 +39,42 @@ class CyclicSampler(torch.utils.data.Sampler):
         return len(self.data_source) * self.loops
 
 
+def _env_collate_fn(batch):
+    ret = [
+        torch.stack([item[0] for item in batch]),  # kspace
+        torch.stack([item[1] for item in batch]),  # mask
+        torch.stack([item[2] for item in batch]),  # target
+    ]
+    for i in range(3, 6):  # attrs, fname, slice_id
+        arg_i = [item[i] for item in batch]
+        ret.append(arg_i)
+
+    return tuple(ret)
+
+
 class DataHandler:
-    def __init__(self, data_source, seed, batch_size=1, loops=1):
+    def __init__(
+        self,
+        data_source: Sized,
+        seed: Optional[int],
+        batch_size: int = 1,
+        loops: int = 1,
+        collate_fn: Optional[Callable] = None,
+    ):
         rng = np.random.RandomState(seed)
         order = rng.permutation(len(data_source))
         sampler = CyclicSampler(data_source, order, loops=loops)
-        self.__data_loader = torch.utils.data.DataLoader(
-            data_source, batch_size=batch_size, sampler=sampler
-        )
+        if collate_fn:
+            self.__data_loader = torch.utils.data.DataLoader(
+                data_source,
+                batch_size=batch_size,
+                sampler=sampler,
+                collate_fn=collate_fn,
+            )
+        else:
+            self.__data_loader = torch.utils.data.DataLoader(
+                data_source, batch_size=batch_size, sampler=sampler
+            )
         self.__iter = iter(self.__data_loader)
 
     def reset(self):
@@ -55,12 +83,15 @@ class DataHandler:
     def __iter__(self):
         return self.__iter
 
+    def __next__(self):
+        return next(self.__iter)
+
 
 # -----------------------------------------------------------------------------
 #                           BASE ACTIVE MRI ENV
 # -----------------------------------------------------------------------------
 # TODO Add option to resize default img size (need to pass this option to reconstructor)
-# TODO Add option to control batch size (default 1)
+# TODO Add option to control batch size (default 2)
 # TODO See if there is a clean way to have access to current image indices from the env
 class ActiveMRIEnv(gym.Env):
     def __init__(self, img_width: int, img_height: int):
@@ -72,6 +103,7 @@ class ActiveMRIEnv(gym.Env):
         self._val_data_handler = None
         self._test_data_handler = None
         self._device = torch.device("cpu")
+        self._batch_size = 2
 
         self.horizon = None
         self.seed = None
@@ -126,20 +158,19 @@ class ActiveMRIEnv(gym.Env):
         with open(config_filename, "rb") as f:
             self._init_from_config_dict(json.load(f))
 
-    def _replace_mask__transform__and__send_tensors_to_device(
-        self, kspace: torch.Tensor, _, target: torch.Tensor, *args
-    ) -> Tuple[Any, ...]:
-        # Other mask args are already passed in _init_from_config_dict
-        mask = self._mask_func(self.rng)
-        ret = [kspace.to(self._device), mask.to(self._device), target.to(self._device)]
-        for arg in args:
-            ret.append(arg)
-        return self._transform(*ret)
-
     # -------------------------------------------------------------------------
     # Public methods
     # -------------------------------------------------------------------------
     def reset(self,) -> Dict[str, np.ndarray]:
+
+        kspace, _, target, attrs, fname, slice_id = next(self._train_data_handler)
+        kspace = kspace.to(self._device)
+        mask = self._mask_func(self.rng).to(self._device)
+        target = target.to(self._device)
+        reconstructor_input = self._transform(
+            kspace, mask, target, attrs, fname, slice_id
+        )
+        reconstruction = self._reconstructor(*reconstructor_input)
         pass
 
     def step(
@@ -204,40 +235,40 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
 
         # Setting up training data loader
         train_data = scknee_data.RawSliceData(
-            train_path,
-            self._replace_mask__transform__and__send_tensors_to_device,
-            num_cols=self.IMAGE_WIDTH,
+            train_path, activemri.envs.transform, num_cols=self.IMAGE_WIDTH,
         )
         self._train_data_handler = DataHandler(
-            train_data, self.seed, batch_size=1, loops=1000
+            train_data,
+            self.seed,
+            batch_size=self._batch_size,
+            loops=1000,
+            collate_fn=_env_collate_fn,
         )
         # Setting up val data loader
         val_data = scknee_data.RawSliceData(
             val_and_test_path,
-            self._replace_mask__transform__and__send_tensors_to_device,
+            activemri.envs.transform,
             custom_split="val",
             num_cols=self.IMAGE_WIDTH,
         )
         self._val_data_handler = DataHandler(
-            val_data, self.seed + 1 if self.seed else None, batch_size=1, loops=1
+            val_data,
+            self.seed + 1 if self.seed else None,
+            batch_size=self._batch_size,
+            loops=1,
+            collate_fn=_env_collate_fn,
         )
         # Setting up test data loader
         test_data = scknee_data.RawSliceData(
             val_and_test_path,
-            self._replace_mask__transform__and__send_tensors_to_device,
+            activemri.envs.transform,
             custom_split="test",
+            num_cols=self.IMAGE_WIDTH,
         )
         self._test_data_handler = DataHandler(
-            test_data, self.seed + 2 if self.seed else None, batch_size=1, loops=1
+            test_data,
+            self.seed + 2 if self.seed else None,
+            batch_size=self._batch_size,
+            loops=1,
+            collate_fn=_env_collate_fn,
         )
-
-    def reset(self) -> Dict[str, np.ndarray]:
-        pass
-
-    def step(
-        self, action: int
-    ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], float, bool]:
-        pass
-
-    def render(self, mode="human"):
-        pass

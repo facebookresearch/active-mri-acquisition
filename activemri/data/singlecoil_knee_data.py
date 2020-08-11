@@ -53,22 +53,22 @@ class RawSliceData(torch.utils.data.Dataset):
 
             if num_rand_slices is None:
                 num_slices = kspace.shape[0]
-                self.examples += [(fname, slice) for slice in range(num_slices)]
+                self.examples += [(fname, slice_id) for slice_id in range(num_slices)]
             else:
                 slice_ids = list(range(kspace.shape[0]))
                 self.rng.seed(seed=volume_i)
                 self.rng.shuffle(slice_ids)
                 self.examples += [
-                    (fname, slice) for slice in slice_ids[:num_rand_slices]
+                    (fname, slice_id) for slice_id in slice_ids[:num_rand_slices]
                 ]
 
     def __len__(self):
         return len(self.examples)
 
     def __getitem__(self, i):
-        fname, slice = self.examples[i]
+        fname, slice_id = self.examples[i]
         with h5py.File(fname, "r") as data:
-            kspace = data["kspace"][slice]
+            kspace = data["kspace"][slice_id]
             kspace = torch.from_numpy(np.stack([kspace.real, kspace.imag], axis=-1))
             kspace = fastmri_transforms.ifftshift(kspace, dim=(0, 1))
             target = torch.ifft(kspace, 2, normalized=False)
@@ -76,7 +76,14 @@ class RawSliceData(torch.utils.data.Dataset):
             # Normalize using mean of k-space in training data
             target /= 7.072103529760345e-07
             kspace /= 7.072103529760345e-07
-            return self.transform(kspace, None, target, data.attrs)
+            return self.transform(
+                kspace,
+                torch.zeros(kspace.shape[1]),
+                target,
+                dict(data.attrs),
+                fname,
+                slice_id,
+            )
 
 
 # -----------------------------------------------------------------------------
@@ -114,9 +121,9 @@ class Slice(torch.utils.data.Dataset):
             slice_i = slice_ids[i % self.num_rand_slices]
 
         volume, volume_metadata = self.dataset[volume_i]
-        slice = volume[slice_i : slice_i + 1]
-        slice = slice.astype(np.float32)
-        return self.transform(slice, volume_metadata["mean"], volume_metadata["std"])
+        slice_id = volume[slice_i : slice_i + 1]
+        slice_id = slice_id.astype(np.float32)
+        return self.transform(slice_id, volume_metadata["mean"], volume_metadata["std"])
 
     def __len__(self):
         if self.num_rand_slices is None:

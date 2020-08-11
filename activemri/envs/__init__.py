@@ -1,7 +1,8 @@
 import numpy as np
+import pathlib
 import torch
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .envs import (
     ActiveMRIEnv,
@@ -33,9 +34,15 @@ class Reconstructor(torch.nn.Module):
         pass
 
 
-# noinspection PyUnusedLocal
-def transform(kspace: torch.Tensor, maak: torch.Tensor, target: torch.Tensor, *args):
-    pass
+def transform(
+    kspace: torch.Tensor,
+    mask: torch.Tensor,
+    target: torch.Tensor,
+    attrs: List[Dict[str, Any]],
+    fname: List[pathlib.Path],
+    slice_id: List[int],
+) -> Tuple:
+    return kspace, mask, target, attrs, fname, slice_id
 
 
 # noinspection PyUnusedLocal

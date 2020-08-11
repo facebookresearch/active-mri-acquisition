@@ -15,23 +15,23 @@ def dicom_transform(image: torch.Tensor, mean: float, std: float):
 
 
 def to_magnitude(tensor):
-    tensor = (tensor[0] ** 2 + tensor[1] ** 2) ** 0.5
+    tensor = (tensor[:, 0] ** 2 + tensor[:, 1] ** 2) ** 0.5
     return tensor.unsqueeze(0)
 
 
 def ifft_permute_maybe_shift(x, normalized=False, ifft_shift=False):
-    x = x.permute(1, 2, 0)
+    x = x.permute(0, 2, 3, 1)
     y = torch.ifft(x, 2, normalized=normalized)
     if ifft_shift:
         y = fastmri_transforms.ifftshift(y, dim=(1, 2))
-    return y.permute(2, 0, 1)
+    return y.permute(0, 3, 1, 2)
 
 
-def raw_transform_miccai20(kspace, mask, target, *_):
-    k_space = kspace.permute(2, 0, 1)
+def raw_transform_miccai20(kspace, mask, *_):
+    k_space = kspace.permute(0, 3, 1, 2)
     # alter mask to always include the highest frequencies that include padding
     mask = torch.where(
-        to_magnitude(k_space).sum(1, keepdim=True) == 0.0,
+        to_magnitude(k_space).sum(2, keepdim=True) == 0.0,
         torch.tensor(1.0).to(mask.device),
         mask,
     )
@@ -39,5 +39,4 @@ def raw_transform_miccai20(kspace, mask, target, *_):
         mask.byte(), k_space, torch.tensor(0.0).to(mask.device)
     )
     reconstructor_input = ifft_permute_maybe_shift(masked_true_k_space, ifft_shift=True)
-    target = target.permute(2, 0, 1)
-    return reconstructor_input, target, mask
+    return reconstructor_input, mask

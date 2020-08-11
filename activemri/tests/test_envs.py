@@ -1,4 +1,5 @@
 import json
+import pathlib
 
 # noinspection PyUnresolvedReferences
 import pytest
@@ -147,8 +148,21 @@ class TestMRIEnvs:
 
     def test_singlecoil_raw_env(self):
         env = envs.SingleCoilKneeRAWEnv()
-        for batch in env._train_data_handler:
-            assert batch[0].shape == (1, 2, 640, 368)  # reconstruction input
-            assert batch[1].shape == (1, 2, 640, 368)  # target image
-            assert batch[2].shape == (1, 1, 1, 368)  # mask
-            break
+        for i, batch in enumerate(env._train_data_handler):
+            batch_size = 2
+            # No check for batch[1], since it's the mask and will be replaced later
+            assert batch[0].shape == (batch_size, 640, 368, 2)  # reconstruction input
+            assert batch[2].shape == (batch_size, 640, 368, 2)  # target image
+            for j in range(3, 6):
+                assert len(batch[j]) == batch_size
+            for l in range(batch_size):
+                # data.attrs
+                assert len(batch[3][l]) == 4
+                for key in ["norm", "max", "patient_id", "acquisition"]:
+                    assert key in batch[3][l]
+                # file name
+                assert isinstance(batch[4][l], pathlib.Path)
+                # slice_id
+                assert isinstance(batch[5][l], int)
+            if i == 1:
+                break
