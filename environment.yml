@@ -8,8 +8,8 @@ channels:
 dependencies:
   - numpy
   - tensorboardX
-  - pytorch==1.1.0
-  - torchvision==0.3.0
+  - pytorch
+  - torchvision
   - gym
   - h5py
   - matplotlib
@@ -19,3 +19,5 @@ dependencies:
   - ignite==0.2.0
   - tqdm
   - pytest
+  - pytorch-lightning
+  - statistics

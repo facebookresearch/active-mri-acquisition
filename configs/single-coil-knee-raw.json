@@ -1,11 +1,16 @@
 {
   "data_location": "/private/home/lep/fastmri",
   "reconstructor": {
-    "cls": "activemri.envs.Reconstructor",
+    "cls": "fastmri.models.Unet",
     "options": {
+      "in_chans": 2,
+      "out_chans": 2,
+      "chans": 32,
+      "num_pool_layers": 4,
+      "drop_prob": 0.0
     },
     "checkpoint_path": "",
-    "transform": "activemri.envs.transform"
+    "transform": "experimental.unet.unet_module.DataTransform"
   },
   "mask": {
     "function": "activemri.envs.mask_functions.sample_low_frequency_mask",

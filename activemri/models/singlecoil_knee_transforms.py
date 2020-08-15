@@ -1,4 +1,4 @@
-import fastMRI.data.transforms as fastmri_transforms
+import fastmri
 import torch
 
 
@@ -23,7 +23,7 @@ def ifft_permute_maybe_shift(x, normalized=False, ifft_shift=False):
     x = x.permute(0, 2, 3, 1)
     y = torch.ifft(x, 2, normalized=normalized)
     if ifft_shift:
-        y = fastmri_transforms.ifftshift(y, dim=(1, 2))
+        y = fastmri.ifftshift(y, dim=(1, 2))
     return y.permute(0, 3, 1, 2)
 
 
