@@ -103,7 +103,7 @@ class ActiveMRIEnv(gym.Env):
         self._val_data_handler = None
         self._test_data_handler = None
         self._device = torch.device("cpu")
-        self._batch_size = 2
+        self._batch_size = 1
 
         self.horizon = None
         self.seed = None
@@ -117,6 +117,8 @@ class ActiveMRIEnv(gym.Env):
         self.observation_space = None  # Observation will be a dictionary
         self.action_space = gym.spaces.Discrete(img_width)
 
+        self._current_mask = None
+
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
@@ -128,7 +130,7 @@ class ActiveMRIEnv(gym.Env):
         self._data_location = cfg["data_location"]
         self._device = torch.device(cfg["device"])
         mask_func = activemri.envs.util.import_object_from_str(cfg["mask"]["function"])
-        self._mask_func = lambda rng: mask_func(cfg["mask"]["args"], rng)
+        self._mask_func = lambda size, rng: mask_func(cfg["mask"]["args"], size, rng)
 
         # Instantiating reconstructor
         reconstructor_cfg = cfg["reconstructor"]
@@ -163,15 +165,21 @@ class ActiveMRIEnv(gym.Env):
     # -------------------------------------------------------------------------
     def reset(self,) -> Dict[str, np.ndarray]:
 
-        kspace, _, target, attrs, fname, slice_id = next(self._train_data_handler)
+        kspace, foo, target, attrs, fname, slice_id = next(self._train_data_handler)
         kspace = kspace.to(self._device)
-        mask = self._mask_func(self.rng).to(self._device)
+        self._current_mask = self._mask_func(self._batch_size, self.rng).to(
+            self._device
+        )
         target = target.to(self._device)
         reconstructor_input = self._transform(
-            kspace, mask, target, attrs, fname, slice_id
+            kspace, self._current_mask, target, attrs, fname, slice_id
         )
-        reconstruction = self._reconstructor(*reconstructor_input)
-        pass
+        reconstruction, *extra_outputs = self._reconstructor(*reconstructor_input)
+        return {
+            "reconstruction": reconstruction,
+            "extra_outputs": extra_outputs,
+            "mask": self._current_mask,
+        }
 
     def step(
         self, action: int
@@ -220,6 +228,8 @@ class ActiveMRIEnv(gym.Env):
 class SingleCoilKneeRAWEnv(ActiveMRIEnv):
     IMAGE_WIDTH = 368
     IMAGE_HEIGHT = 640
+    START_PADDING = 166
+    END_PADDING = 202
 
     def __init__(self):
         ActiveMRIEnv.__init__(self, self.IMAGE_WIDTH, self.IMAGE_HEIGHT)
@@ -272,3 +282,8 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
             loops=1,
             collate_fn=_env_collate_fn,
         )
+
+    def reset(self,) -> Dict[str, np.ndarray]:
+        obs = super().reset()
+        obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
+        return obs

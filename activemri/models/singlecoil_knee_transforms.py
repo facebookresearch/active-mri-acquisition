@@ -30,13 +30,14 @@ def ifft_permute_maybe_shift(x, normalized=False, ifft_shift=False):
 def raw_transform_miccai20(kspace, mask, *_):
     k_space = kspace.permute(0, 3, 1, 2)
     # alter mask to always include the highest frequencies that include padding
-    mask = torch.where(
-        to_magnitude(k_space).sum(2, keepdim=True) == 0.0,
-        torch.tensor(1.0).to(mask.device),
-        mask,
-    )
+    # mask = torch.where(
+    #     to_magnitude(k_space).sum(2, keepdim=True) == 0.0,
+    #     torch.tensor(1.0).to(mask.device),
+    #     mask.view(mask.shape[0], 1, 1, -1),
+    # )
+    mask = mask.view(mask.shape[0], 1, 1, -1)
     masked_true_k_space = torch.where(
-        mask.byte(), k_space, torch.tensor(0.0).to(mask.device)
+        mask.byte(), k_space, torch.tensor(0.0).to(mask.device),
     )
     reconstructor_input = ifft_permute_maybe_shift(masked_true_k_space, ifft_shift=True)
     return reconstructor_input, mask

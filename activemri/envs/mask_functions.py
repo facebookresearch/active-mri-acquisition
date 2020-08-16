@@ -12,9 +12,10 @@ def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
 
 
 def sample_low_frequency_mask(
-    mask_args: Dict[str, Any], rng: np.random.RandomState
+    mask_args: Dict[str, Any], size: int, rng: np.random.RandomState
 ) -> torch.Tensor:
-    mask = torch.zeros(mask_args["img_width"])
-    num_lowf = rng.randint(mask_args["min_cols"], mask_args["max_cols"] + 1)
-    mask[:num_lowf] = mask[-num_lowf:] = 1
+    mask = torch.zeros(size, mask_args["img_width"])
+    num_lowf = rng.randint(mask_args["min_cols"], mask_args["max_cols"] + 1, size=size)
+    for i in range(size):
+        mask[i, : num_lowf[i]] = mask[i, -num_lowf[i] :] = 1
     return mask

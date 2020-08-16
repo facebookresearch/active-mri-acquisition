@@ -91,8 +91,8 @@ def mock_transform(data):
     return data
 
 
-def mock_mask_func(args, rng):
-    return args, rng
+def mock_mask_func(args, size, rng):
+    return args, size, rng
 
 
 # noinspection PyProtectedMember
@@ -114,7 +114,7 @@ class TestMRIEnvs:
         "mask": {
             "function": "activemri.tests.mock_mask_func",
             "args": {
-                "a":0, 
+                "a":0,
                 "b":1
             }
         },
@@ -137,8 +137,8 @@ class TestMRIEnvs:
         assert env._reconstructor.device == torch.device("cpu")
         assert env._transform("x") == "x"
 
-        args, rng = env._mask_func("rng")
-        assert args["a"] == 0 and args["b"] == 1 and rng == "rng"
+        args, size, rng = env._mask_func(3, "rng")
+        assert args["a"] == 0 and args["b"] == 1 and rng == "rng" and size == 3
 
     def test_init_sets_action_space(self):
         env = envs.ActiveMRIEnv(32, 64)
@@ -146,16 +146,24 @@ class TestMRIEnvs:
             assert env.action_space.contains(i)
         assert env.action_space.n == 32
 
-    def test_singlecoil_raw_env(self):
-        env = envs.SingleCoilKneeRAWEnv()
-        for i, batch in enumerate(env._train_data_handler):
-            batch_size = 2
+
+# noinspection PyProtectedMember
+class TestSingleCoilRawEnv:
+    env = envs.SingleCoilKneeRAWEnv()
+
+    def test_singlecoil_raw_env_batch_content(self):
+        for i, batch in enumerate(self.env._train_data_handler):
             # No check for batch[1], since it's the mask and will be replaced later
-            assert batch[0].shape == (batch_size, 640, 368, 2)  # reconstruction input
-            assert batch[2].shape == (batch_size, 640, 368, 2)  # target image
+            assert batch[0].shape == (
+                self.env._batch_size,
+                640,
+                368,
+                2,
+            )  # reconstruction input
+            assert batch[2].shape == (self.env._batch_size, 640, 368, 2)  # target image
             for j in range(3, 6):
-                assert len(batch[j]) == batch_size
-            for l in range(batch_size):
+                assert len(batch[j]) == self.env._batch_size
+            for l in range(self.env._batch_size):
                 # data.attrs
                 assert len(batch[3][l]) == 4
                 for key in ["norm", "max", "patient_id", "acquisition"]:
@@ -166,3 +174,12 @@ class TestMRIEnvs:
                 assert isinstance(batch[5][l], int)
             if i == 1:
                 break
+
+    def test_reset(self):
+        obs = self.env.reset()
+        assert len(obs) == 3
+        assert "reconstruction" in obs
+        assert "mask" in obs
+        assert "extra_outputs" in obs
+        assert obs["reconstruction"].shape == (self.env._batch_size, 2, 640, 368)
+        assert obs["mask"].shape == (self.env._batch_size, 368)
