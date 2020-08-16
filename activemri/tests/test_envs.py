@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 import torch
 
-import activemri.envs as envs
+import activemri.envs.envs as envs
 import activemri.envs.mask_functions as masks
 import activemri.envs.util as util
 
@@ -181,5 +181,5 @@ class TestSingleCoilRawEnv:
         assert "reconstruction" in obs
         assert "mask" in obs
         assert "extra_outputs" in obs
-        assert obs["reconstruction"].shape == (self.env._batch_size, 2, 640, 368)
+        assert obs["reconstruction"].shape == (self.env._batch_size, 640, 368, 2)
         assert obs["mask"].shape == (self.env._batch_size, 368)

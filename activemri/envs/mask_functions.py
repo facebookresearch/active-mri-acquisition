@@ -1,11 +1,11 @@
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
 
 import numpy as np
 import torch
 
 
-def update_masks_from_indices(masks: torch.Tensor, indices: np.ndarray):
-    assert masks.shape[0] == indices.size
+def update_masks_from_indices(masks: torch.Tensor, indices: Iterable[int]):
+    assert masks.shape[0] == len(indices)
     for i, index in enumerate(indices):
         masks[i, :, index] = 1
     return masks

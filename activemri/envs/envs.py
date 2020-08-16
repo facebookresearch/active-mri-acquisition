@@ -1,8 +1,9 @@
+import abc
 import json
 import pathlib
 import warnings
 
-from typing import Any, Callable, Dict, List, Mapping, Tuple, Optional, Sized
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Tuple, Optional, Sized
 
 import gym
 import numpy as np
@@ -11,6 +12,8 @@ import torch.utils.data
 
 import activemri.data.singlecoil_knee_data as scknee_data
 import activemri.envs.util
+import activemri.envs.mask_functions
+import activemri.models.singlecoil_knee_transforms as sc_transforms
 
 
 # -----------------------------------------------------------------------------
@@ -118,6 +121,10 @@ class ActiveMRIEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(img_width)
 
         self._current_mask = None
+        self._current_ground_truth = None
+        self._transform_wrapper = None
+        self._current_k_space = None
+        self._current_score = None
 
     # -------------------------------------------------------------------------
     # Protected methods
@@ -160,30 +167,61 @@ class ActiveMRIEnv(gym.Env):
         with open(config_filename, "rb") as f:
             self._init_from_config_dict(json.load(f))
 
-    # -------------------------------------------------------------------------
-    # Public methods
-    # -------------------------------------------------------------------------
-    def reset(self,) -> Dict[str, np.ndarray]:
-
-        kspace, foo, target, attrs, fname, slice_id = next(self._train_data_handler)
-        kspace = kspace.to(self._device)
-        self._current_mask = self._mask_func(self._batch_size, self.rng).to(
-            self._device
-        )
-        target = target.to(self._device)
-        reconstructor_input = self._transform(
-            kspace, self._current_mask, target, attrs, fname, slice_id
+    def __compute_obs_and_score(self):
+        reconstructor_input = self._transform_wrapper(
+            self._current_k_space, self._current_mask, self._current_ground_truth
         )
         reconstruction, *extra_outputs = self._reconstructor(*reconstructor_input)
-        return {
+        reconstruction = reconstruction.detach()
+
+        score = self._compute_score_given_tensors(
+            reconstruction, self._current_ground_truth
+        )
+
+        obs = {
             "reconstruction": reconstruction,
             "extra_outputs": extra_outputs,
             "mask": self._current_mask,
         }
 
+        return obs, score
+
+    @abc.abstractmethod
+    def _compute_score_given_tensors(
+        self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
+    ) -> Dict[str, torch.Tensor]:
+        pass
+
+    # -------------------------------------------------------------------------
+    # Public methods
+    # -------------------------------------------------------------------------
+    def reset(self,) -> Dict[str, np.ndarray]:
+
+        kspace, _, ground_truth, attrs, fname, slice_id = next(self._train_data_handler)
+        self._current_ground_truth = ground_truth.to(self._device)
+        self._current_k_space = kspace.to(self._device)
+        self._transform_wrapper = lambda ks, mask, gt: self._transform(
+            ks, mask, gt, attrs, fname, slice_id
+        )
+        self._current_mask = self._mask_func(self._batch_size, self.rng).to(
+            self._device
+        )
+        obs, self._current_score = self.__compute_obs_and_score()
+
+        return obs
+
     def step(
-        self, action: int
+        self, action: int, multi_actions: Optional[Iterable[int]] = None
     ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], float, bool]:
+        indices = (
+            [action for i in range(self._batch_size)]
+            if multi_actions is None
+            else multi_actions
+        )
+        self._current_mask = activemri.envs.mask_functions.update_masks_from_indices(
+            self._current_mask, indices
+        )
+
         pass
 
     def render(self, mode="human"):
@@ -230,6 +268,7 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
     IMAGE_HEIGHT = 640
     START_PADDING = 166
     END_PADDING = 202
+    CENTER_CROP_SIZE = 320
 
     def __init__(self):
         ActiveMRIEnv.__init__(self, self.IMAGE_WIDTH, self.IMAGE_HEIGHT)
@@ -287,3 +326,24 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         obs = super().reset()
         obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
         return obs
+
+    def _compute_score_given_tensors(
+        self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
+    ) -> Dict[str, torch.Tensor]:
+        # Compute magnitude (for metrics)
+        reconstruction = sc_transforms.to_magnitude(reconstruction, dim=3)
+        ground_truth = sc_transforms.to_magnitude(ground_truth, dim=3)
+
+        reconstruction = sc_transforms.center_crop(
+            reconstruction, [self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE]
+        )
+        ground_truth = sc_transforms.center_crop(
+            ground_truth, [self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE]
+        )
+
+        mse = activemri.envs.util.compute_mse(reconstruction, ground_truth)
+        nmse = activemri.envs.util.compute_nmse(reconstruction, ground_truth)
+        ssim = activemri.envs.util.compute_ssim(reconstruction, ground_truth)
+        psnr = activemri.envs.util.compute_psnr(reconstruction, ground_truth)
+
+        return {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
