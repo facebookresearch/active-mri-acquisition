@@ -1,4 +1,3 @@
-from . import data
-from . import envs
+from . import data, envs
 
 __all__ = ["data", "envs"]

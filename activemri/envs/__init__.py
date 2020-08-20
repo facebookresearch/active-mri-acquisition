@@ -1,6 +1,6 @@
-import torch
-
 from typing import Any, Dict, Optional
+
+import torch
 
 __all__ = ["SingleCoilKneeRAWEnv"]
 

@@ -1,13 +1,12 @@
+import json
 import os
 import pathlib
+from typing import Callable, Optional
 
 import fastmri
 import h5py
-import json
 import numpy as np
 import torch.utils.data
-
-from typing import Callable, Optional
 
 
 # -----------------------------------------------------------------------------

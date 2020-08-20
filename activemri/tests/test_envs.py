@@ -1,10 +1,9 @@
 import json
 import pathlib
 
+import numpy as np
 # noinspection PyUnresolvedReferences
 import pytest
-
-import numpy as np
 import torch
 
 import activemri.envs.envs as envs

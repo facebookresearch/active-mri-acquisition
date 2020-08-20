@@ -2,19 +2,8 @@ import abc
 import json
 import pathlib
 import warnings
-
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Sized,
-    Tuple,
-    Union,
-)
+from typing import (Any, Callable, Dict, Iterable, List, Mapping, Optional,
+                    Sized, Tuple, Union)
 
 import gym
 import numpy as np
@@ -22,8 +11,8 @@ import torch
 import torch.utils.data
 
 import activemri.data.singlecoil_knee_data as scknee_data
-import activemri.envs.util
 import activemri.envs.mask_functions
+import activemri.envs.util
 import activemri.models.singlecoil_knee_transforms as sc_transforms
 
 
