@@ -2,6 +2,7 @@ import importlib
 
 import numpy as np
 import skimage.metrics
+import torch
 
 
 def import_object_from_str(classname: str):
@@ -11,7 +12,7 @@ def import_object_from_str(classname: str):
     return getattr(module, the_object)
 
 
-def compute_ssim(xs, ys):
+def compute_ssim(xs: torch.Tensor, ys: torch.Tensor) -> np.ndarray:
     ssims = []
     for i in range(xs.shape[0]):
         ssim = skimage.metrics.structural_similarity(
@@ -23,7 +24,7 @@ def compute_ssim(xs, ys):
     return np.array(ssims, dtype=np.float32)
 
 
-def compute_psnr(xs, ys):
+def compute_psnr(xs: torch.Tensor, ys: torch.Tensor) -> np.ndarray:
     psnrs = []
     for i in range(xs.shape[0]):
         psnr = skimage.metrics.peak_signal_noise_ratio(
@@ -35,12 +36,12 @@ def compute_psnr(xs, ys):
     return np.array(psnrs, dtype=np.float32)
 
 
-def compute_mse(xs, ys):
+def compute_mse(xs: torch.Tensor, ys: torch.Tensor) -> np.ndarray:
     dims = tuple(range(1, len(xs.shape)))
     return np.mean((ys.cpu().numpy() - xs.cpu().numpy()) ** 2, axis=dims)
 
 
-def compute_nmse(xs, ys):
+def compute_nmse(xs: torch.Tensor, ys: torch.Tensor) -> np.ndarray:
     ys_numpy = ys.cpu().numpy()
     nmses = []
     for i in range(xs.shape[0]):

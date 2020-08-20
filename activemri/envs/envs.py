@@ -193,25 +193,25 @@ class ActiveMRIEnv(gym.Env):
         return tuple(the_tuple_device)
 
     @staticmethod
-    def __send_tuple_to_cpu_and_detach(the_tuple: Tuple[Union[Any, torch.Tensor]]):
-        the_tuple_cpu = []
-        for i in range(len(the_tuple)):
-            if isinstance(the_tuple[i], torch.Tensor):
-                the_tuple_cpu.append(the_tuple[i].detach().cpu())
-            else:
-                the_tuple_cpu.append(the_tuple[i])
-        return tuple(the_tuple_cpu)
+    def __send_dict_to_cpu_and_detach(the_dict: Dict[str, Union[Any, torch.Tensor]]):
+        the_dict_cpu = {}
+        for key in the_dict:
+            if isinstance(the_dict[key], torch.Tensor):
+                the_dict_cpu[key] = the_dict[key].detach().cpu()
+        return the_dict_cpu
 
-    def __compute_obs_and_score(self):
+    def __compute_obs_and_score(self) -> Tuple[Dict[str, Any], Dict[str, np.ndarray]]:
         reconstructor_input = self._transform_wrapper(
             self._current_k_space, self._current_mask, self._current_ground_truth
         )
 
         reconstructor_input = self.__send_tuple_to_device(reconstructor_input)
-        reconstruction, *extra_outputs = self._reconstructor(*reconstructor_input)
+        extra_outputs = self._reconstructor(*reconstructor_input)
 
-        reconstruction = reconstruction.cpu().detach()
-        extra_outputs = self.__send_tuple_to_cpu_and_detach(extra_outputs)
+        extra_outputs = self.__send_dict_to_cpu_and_detach(extra_outputs)
+        reconstruction = extra_outputs["reconstruction"]
+        del extra_outputs["reconstruction"]
+
         # noinspection PyUnusedLocal
         reconstructor_input = None  # de-referencing GPU tensors
 
@@ -221,7 +221,7 @@ class ActiveMRIEnv(gym.Env):
 
         obs = {
             "reconstruction": reconstruction,
-            "extra_outputs": tuple(extra_outputs),
+            "extra_outputs": extra_outputs,
             "mask": self._current_mask,
         }
 
@@ -230,7 +230,7 @@ class ActiveMRIEnv(gym.Env):
     @abc.abstractmethod
     def _compute_score_given_tensors(
         self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
-    ) -> Dict[str, torch.Tensor]:
+    ) -> Dict[str, np.ndarray]:
         pass
 
     # -------------------------------------------------------------------------
@@ -374,7 +374,7 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
 
     def _compute_score_given_tensors(
         self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
-    ) -> Dict[str, torch.Tensor]:
+    ) -> Dict[str, np.ndarray]:
         # Compute magnitude (for metrics)
         reconstruction = sc_transforms.to_magnitude(reconstruction, dim=3)
         ground_truth = sc_transforms.to_magnitude(ground_truth, dim=3)

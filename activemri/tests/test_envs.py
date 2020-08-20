@@ -67,6 +67,20 @@ def test_data_handler():
         assert cnt[x] == loops
 
 
+class MockDataset:
+    size = 10
+
+    def __len__(self):
+        return 2
+
+    def __getitem__(self, item):
+        mock_kspace = (item + 1) * np.ones((self.size, self.size, 2))
+        mock_mask = np.zeros(self.size)
+        mock_ground_truth = mock_kspace + 1
+        return mock_kspace, mock_mask, mock_ground_truth, {}, "fname", item
+
+
+# noinspection PyMethodMayBeStatic
 class MockReconstructor:
     def __init__(self, **kwargs):
         self.option1 = kwargs["option1"]
@@ -76,8 +90,9 @@ class MockReconstructor:
         self.weights = None
         self._eval = None
         self.device = None
+        self.state_dict = {}
 
-    def init_from_checkpoint(self, checkpoint):
+    def init_from_checkpoint(self, _checkpoint):
         self.weights = "init"
 
     def eval(self):
@@ -86,13 +101,26 @@ class MockReconstructor:
     def to(self, device):
         self.device = device
 
+    def forward(self, kspace, mask):
+        print("shape", kspace.shape, mask.shape)
+        return {"reconstruction": kspace + mask}
 
-def mock_transform(data):
-    return data
+    __call__ = forward
+
+    def load_state_dict(self):
+        pass
 
 
-def mock_mask_func(args, size, rng):
-    return args, size, rng
+def mock_transform(data, mask, *_):
+    if isinstance(mask, np.ndarray):
+        mask = torch.from_numpy(mask).view(mask.shape[0], 1, -1, 1)
+    return data, mask
+
+
+def mock_mask_func(args, size, _rng):
+    mask = np.zeros((size, MockDataset.size))
+    mask[:, : args["how_many"]] = 1
+    return mask
 
 
 # noinspection PyProtectedMember
@@ -114,8 +142,7 @@ class TestMRIEnvs:
         "mask": {
             "function": "activemri.tests.mock_mask_func",
             "args": {
-                "a":0,
-                "b":1
+                "how_many":3
             }
         },
         "reward_metric": "ssim",
@@ -137,16 +164,40 @@ class TestMRIEnvs:
         assert env._reconstructor.weights == "init"
         assert env._reconstructor._eval
         assert env._reconstructor.device == torch.device("cpu")
-        assert env._transform("x") == "x"
+        assert env._transform("x", "m") == ("x", "m")
 
-        args, size, rng = env._mask_func(3, "rng")
-        assert args["a"] == 0 and args["b"] == 1 and rng == "rng" and size == 3
+        batch_size = 3
+        mask = env._mask_func(batch_size, "rng")
+        assert mask.shape == (batch_size, MockDataset.size)
 
     def test_init_sets_action_space(self):
         env = envs.ActiveMRIEnv(32, 64)
         for i in range(32):
             assert env.action_space.contains(i)
         assert env.action_space.n == 32
+
+    def test_reset_and_step(self):
+        env = envs.ActiveMRIEnv(32, 64)
+        env._init_from_config_dict(self.mock_config_dict)
+
+        def compute_score(x, y):
+            return {"ssim": (x - y).sum()}
+
+        env._compute_score_given_tensors = compute_score
+
+        data = MockDataset()
+        handler = envs.DataHandler(data, None, batch_size=env._batch_size, loops=1)
+        env._train_data_handler = handler
+
+        obs = env.reset()
+        assert tuple(obs["reconstruction"].shape) == (
+            env._batch_size,
+            data.size,
+            data.size,
+            2,
+        )
+
+        print(env._current_score)
 
 
 # noinspection PyProtectedMember
