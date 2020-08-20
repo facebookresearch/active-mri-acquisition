@@ -1,14 +1,14 @@
 from typing import Any, Dict
 
 import torch
-import torch.nn as nn
 
+import activemri.models
 import miccai_2020.models.reconstruction
 
 
 # This is just a wrapper for the model in miccai_2020 folder
 # noinspection PyAbstractClass
-class MICCAIReconstructor(nn.Module):
+class MICCAIReconstructor(activemri.models.Reconstructor):
     def __init__(
         self,
         number_of_encoder_input_channels: int = 2,
