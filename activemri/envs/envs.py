@@ -1,4 +1,5 @@
 import abc
+import functools
 import json
 import pathlib
 import warnings
@@ -143,7 +144,8 @@ class ActiveMRIEnv(gym.Env):
         if self.reward_metric not in ["mse", "ssim", "psnr", "nmse"]:
             raise ValueError("Reward metric must be one of mse, nmse, ssim, or psnr.")
         mask_func = activemri.envs.util.import_object_from_str(cfg["mask"]["function"])
-        self._mask_func = lambda size, rng: mask_func(cfg["mask"]["args"], size, rng)
+        # self._mask_func = lambda size, rng: mask_func(cfg["mask"]["args"], size, rng)
+        self._mask_func = functools.partial(mask_func, cfg["mask"]["args"])
 
         # Instantiating reconstructor
         reconstructor_cfg = cfg["reconstructor"]
@@ -203,7 +205,9 @@ class ActiveMRIEnv(gym.Env):
 
     def _compute_obs_and_score(self) -> Tuple[Dict[str, Any], Dict[str, np.ndarray]]:
         reconstructor_input = self._transform_wrapper(
-            self._current_k_space, self._current_mask, self._current_ground_truth
+            kspace=self._current_k_space,
+            mask=self._current_mask,
+            ground_truth=self._current_ground_truth,
         )
 
         reconstructor_input = self._send_tuple_to_device(reconstructor_input)
@@ -242,13 +246,16 @@ class ActiveMRIEnv(gym.Env):
         kspace, _, ground_truth, attrs, fname, slice_id = next(self._train_data_handler)
         self._current_ground_truth = ground_truth
         self._current_k_space = kspace
-        self._transform_wrapper = lambda ks, mask, gt: self._transform(
-            kspace=ks,
-            mask=mask,
-            ground_truth=gt,
-            attrs=attrs,
-            fname=fname,
-            slice_id=slice_id,
+        # self._transform_wrapper = lambda ks, mask, gt: self._transform(
+        #     kspace=ks,
+        #     mask=mask,
+        #     ground_truth=gt,
+        #     attrs=attrs,
+        #     fname=fname,
+        #     slice_id=slice_id,
+        # )
+        self._transform_wrapper = functools.partial(
+            self._transform, attrs=attrs, fname=fname, slice_id=slice_id
         )
         self._current_mask = self._mask_func(self._batch_size, self.rng)
         obs, self._current_score = self._compute_obs_and_score()

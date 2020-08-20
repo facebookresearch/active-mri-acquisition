@@ -2,7 +2,6 @@ import json
 import pathlib
 
 import numpy as np
-
 # noinspection PyUnresolvedReferences
 import pytest
 import torch
