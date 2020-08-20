@@ -111,10 +111,10 @@ class MockReconstructor:
         pass
 
 
-def mock_transform(data, mask, *_):
+def mock_transform(kspace=None, mask=None, **_kwargs):
     if isinstance(mask, np.ndarray):
         mask = torch.from_numpy(mask).view(mask.shape[0], 1, -1, 1)
-    return data, mask
+    return kspace, mask
 
 
 def mock_mask_func(args, size, _rng):

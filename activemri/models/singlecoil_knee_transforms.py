@@ -39,7 +39,7 @@ def ifft_permute_maybe_shift(x, normalized=False, ifft_shift=False):
     return y.permute(0, 3, 1, 2)
 
 
-def raw_transform_miccai20(kspace, mask, *_):
+def raw_transform_miccai20(kspace=None, mask=None, **_kwargs):
     k_space = kspace.permute(0, 3, 1, 2)
     # alter mask to always include the highest frequencies that include padding
     mask[

@@ -41,13 +41,13 @@ class CyclicSampler(torch.utils.data.Sampler):
         self.order = order if order is not None else range(len(self.data_source))
         self.loops = loops
 
-    def __iterator(self):
+    def _iterator(self):
         for _ in range(self.loops):
             for j in self.order:
                 yield j
 
     def __iter__(self):
-        return iter(self.__iterator())
+        return iter(self._iterator())
 
     def __len__(self):
         return len(self.data_source) * self.loops
@@ -79,31 +79,32 @@ class DataHandler:
         order = rng.permutation(len(data_source))
         sampler = CyclicSampler(data_source, order, loops=loops)
         if collate_fn:
-            self.__data_loader = torch.utils.data.DataLoader(
+            self._data_loader = torch.utils.data.DataLoader(
                 data_source,
                 batch_size=batch_size,
                 sampler=sampler,
                 collate_fn=collate_fn,
             )
         else:
-            self.__data_loader = torch.utils.data.DataLoader(
+            self._data_loader = torch.utils.data.DataLoader(
                 data_source, batch_size=batch_size, sampler=sampler
             )
-        self.__iter = iter(self.__data_loader)
+        self._iter = iter(self._data_loader)
 
     def reset(self):
-        self.__iter = iter(self.__data_loader)
+        self._iter = iter(self._data_loader)
 
     def __iter__(self):
-        return self.__iter
+        return self._iter
 
     def __next__(self):
-        return next(self.__iter)
+        return next(self._iter)
 
 
 # -----------------------------------------------------------------------------
 #                           BASE ACTIVE MRI ENV
 # -----------------------------------------------------------------------------
+
 # TODO Add option to resize default img size (need to pass this option to reconstructor)
 # TODO Add option to control batch size (default 2)
 # TODO See if there is a clean way to have access to current image indices from the env
@@ -179,11 +180,22 @@ class ActiveMRIEnv(gym.Env):
             reconstructor_cfg["transform"]
         )
 
+    @staticmethod
+    def _void_transform(
+        kspace: torch.Tensor,
+        mask: torch.Tensor,
+        target: torch.Tensor,
+        attrs: List[Dict[str, Any]],
+        fname: List[pathlib.Path],
+        slice_id: List[int],
+    ) -> Tuple:
+        return kspace, mask, target, attrs, fname, slice_id
+
     def _init_from_config_file(self, config_filename: str):
         with open(config_filename, "rb") as f:
             self._init_from_config_dict(json.load(f))
 
-    def __send_tuple_to_device(self, the_tuple: Tuple[Union[Any, torch.Tensor]]):
+    def _send_tuple_to_device(self, the_tuple: Tuple[Union[Any, torch.Tensor]]):
         the_tuple_device = []
         for i in range(len(the_tuple)):
             if isinstance(the_tuple[i], torch.Tensor):
@@ -193,22 +205,22 @@ class ActiveMRIEnv(gym.Env):
         return tuple(the_tuple_device)
 
     @staticmethod
-    def __send_dict_to_cpu_and_detach(the_dict: Dict[str, Union[Any, torch.Tensor]]):
+    def _send_dict_to_cpu_and_detach(the_dict: Dict[str, Union[Any, torch.Tensor]]):
         the_dict_cpu = {}
         for key in the_dict:
             if isinstance(the_dict[key], torch.Tensor):
                 the_dict_cpu[key] = the_dict[key].detach().cpu()
         return the_dict_cpu
 
-    def __compute_obs_and_score(self) -> Tuple[Dict[str, Any], Dict[str, np.ndarray]]:
+    def _compute_obs_and_score(self) -> Tuple[Dict[str, Any], Dict[str, np.ndarray]]:
         reconstructor_input = self._transform_wrapper(
             self._current_k_space, self._current_mask, self._current_ground_truth
         )
 
-        reconstructor_input = self.__send_tuple_to_device(reconstructor_input)
+        reconstructor_input = self._send_tuple_to_device(reconstructor_input)
         extra_outputs = self._reconstructor(*reconstructor_input)
 
-        extra_outputs = self.__send_dict_to_cpu_and_detach(extra_outputs)
+        extra_outputs = self._send_dict_to_cpu_and_detach(extra_outputs)
         reconstruction = extra_outputs["reconstruction"]
         del extra_outputs["reconstruction"]
 
@@ -242,10 +254,15 @@ class ActiveMRIEnv(gym.Env):
         self._current_ground_truth = ground_truth
         self._current_k_space = kspace
         self._transform_wrapper = lambda ks, mask, gt: self._transform(
-            ks, mask, gt, attrs, fname, slice_id
+            kspace=ks,
+            mask=mask,
+            ground_truth=gt,
+            attrs=attrs,
+            fname=fname,
+            slice_id=slice_id,
         )
         self._current_mask = self._mask_func(self._batch_size, self.rng)
-        obs, self._current_score = self.__compute_obs_and_score()
+        obs, self._current_score = self._compute_obs_and_score()
 
         return obs
 
@@ -260,7 +277,7 @@ class ActiveMRIEnv(gym.Env):
         self._current_mask = activemri.envs.mask_functions.update_masks_from_indices(
             self._current_mask, indices
         )
-        obs, new_score = self.__compute_obs_and_score()
+        obs, new_score = self._compute_obs_and_score()
         reward = new_score[self.reward_metric] - self._current_score[self.reward_metric]
         if self.reward_metric in ["mse", "nmse"]:
             reward *= -1
@@ -316,20 +333,20 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
     CENTER_CROP_SIZE = scknee_data.RawSliceData.CENTER_CROP_SIZE
 
     def __init__(self):
-        ActiveMRIEnv.__init__(self, self.IMAGE_WIDTH, self.IMAGE_HEIGHT)
-        self._setup("configs/miccai_raw.json", self.__setup_data_handlers)
+        super().__init__(self.IMAGE_WIDTH, self.IMAGE_HEIGHT)
+        self._setup("configs/miccai_raw.json", self._setup_data_handlers)
 
     # -------------------------------------------------------------------------
     # Private methods
     # -------------------------------------------------------------------------
-    def __setup_data_handlers(self):
+    def _setup_data_handlers(self):
         root_path = pathlib.Path(self._data_location)
         train_path = root_path.joinpath("knee_singlecoil_train")
         val_and_test_path = root_path.joinpath("knee_singlecoil_val")
 
         # Setting up training data loader
         train_data = scknee_data.RawSliceData(
-            train_path, activemri.envs.transform, num_cols=self.IMAGE_WIDTH,
+            train_path, ActiveMRIEnv._void_transform, num_cols=self.IMAGE_WIDTH,
         )
         self._train_data_handler = DataHandler(
             train_data,
@@ -341,7 +358,7 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         # Setting up val data loader
         val_data = scknee_data.RawSliceData(
             val_and_test_path,
-            activemri.envs.transform,
+            ActiveMRIEnv._void_transform,
             custom_split="val",
             num_cols=self.IMAGE_WIDTH,
         )
@@ -355,7 +372,7 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         # Setting up test data loader
         test_data = scknee_data.RawSliceData(
             val_and_test_path,
-            activemri.envs.transform,
+            ActiveMRIEnv._void_transform,
             custom_split="test",
             num_cols=self.IMAGE_WIDTH,
         )

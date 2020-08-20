@@ -23,7 +23,7 @@ class MICCAIReconstructor(nn.Module):
         img_width: int = 128,
         use_deconv: bool = True,
     ):
-        super(MICCAIReconstructor, self).__init__()
+        super().__init__()
         self.reconstructor = miccai_2020.models.reconstruction.ReconstructorNetwork(
             number_of_encoder_input_channels=number_of_encoder_input_channels,
             number_of_decoder_output_channels=number_of_decoder_output_channels,
