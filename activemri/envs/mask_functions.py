@@ -1,14 +1,21 @@
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, List
 
 import numpy as np
 import torch
 
 
-def update_masks_from_indices(masks: torch.Tensor, indices: Iterable[int]):
+def update_masks_from_indices(masks: torch.Tensor, indices: List) -> torch.Tensor:
     assert masks.shape[0] == len(indices)
     for i, index in enumerate(indices):
-        masks[i, :, index] = 1
+        masks[i, ..., index] = 1
     return masks
+
+
+def check_masks_complete(masks: torch.Tensor) -> List[bool]:
+    done = []
+    for mask in masks:
+        done.append(mask.bool().all().item())
+    return done
 
 
 def sample_low_frequency_mask(

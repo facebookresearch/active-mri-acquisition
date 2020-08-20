@@ -16,5 +16,6 @@
     "function": "activemri.envs.mask_functions.sample_low_frequency_mask",
     "args": {}
   },
+  "reward_metric": "ssim",
   "device": "cuda:0"
 }

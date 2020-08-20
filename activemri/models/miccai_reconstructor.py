@@ -4,6 +4,7 @@ import miccai_2020.models.reconstruction
 
 
 # This is just a wrapper for the model in miccai_2020 folder
+# noinspection PyAbstractClass
 class MICCAIReconstructor(nn.Module):
     def __init__(
         self,

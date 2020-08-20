@@ -20,7 +20,7 @@ def compute_ssim(xs, ys):
             data_range=ys[i, ..., 0].cpu().numpy().max(),
         )
         ssims.append(ssim)
-    return np.array(ssims).mean()
+    return np.array(ssims, dtype=np.float32)
 
 
 def compute_psnr(xs, ys):
@@ -32,15 +32,20 @@ def compute_psnr(xs, ys):
             data_range=ys[i, ..., 0].cpu().numpy().max(),
         )
         psnrs.append(psnr)
-    return np.array(psnrs).mean()
+    return np.array(psnrs, dtype=np.float32)
 
 
 def compute_mse(xs, ys):
-    return np.mean((ys.cpu().numpy() - xs.cpu().numpy()) ** 2)
+    dims = tuple(range(1, len(xs.shape)))
+    return np.mean((ys.cpu().numpy() - xs.cpu().numpy()) ** 2, axis=dims)
 
 
 def compute_nmse(xs, ys):
     ys_numpy = ys.cpu().numpy()
-    return (
-        np.linalg.norm(ys_numpy - xs.cpu().numpy()) ** 2 / np.linalg.norm(ys_numpy) ** 2
-    )
+    nmses = []
+    for i in range(xs.shape[0]):
+        x = xs[i, ..., 0].cpu().numpy()
+        y = ys_numpy[i, ..., 0]
+        nmse = np.linalg.norm(y - x) ** 2 / np.linalg.norm(y) ** 2
+        nmses.append(nmse)
+    return np.array(nmses, dtype=np.float32)

@@ -3,7 +3,18 @@ import json
 import pathlib
 import warnings
 
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Tuple, Optional, Sized
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sized,
+    Tuple,
+    Union,
+)
 
 import gym
 import numpy as np
@@ -96,6 +107,7 @@ class DataHandler:
 # TODO Add option to resize default img size (need to pass this option to reconstructor)
 # TODO Add option to control batch size (default 2)
 # TODO See if there is a clean way to have access to current image indices from the env
+# TODO add reward scaling option
 class ActiveMRIEnv(gym.Env):
     def __init__(self, img_width: int, img_height: int):
         # Default initialization
@@ -106,11 +118,12 @@ class ActiveMRIEnv(gym.Env):
         self._val_data_handler = None
         self._test_data_handler = None
         self._device = torch.device("cpu")
-        self._batch_size = 1
+        self._batch_size = 2
 
         self.horizon = None
         self.seed = None
         self.rng = np.random.RandomState()
+        self.reward_metric = "mse"
 
         # Init from provided configuration
         self._img_width = img_width
@@ -136,6 +149,9 @@ class ActiveMRIEnv(gym.Env):
     def _init_from_config_dict(self, cfg: Mapping[str, Any]):
         self._data_location = cfg["data_location"]
         self._device = torch.device(cfg["device"])
+        self.reward_metric = cfg["reward_metric"]
+        if self.reward_metric not in ["mse", "ssim", "psnr", "nmse"]:
+            raise ValueError("Reward metric must be one of mse, nmse, ssim, or psnr.")
         mask_func = activemri.envs.util.import_object_from_str(cfg["mask"]["function"])
         self._mask_func = lambda size, rng: mask_func(cfg["mask"]["args"], size, rng)
 
@@ -167,12 +183,37 @@ class ActiveMRIEnv(gym.Env):
         with open(config_filename, "rb") as f:
             self._init_from_config_dict(json.load(f))
 
+    def __send_tuple_to_device(self, the_tuple: Tuple[Union[Any, torch.Tensor]]):
+        the_tuple_device = []
+        for i in range(len(the_tuple)):
+            if isinstance(the_tuple[i], torch.Tensor):
+                the_tuple_device.append(the_tuple[i].to(self._device))
+            else:
+                the_tuple_device.append(the_tuple[i])
+        return tuple(the_tuple_device)
+
+    @staticmethod
+    def __send_tuple_to_cpu_and_detach(the_tuple: Tuple[Union[Any, torch.Tensor]]):
+        the_tuple_cpu = []
+        for i in range(len(the_tuple)):
+            if isinstance(the_tuple[i], torch.Tensor):
+                the_tuple_cpu.append(the_tuple[i].detach().cpu())
+            else:
+                the_tuple_cpu.append(the_tuple[i])
+        return tuple(the_tuple_cpu)
+
     def __compute_obs_and_score(self):
         reconstructor_input = self._transform_wrapper(
             self._current_k_space, self._current_mask, self._current_ground_truth
         )
+
+        reconstructor_input = self.__send_tuple_to_device(reconstructor_input)
         reconstruction, *extra_outputs = self._reconstructor(*reconstructor_input)
-        reconstruction = reconstruction.detach()
+
+        reconstruction = reconstruction.cpu().detach()
+        extra_outputs = self.__send_tuple_to_cpu_and_detach(extra_outputs)
+        # noinspection PyUnusedLocal
+        reconstructor_input = None  # de-referencing GPU tensors
 
         score = self._compute_score_given_tensors(
             reconstruction, self._current_ground_truth
@@ -180,7 +221,7 @@ class ActiveMRIEnv(gym.Env):
 
         obs = {
             "reconstruction": reconstruction,
-            "extra_outputs": extra_outputs,
+            "extra_outputs": tuple(extra_outputs),
             "mask": self._current_mask,
         }
 
@@ -198,31 +239,35 @@ class ActiveMRIEnv(gym.Env):
     def reset(self,) -> Dict[str, np.ndarray]:
 
         kspace, _, ground_truth, attrs, fname, slice_id = next(self._train_data_handler)
-        self._current_ground_truth = ground_truth.to(self._device)
-        self._current_k_space = kspace.to(self._device)
+        self._current_ground_truth = ground_truth
+        self._current_k_space = kspace
         self._transform_wrapper = lambda ks, mask, gt: self._transform(
             ks, mask, gt, attrs, fname, slice_id
         )
-        self._current_mask = self._mask_func(self._batch_size, self.rng).to(
-            self._device
-        )
+        self._current_mask = self._mask_func(self._batch_size, self.rng)
         obs, self._current_score = self.__compute_obs_and_score()
 
         return obs
 
     def step(
-        self, action: int, multi_actions: Optional[Iterable[int]] = None
-    ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], float, bool]:
+        self, action: int, batched_actions: Optional[Iterable[int]] = None
+    ) -> Tuple[Dict[str, Any], np.ndarray, List[bool], Dict]:
         indices = (
-            [action for i in range(self._batch_size)]
-            if multi_actions is None
-            else multi_actions
+            [action for _ in range(self._batch_size)]
+            if batched_actions is None
+            else batched_actions
         )
         self._current_mask = activemri.envs.mask_functions.update_masks_from_indices(
             self._current_mask, indices
         )
+        obs, new_score = self.__compute_obs_and_score()
+        reward = new_score[self.reward_metric] - self._current_score[self.reward_metric]
+        if self.reward_metric in ["mse", "nmse"]:
+            reward *= -1
+        self._current_score = new_score
 
-        pass
+        done = activemri.envs.mask_functions.check_masks_complete(self._current_mask)
+        return obs, reward, done, {}
 
     def render(self, mode="human"):
         pass
@@ -264,11 +309,11 @@ class ActiveMRIEnv(gym.Env):
 #                             CUSTOM ENVIRONMENTS
 # -----------------------------------------------------------------------------
 class SingleCoilKneeRAWEnv(ActiveMRIEnv):
-    IMAGE_WIDTH = 368
-    IMAGE_HEIGHT = 640
-    START_PADDING = 166
-    END_PADDING = 202
-    CENTER_CROP_SIZE = 320
+    IMAGE_WIDTH = scknee_data.RawSliceData.IMAGE_WIDTH
+    IMAGE_HEIGHT = scknee_data.RawSliceData.IMAGE_HEIGHT
+    START_PADDING = scknee_data.RawSliceData.START_PADDING
+    END_PADDING = scknee_data.RawSliceData.END_PADDING
+    CENTER_CROP_SIZE = scknee_data.RawSliceData.CENTER_CROP_SIZE
 
     def __init__(self):
         ActiveMRIEnv.__init__(self, self.IMAGE_WIDTH, self.IMAGE_HEIGHT)

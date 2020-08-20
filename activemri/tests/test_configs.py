@@ -15,6 +15,7 @@ def test_all_configs():
             cfg = json.load(f)
             assert "data_location" in cfg
             assert "device" in cfg
+            assert "reward_metric" in cfg
             assert "mask" in cfg
             mask_cfg = cfg["mask"]
             try:

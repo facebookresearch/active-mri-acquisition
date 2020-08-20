@@ -118,6 +118,7 @@ class TestMRIEnvs:
                 "b":1
             }
         },
+        "reward_metric": "ssim",
         "device": "cpu"
     }
     """
@@ -127,6 +128,7 @@ class TestMRIEnvs:
     def test_init_from_config_dict(self):
         env = envs.ActiveMRIEnv(32, 64)
         env._init_from_config_dict(self.mock_config_dict)
+        assert env.reward_metric == "ssim"
         assert type(env._reconstructor) == MockReconstructor
         assert env._reconstructor.option1 == 1
         assert env._reconstructor.option2 == 0.5

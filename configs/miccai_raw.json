@@ -23,6 +23,6 @@
       "max_cols": 15
     }
   },
-
+  "reward_metric": "ssim",
   "device": "cuda:0"
 }

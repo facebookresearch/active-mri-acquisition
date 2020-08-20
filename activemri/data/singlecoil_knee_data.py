@@ -14,6 +14,12 @@ from typing import Callable, Optional
 #                      RAW DATASET (as used in MICCAI'20)
 # -----------------------------------------------------------------------------
 class RawSliceData(torch.utils.data.Dataset):
+    IMAGE_WIDTH = 368
+    IMAGE_HEIGHT = 640
+    START_PADDING = 166
+    END_PADDING = 202
+    CENTER_CROP_SIZE = 320
+
     def __init__(
         self,
         root: pathlib.Path,
