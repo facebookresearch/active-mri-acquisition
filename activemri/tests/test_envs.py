@@ -2,6 +2,7 @@ import json
 import pathlib
 
 import numpy as np
+
 # noinspection PyUnresolvedReferences
 import pytest
 import torch
@@ -9,6 +10,7 @@ import torch
 import activemri.envs.envs as envs
 import activemri.envs.mask_functions as masks
 import activemri.envs.util as util
+import activemri.tests.mocks as mocks
 
 
 def test_import_object_from_str():
@@ -66,96 +68,16 @@ def test_data_handler():
         assert cnt[x] == loops
 
 
-class MockDataset:
-    size = 10
-
-    def __len__(self):
-        return 2
-
-    def __getitem__(self, item):
-        mock_kspace = (item + 1) * np.ones((self.size, self.size, 2))
-        mock_mask = np.zeros(self.size)
-        mock_ground_truth = mock_kspace + 1
-        return mock_kspace, mock_mask, mock_ground_truth, {}, "fname", item
-
-
-# noinspection PyMethodMayBeStatic
-class MockReconstructor:
-    def __init__(self, **kwargs):
-        self.option1 = kwargs["option1"]
-        self.option2 = kwargs["option2"]
-        self.option3 = kwargs["option3"]
-        self.option4 = kwargs["option4"]
-        self.weights = None
-        self._eval = None
-        self.device = None
-        self.state_dict = {}
-
-    def init_from_checkpoint(self, _checkpoint):
-        self.weights = "init"
-
-    def eval(self):
-        self._eval = True
-
-    def to(self, device):
-        self.device = device
-
-    def forward(self, kspace, mask):
-        print("shape", kspace.shape, mask.shape)
-        return {"reconstruction": kspace + mask}
-
-    __call__ = forward
-
-    def load_state_dict(self):
-        pass
-
-
-def mock_transform(kspace=None, mask=None, **_kwargs):
-    if isinstance(mask, np.ndarray):
-        mask = torch.from_numpy(mask).view(mask.shape[0], 1, -1, 1)
-    return kspace, mask
-
-
-def mock_mask_func(args, size, _rng):
-    mask = np.zeros((size, MockDataset.size))
-    mask[:, : args["how_many"]] = 1
-    return mask
-
-
 # noinspection PyProtectedMember
 class TestMRIEnvs:
-    mock_config_json_str = """
-    {
-        "data_location": "dummy_location",
-        "reconstructor": {
-            "cls": "activemri.tests.MockReconstructor",
-            "options": {
-                "option1": 1,
-                "option2": 0.5,
-                "option3": "dummy",
-                "option4": true
-            },
-            "checkpoint_path": "null",
-            "transform": "activemri.tests.mock_transform"
-        },
-        "mask": {
-            "function": "activemri.tests.mock_mask_func",
-            "args": {
-                "how_many":3
-            }
-        },
-        "reward_metric": "ssim",
-        "device": "cpu"
-    }
-    """
 
-    mock_config_dict = json.loads(mock_config_json_str)
+    mock_config_dict = json.loads(mocks.cfg_json_str)
 
     def test_init_from_config_dict(self):
         env = envs.ActiveMRIEnv(32, 64)
         env._init_from_config_dict(self.mock_config_dict)
         assert env.reward_metric == "ssim"
-        assert type(env._reconstructor) == MockReconstructor
+        assert type(env._reconstructor) == mocks.Reconstructor
         assert env._reconstructor.option1 == 1
         assert env._reconstructor.option2 == 0.5
         assert env._reconstructor.option3 == "dummy"
@@ -167,7 +89,7 @@ class TestMRIEnvs:
 
         batch_size = 3
         mask = env._mask_func(batch_size, "rng")
-        assert mask.shape == (batch_size, MockDataset.size)
+        assert mask.shape == (batch_size, mocks.Dataset.size)
 
     def test_init_sets_action_space(self):
         env = envs.ActiveMRIEnv(32, 64)
@@ -184,7 +106,7 @@ class TestMRIEnvs:
 
         env._compute_score_given_tensors = compute_score
 
-        data = MockDataset()
+        data = mocks.Dataset()
         handler = envs.DataHandler(data, None, batch_size=env._batch_size, loops=1)
         env._train_data_handler = handler
 
