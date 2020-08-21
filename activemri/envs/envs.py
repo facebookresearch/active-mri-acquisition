@@ -150,9 +150,39 @@ class ActiveMRIEnv(gym.Env):
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
-    def _setup(self, cfg_filename: str, data_init_func: Callable):
+    def _setup(
+        self,
+        cfg_filename: str,
+        data_init_func: Callable[[], Tuple[Sized, Sized, Sized]],
+    ):
         self._init_from_config_file(cfg_filename)
-        data_init_func()
+        self._setup_data_handlers(data_init_func)
+
+    def _setup_data_handlers(
+        self, data_init_func: Callable[[], Tuple[Sized, Sized, Sized]]
+    ):
+        train_data, val_data, test_data = data_init_func()
+        self._train_data_handler = DataHandler(
+            train_data,
+            self.seed,
+            batch_size=self._batch_size,
+            loops=1000,
+            collate_fn=_env_collate_fn,
+        )
+        self._val_data_handler = DataHandler(
+            val_data,
+            self.seed + 1 if self.seed else None,
+            batch_size=self._batch_size,
+            loops=1,
+            collate_fn=_env_collate_fn,
+        )
+        self._test_data_handler = DataHandler(
+            test_data,
+            self.seed + 2 if self.seed else None,
+            batch_size=self._batch_size,
+            loops=1,
+            collate_fn=_env_collate_fn,
+        )
 
     def _init_from_config_dict(self, cfg: Mapping[str, Any]):
         self._data_location = cfg["data_location"]
@@ -348,55 +378,32 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         super().__init__(
             self.IMAGE_WIDTH, self.IMAGE_HEIGHT, batch_size=batch_size, budget=budget
         )
-        self._setup("configs/miccai_raw.json", self._setup_data_handlers)
+        self._setup("configs/miccai_raw.json", self._create_dataset)
 
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
-    def _setup_data_handlers(self):
+    def _create_dataset(self) -> Tuple[Sized, Sized, Sized]:
         root_path = pathlib.Path(self._data_location)
         train_path = root_path.joinpath("knee_singlecoil_train")
         val_and_test_path = root_path.joinpath("knee_singlecoil_val")
 
-        # Setting up training data loader
         train_data = scknee_data.RawSliceData(
             train_path, ActiveMRIEnv._void_transform, num_cols=self.IMAGE_WIDTH,
         )
-        self._train_data_handler = DataHandler(
-            train_data,
-            self.seed,
-            batch_size=self._batch_size,
-            loops=1000,
-            collate_fn=_env_collate_fn,
-        )
-        # Setting up val data loader
         val_data = scknee_data.RawSliceData(
             val_and_test_path,
             ActiveMRIEnv._void_transform,
             custom_split="val",
             num_cols=self.IMAGE_WIDTH,
         )
-        self._val_data_handler = DataHandler(
-            val_data,
-            self.seed + 1 if self.seed else None,
-            batch_size=self._batch_size,
-            loops=1,
-            collate_fn=_env_collate_fn,
-        )
-        # Setting up test data loader
         test_data = scknee_data.RawSliceData(
             val_and_test_path,
             ActiveMRIEnv._void_transform,
             custom_split="test",
             num_cols=self.IMAGE_WIDTH,
         )
-        self._test_data_handler = DataHandler(
-            test_data,
-            self.seed + 2 if self.seed else None,
-            batch_size=self._batch_size,
-            loops=1,
-            collate_fn=_env_collate_fn,
-        )
+        return train_data, val_data, test_data
 
     def _compute_score_given_tensors(
         self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
