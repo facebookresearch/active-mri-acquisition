@@ -7,10 +7,10 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Iterable,
     List,
     Mapping,
     Optional,
+    Sequence,
     Sized,
     Tuple,
     Union,
@@ -110,7 +110,7 @@ class DataHandler:
 # TODO See if there is a clean way to have access to current image indices from the env
 # TODO add reward scaling option
 class ActiveMRIEnv(gym.Env):
-    def __init__(self, img_width: int, img_height: int):
+    def __init__(self, img_width: int, img_height: int, batch_size: Optional[int] = 1):
         # Default initialization
         self._data_location = None
         self._reconstructor = None
@@ -119,7 +119,7 @@ class ActiveMRIEnv(gym.Env):
         self._val_data_handler = None
         self._test_data_handler = None
         self._device = torch.device("cpu")
-        self._batch_size = 2
+        self._batch_size = batch_size
 
         self.horizon = None
         self.seed = None
@@ -250,7 +250,7 @@ class ActiveMRIEnv(gym.Env):
     # -------------------------------------------------------------------------
     # Public methods
     # -------------------------------------------------------------------------
-    def reset(self,) -> Dict[str, np.ndarray]:
+    def reset(self,) -> Dict[str, Any]:
 
         kspace, _, ground_truth, attrs, fname, slice_id = next(self._train_data_handler)
         self._current_ground_truth = ground_truth
@@ -264,7 +264,7 @@ class ActiveMRIEnv(gym.Env):
         return obs
 
     def step(
-        self, action: int, batched_actions: Optional[Iterable[int]] = None
+        self, action: int, batched_actions: Optional[Sequence[int]] = None
     ) -> Tuple[Dict[str, Any], np.ndarray, List[bool], Dict]:
         indices = (
             [action for _ in range(self._batch_size)]
@@ -334,7 +334,7 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         self._setup("configs/miccai_raw.json", self._setup_data_handlers)
 
     # -------------------------------------------------------------------------
-    # Private methods
+    # Protected methods
     # -------------------------------------------------------------------------
     def _setup_data_handlers(self):
         root_path = pathlib.Path(self._data_location)
@@ -381,11 +381,6 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
             collate_fn=_env_collate_fn,
         )
 
-    def reset(self,) -> Dict[str, np.ndarray]:
-        obs = super().reset()
-        obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
-        return obs
-
     def _compute_score_given_tensors(
         self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
     ) -> Dict[str, np.ndarray]:
@@ -394,10 +389,10 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         ground_truth = sc_transforms.to_magnitude(ground_truth, dim=3)
 
         reconstruction = sc_transforms.center_crop(
-            reconstruction, [self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE]
+            reconstruction, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
         )
         ground_truth = sc_transforms.center_crop(
-            ground_truth, [self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE]
+            ground_truth, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
         )
 
         mse = activemri.envs.util.compute_mse(reconstruction, ground_truth)
@@ -406,3 +401,11 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         psnr = activemri.envs.util.compute_psnr(reconstruction, ground_truth)
 
         return {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
+
+    # -------------------------------------------------------------------------
+    # Public methods
+    # -------------------------------------------------------------------------
+    def reset(self,) -> Dict[str, Any]:
+        obs = super().reset()
+        obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
+        return obs

@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import fastmri
 import torch
 
@@ -16,11 +18,13 @@ def dicom_transform(image: torch.Tensor, mean: float, std: float):
     return image
 
 
-def to_magnitude(tensor, dim):
+def to_magnitude(tensor: torch.Tensor, dim: int):
     return (tensor ** 2).sum(dim=dim, keepdim=True) ** 0.5
 
 
-def center_crop(x, shape):
+def center_crop(x: torch.Tensor, shape: Tuple[int, int]) -> torch.Tensor:
+    # Expects tensor to be (bs, H, W, C) and shape to be 2-dim
+    assert len(x.shape) == 4
     assert 0 < shape[0] <= x.shape[1]
     assert 0 < shape[1] <= x.shape[2]
     h_from = (x.shape[1] - shape[0]) // 2

@@ -1,13 +1,15 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 import numpy as np
 import torch
 
 
-def update_masks_from_indices(masks: torch.Tensor, indices: List) -> torch.Tensor:
+def update_masks_from_indices(
+    masks: torch.Tensor, indices: Sequence[int]
+) -> torch.Tensor:
     assert masks.shape[0] == len(indices)
-    for i, index in enumerate(indices):
-        masks[i, ..., index] = 1
+    for i in range(len(indices)):
+        masks[i, ..., indices[i]] = 1
     return masks
 
 

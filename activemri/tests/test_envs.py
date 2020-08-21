@@ -98,7 +98,7 @@ class TestMRIEnvs:
         assert env.action_space.n == 32
 
     def test_reset_and_step(self):
-        env = envs.ActiveMRIEnv(32, 64)
+        env = envs.ActiveMRIEnv(32, 64, batch_size=2)
         env._init_from_config_dict(self.mock_config_dict)
 
         def compute_score(x, y):
