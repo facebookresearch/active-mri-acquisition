@@ -2,6 +2,7 @@ import json
 import pathlib
 
 import numpy as np
+
 # noinspection PyUnresolvedReferences
 import pytest
 import torch
@@ -101,7 +102,7 @@ class TestMRIEnvs:
         env._init_from_config_dict(self.mock_config_dict)
 
         def compute_score(x, y):
-            return {"ssim": (x - y).sum()}
+            return {"ssim": (x - y).abs().sum()}
 
         env._compute_score_given_tensors = compute_score
 
@@ -116,8 +117,28 @@ class TestMRIEnvs:
             data.size,
             2,
         )
+        assert "ssim" in env._current_score
 
-        print(env._current_score)
+        def expected_score(step):
+            s = mocks.Dataset.size
+            total = s ** 2
+            return 2 * ((total - (3 + step) * s) + (total - (2 + step) * s))
+
+        assert env._current_score["ssim"] == expected_score(0)
+        prev_score = env._current_score["ssim"]
+        for action in range(3, 10):
+            obs, reward, done, _ = env.step(action)
+            assert env._current_score["ssim"] == expected_score(action - 2)
+            assert reward == env._current_score["ssim"] - prev_score
+            prev_score = env._current_score["ssim"]
+            if action < 9:
+                assert done == [False, False]
+            else:
+                assert done == [True, False]
+        obs, reward, done, _ = env.step(2)
+        assert env._current_score["ssim"] == 0.0
+        assert reward == -prev_score
+        assert done == [True, True]
 
 
 # noinspection PyProtectedMember

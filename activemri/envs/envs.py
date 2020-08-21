@@ -3,8 +3,18 @@ import functools
 import json
 import pathlib
 import warnings
-from typing import (Any, Callable, Dict, Iterable, List, Mapping, Optional,
-                    Sized, Tuple, Union)
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sized,
+    Tuple,
+    Union,
+)
 
 import gym
 import numpy as np
@@ -144,7 +154,6 @@ class ActiveMRIEnv(gym.Env):
         if self.reward_metric not in ["mse", "ssim", "psnr", "nmse"]:
             raise ValueError("Reward metric must be one of mse, nmse, ssim, or psnr.")
         mask_func = activemri.envs.util.import_object_from_str(cfg["mask"]["function"])
-        # self._mask_func = lambda size, rng: mask_func(cfg["mask"]["args"], size, rng)
         self._mask_func = functools.partial(mask_func, cfg["mask"]["args"])
 
         # Instantiating reconstructor
@@ -246,14 +255,6 @@ class ActiveMRIEnv(gym.Env):
         kspace, _, ground_truth, attrs, fname, slice_id = next(self._train_data_handler)
         self._current_ground_truth = ground_truth
         self._current_k_space = kspace
-        # self._transform_wrapper = lambda ks, mask, gt: self._transform(
-        #     kspace=ks,
-        #     mask=mask,
-        #     ground_truth=gt,
-        #     attrs=attrs,
-        #     fname=fname,
-        #     slice_id=slice_id,
-        # )
         self._transform_wrapper = functools.partial(
             self._transform, attrs=attrs, fname=fname, slice_id=slice_id
         )

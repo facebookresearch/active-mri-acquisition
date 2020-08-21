@@ -40,15 +40,16 @@ class Dataset:
         return mock_kspace, mock_mask, mock_ground_truth, {}, "fname", item
 
 
-def mask_func(args, size, _rng):
-    mask = np.zeros((size, Dataset.size))
-    mask[:, : args["how_many"]] = 1
+def mask_func(args, batch_size, _rng):
+    mask = torch.zeros(batch_size, Dataset.size)
+    mask[0, : args["how_many"]] = 1
+    mask[1, : args["how_many"] - 1] = 1
     return mask
 
 
 def transform(kspace=None, mask=None, **_kwargs):
-    if isinstance(mask, np.ndarray):
-        mask = torch.from_numpy(mask).view(mask.shape[0], 1, -1, 1)
+    if isinstance(mask, torch.Tensor):
+        mask = mask.view(mask.shape[0], 1, -1, 1)
     return kspace, mask
 
 
@@ -74,7 +75,6 @@ class Reconstructor:
         self.device = device
 
     def forward(self, kspace, mask):
-        print("shape", kspace.shape, mask.shape)
         return {"reconstruction": kspace + mask}
 
     __call__ = forward
