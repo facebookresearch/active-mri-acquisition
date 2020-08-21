@@ -106,7 +106,6 @@ class DataHandler:
 # -----------------------------------------------------------------------------
 
 # TODO Add option to resize default img size (need to pass this option to reconstructor)
-# TODO See if there is a clean way to have access to current image indices from the env
 # TODO add reward scaling option
 class ActiveMRIEnv(gym.Env):
     def __init__(
@@ -306,15 +305,12 @@ class ActiveMRIEnv(gym.Env):
         return obs, meta
 
     def step(
-        self, action: int, batched_actions: Optional[Sequence[int]] = None
+        self, action: Union[int, Sequence[int]]
     ) -> Tuple[Dict[str, Any], np.ndarray, List[bool], Dict]:
-        indices = (
-            [action for _ in range(self._batch_size)]
-            if batched_actions is None
-            else batched_actions
-        )
+        if isinstance(action, int):
+            action = [action for _ in range(self._batch_size)]
         self._current_mask = activemri.envs.masks.update_masks_from_indices(
-            self._current_mask, indices
+            self._current_mask, action
         )
         obs, new_score = self._compute_obs_and_score()
         reward = new_score[self.reward_metric] - self._current_score[self.reward_metric]
