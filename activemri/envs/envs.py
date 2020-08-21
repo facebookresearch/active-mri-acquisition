@@ -106,11 +106,16 @@ class DataHandler:
 # -----------------------------------------------------------------------------
 
 # TODO Add option to resize default img size (need to pass this option to reconstructor)
-# TODO Add option to control batch size (default 2)
 # TODO See if there is a clean way to have access to current image indices from the env
 # TODO add reward scaling option
 class ActiveMRIEnv(gym.Env):
-    def __init__(self, img_width: int, img_height: int, batch_size: Optional[int] = 1):
+    def __init__(
+        self,
+        img_width: int,
+        img_height: int,
+        batch_size: int = 1,
+        budget: Optional[int] = None,
+    ):
         # Default initialization
         self._data_location = None
         self._reconstructor = None
@@ -120,6 +125,7 @@ class ActiveMRIEnv(gym.Env):
         self._test_data_handler = None
         self._device = torch.device("cpu")
         self._batch_size = batch_size
+        self._budget = budget
 
         self.horizon = None
         self.seed = None
@@ -139,6 +145,7 @@ class ActiveMRIEnv(gym.Env):
         self._transform_wrapper = None
         self._current_k_space = None
         self._current_score = None
+        self._steps_since_reset = 0
 
     # -------------------------------------------------------------------------
     # Protected methods
@@ -250,7 +257,7 @@ class ActiveMRIEnv(gym.Env):
     # -------------------------------------------------------------------------
     # Public methods
     # -------------------------------------------------------------------------
-    def reset(self,) -> Dict[str, Any]:
+    def reset(self,) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
         kspace, _, ground_truth, attrs, fname, slice_id = next(self._train_data_handler)
         self._current_ground_truth = ground_truth
@@ -260,8 +267,13 @@ class ActiveMRIEnv(gym.Env):
         )
         self._current_mask = self._mask_func(self._batch_size, self.rng)
         obs, self._current_score = self._compute_obs_and_score()
+        self._steps_since_reset = 0
 
-        return obs
+        meta = {
+            "fname": fname,
+            "slice_id": slice_id,
+        }
+        return obs, meta
 
     def step(
         self, action: int, batched_actions: Optional[Sequence[int]] = None
@@ -279,8 +291,11 @@ class ActiveMRIEnv(gym.Env):
         if self.reward_metric in ["mse", "nmse"]:
             reward *= -1
         self._current_score = new_score
+        self._steps_since_reset += 1
 
         done = activemri.envs.mask_functions.check_masks_complete(self._current_mask)
+        if self._budget and self._steps_since_reset >= self._budget:
+            done = [True for _ in range(len(done))]
         return obs, reward, done, {}
 
     def render(self, mode="human"):
@@ -329,8 +344,10 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
     END_PADDING = scknee_data.RawSliceData.END_PADDING
     CENTER_CROP_SIZE = scknee_data.RawSliceData.CENTER_CROP_SIZE
 
-    def __init__(self):
-        super().__init__(self.IMAGE_WIDTH, self.IMAGE_HEIGHT)
+    def __init__(self, batch_size: int = 1, budget: Optional[int] = None):
+        super().__init__(
+            self.IMAGE_WIDTH, self.IMAGE_HEIGHT, batch_size=batch_size, budget=budget
+        )
         self._setup("configs/miccai_raw.json", self._setup_data_handlers)
 
     # -------------------------------------------------------------------------
@@ -405,7 +422,7 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
     # -------------------------------------------------------------------------
     # Public methods
     # -------------------------------------------------------------------------
-    def reset(self,) -> Dict[str, Any]:
-        obs = super().reset()
+    def reset(self,) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        obs, meta = super().reset()
         obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
-        return obs
+        return obs, meta

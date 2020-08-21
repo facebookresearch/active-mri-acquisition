@@ -110,7 +110,7 @@ class TestMRIEnvs:
         handler = envs.DataHandler(data, None, batch_size=env._batch_size, loops=1)
         env._train_data_handler = handler
 
-        obs = env.reset()
+        obs, _ = env.reset()
         assert tuple(obs["reconstruction"].shape) == (
             env._batch_size,
             data.size,
@@ -170,7 +170,7 @@ class TestSingleCoilRawEnv:
                 break
 
     def test_reset(self):
-        obs = self.env.reset()
+        obs, _ = self.env.reset()
         assert len(obs) == 3
         assert "reconstruction" in obs
         assert "mask" in obs
