@@ -13,7 +13,7 @@
     "transform": "experimental.unet.unet_module.DataTransform"
   },
   "mask": {
-    "function": "activemri.envs.mask_functions.sample_low_frequency_mask",
+    "function": "activemri.envs.masks.sample_low_frequency_mask",
     "args": {}
   },
   "reward_metric": "ssim",

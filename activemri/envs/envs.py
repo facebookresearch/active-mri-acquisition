@@ -22,7 +22,7 @@ import torch
 import torch.utils.data
 
 import activemri.data.singlecoil_knee_data as scknee_data
-import activemri.envs.mask_functions
+import activemri.envs.masks
 import activemri.envs.util
 import activemri.models.singlecoil_knee_transforms as sc_transforms
 
@@ -313,7 +313,7 @@ class ActiveMRIEnv(gym.Env):
             if batched_actions is None
             else batched_actions
         )
-        self._current_mask = activemri.envs.mask_functions.update_masks_from_indices(
+        self._current_mask = activemri.envs.masks.update_masks_from_indices(
             self._current_mask, indices
         )
         obs, new_score = self._compute_obs_and_score()
@@ -323,7 +323,7 @@ class ActiveMRIEnv(gym.Env):
         self._current_score = new_score
         self._steps_since_reset += 1
 
-        done = activemri.envs.mask_functions.check_masks_complete(self._current_mask)
+        done = activemri.envs.masks.check_masks_complete(self._current_mask)
         if self._budget and self._steps_since_reset >= self._budget:
             done = [True for _ in range(len(done))]
         return obs, reward, done, {}

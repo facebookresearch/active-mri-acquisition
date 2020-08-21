@@ -16,7 +16,7 @@
     "transform": "activemri.models.singlecoil_knee_transforms.raw_transform_miccai20"
   },
   "mask": {
-    "function": "activemri.envs.mask_functions.sample_low_frequency_mask",
+    "function": "activemri.envs.masks.sample_low_frequency_mask",
     "args": {
       "img_width": 368,
       "min_cols": 5,

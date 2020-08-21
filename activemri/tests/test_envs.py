@@ -8,7 +8,7 @@ import pytest
 import torch
 
 import activemri.envs.envs as envs
-import activemri.envs.mask_functions as masks
+import activemri.envs.masks as masks
 import activemri.envs.util as util
 import activemri.tests.mocks as mocks
 
