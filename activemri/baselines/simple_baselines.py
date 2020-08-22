@@ -18,9 +18,6 @@ class RandomPolicy(Policy):
         """ Returns a random action without replacement. """
         return (obs["mask"].logical_not().float() + 1e-6).multinomial(1).tolist()
 
-    def init_episode(self):
-        pass
-
 
 class LowestIndexPolicy(Policy):
     """ A policy that represents low-to-high frequency k-space selection.
@@ -49,6 +46,3 @@ class LowestIndexPolicy(Policy):
         if self.alternate_sides:
             self.bottom_side = not self.bottom_side
         return (mask.logical_not() * idx).argmax(dim=1).int().tolist()
-
-    def init_episode(self):
-        pass

@@ -35,7 +35,9 @@ def center_crop(x: torch.Tensor, shape: Tuple[int, int]) -> torch.Tensor:
     return x
 
 
-def ifft_permute_maybe_shift(x, normalized=False, ifft_shift=False):
+def ifft_permute_maybe_shift(
+    x: torch.Tensor, normalized: bool = False, ifft_shift: bool = False
+) -> torch.Tensor:
     x = x.permute(0, 2, 3, 1)
     y = torch.ifft(x, 2, normalized=normalized)
     if ifft_shift:

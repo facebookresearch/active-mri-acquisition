@@ -106,7 +106,8 @@ class DataHandler:
 # -----------------------------------------------------------------------------
 
 # TODO Add option to resize default img size (need to pass this option to reconstructor)
-# TODO add reward scaling option
+# TODO Add reward scaling option
+# TODO Add with torch no grad
 class ActiveMRIEnv(gym.Env):
     def __init__(
         self,
@@ -246,6 +247,8 @@ class ActiveMRIEnv(gym.Env):
         for key in the_dict:
             if isinstance(the_dict[key], torch.Tensor):
                 the_dict_cpu[key] = the_dict[key].detach().cpu()
+            else:
+                the_dict_cpu[key] = the_dict[key]
         return the_dict_cpu
 
     def _compute_obs_and_score(self) -> Tuple[Dict[str, Any], Dict[str, np.ndarray]]:
@@ -287,7 +290,6 @@ class ActiveMRIEnv(gym.Env):
     # Public methods
     # -------------------------------------------------------------------------
     def reset(self,) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-
         kspace, _, ground_truth, attrs, fname, slice_id = next(self._train_data_handler)
         self._current_ground_truth = ground_truth
         self._current_k_space = kspace

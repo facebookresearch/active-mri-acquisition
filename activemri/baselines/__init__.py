@@ -12,14 +12,11 @@ class Policy:
     def get_action(self, obs: Dict[str, Any]) -> List[int]:
         pass
 
-    @abc.abstractmethod
-    def init_episode(self):
-        pass
-
     def __call__(self, obs: Dict[str, Any]) -> List[int]:
         return self.get_action(obs)
 
 
-from .simple_baselines import *
+from .simple_baselines import RandomPolicy, LowestIndexPolicy
+from .cvpr19_evaluator import CVPR19Evaluator
 
-__all__ = ["RandomPolicy", "LowestIndexPolicy"]
+__all__ = ["RandomPolicy", "LowestIndexPolicy", "CVPR19Evaluator"]
