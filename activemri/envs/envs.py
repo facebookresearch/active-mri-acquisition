@@ -53,7 +53,8 @@ class CyclicSampler(torch.utils.data.Sampler):
         return len(self.data_source) * self.loops
 
 
-def _env_collate_fn(batch):
+# noinspection PyUnresolvedReferences
+def _env_collate_fn(batch: Tuple[torch.Tensor]) -> Tuple:
     ret = [
         torch.stack([item[0] for item in batch]),  # kspace
         torch.stack([item[1] for item in batch]),  # mask
@@ -109,6 +110,8 @@ class DataHandler:
 # TODO Add reward scaling option
 # TODO Add with torch no grad
 class ActiveMRIEnv(gym.Env):
+    _num_loops_train_data = 1000
+
     def __init__(
         self,
         img_width: int,
@@ -117,6 +120,7 @@ class ActiveMRIEnv(gym.Env):
         budget: Optional[int] = None,
     ):
         # Default initialization
+        self._cfg = None
         self._data_location = None
         self._reconstructor = None
         self._transform = None
@@ -140,6 +144,7 @@ class ActiveMRIEnv(gym.Env):
         self.observation_space = None  # Observation will be a dictionary
         self.action_space = gym.spaces.Discrete(img_width)
 
+        self._current_data_handler = None
         self._current_mask = None
         self._current_ground_truth = None
         self._transform_wrapper = None
@@ -166,7 +171,7 @@ class ActiveMRIEnv(gym.Env):
             train_data,
             self.seed,
             batch_size=self._batch_size,
-            loops=1000,
+            loops=self._num_loops_train_data,
             collate_fn=_env_collate_fn,
         )
         self._val_data_handler = DataHandler(
@@ -183,8 +188,10 @@ class ActiveMRIEnv(gym.Env):
             loops=1,
             collate_fn=_env_collate_fn,
         )
+        self._current_data_handler = self._train_data_handler
 
     def _init_from_config_dict(self, cfg: Mapping[str, Any]):
+        self._cfg = cfg
         self._data_location = cfg["data_location"]
         self._device = torch.device(cfg["device"])
         self.reward_metric = cfg["reward_metric"]
@@ -217,6 +224,10 @@ class ActiveMRIEnv(gym.Env):
             reconstructor_cfg["transform"]
         )
 
+    def _init_from_config_file(self, config_filename: str):
+        with open(config_filename, "rb") as f:
+            self._init_from_config_dict(json.load(f))
+
     @staticmethod
     def _void_transform(
         kspace: torch.Tensor,
@@ -227,10 +238,6 @@ class ActiveMRIEnv(gym.Env):
         slice_id: List[int],
     ) -> Tuple:
         return kspace, mask, target, attrs, fname, slice_id
-
-    def _init_from_config_file(self, config_filename: str):
-        with open(config_filename, "rb") as f:
-            self._init_from_config_dict(json.load(f))
 
     def _send_tuple_to_device(self, the_tuple: Tuple[Union[Any, torch.Tensor]]):
         the_tuple_device = []
@@ -290,7 +297,12 @@ class ActiveMRIEnv(gym.Env):
     # Public methods
     # -------------------------------------------------------------------------
     def reset(self,) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        kspace, _, ground_truth, attrs, fname, slice_id = next(self._train_data_handler)
+        try:
+            kspace, _, ground_truth, attrs, fname, slice_id = next(
+                self._current_data_handler
+            )
+        except StopIteration:
+            return {}, {}
         self._current_ground_truth = ground_truth
         self._current_k_space = kspace
         self._transform_wrapper = functools.partial(
@@ -333,30 +345,20 @@ class ActiveMRIEnv(gym.Env):
         self.seed = seed
         self.rng = np.random.RandomState(seed)
 
-    def reset_val(self,) -> Dict[str, np.ndarray]:
-        pass
+    def set_training(self, reset: bool = False):
+        if reset:
+            self._train_data_handler.reset()
+        self._current_data_handler = self._train_data_handler
 
-    def step_val(
-        self, action: int
-    ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], float, bool]:
-        pass
+    def set_val(self, reset: bool = True):
+        if reset:
+            self._val_data_handler.reset()
+        self._current_data_handler = self._val_data_handler
 
-    def reset_test(self,) -> Dict[str, np.ndarray]:
-        pass
-
-    def step_test(
-        self, action: int
-    ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], float, bool]:
-        pass
-
-    def restart_train(self):
-        self._train_data_handler.reset()
-
-    def restart_val(self):
-        self._val_data_handler.reset()
-
-    def restart_test(self):
-        self._test_data_handler.reset()
+    def set_test(self, reset: bool = True):
+        if reset:
+            self._test_data_handler.reset()
+        self._current_data_handler = self._test_data_handler
 
     def valid_actions(self) -> List[int]:
         pass

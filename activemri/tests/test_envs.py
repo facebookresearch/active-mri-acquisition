@@ -1,4 +1,4 @@
-import json
+import functools
 import pathlib
 
 import numpy as np
@@ -20,6 +20,7 @@ def test_import_object_from_str():
     assert det(np.array([[1, 0], [0, 1]])) == 1
 
 
+# noinspection PyCallingNonCallable,PyUnresolvedReferences
 def test_update_masks_from_indices():
     mask_1 = torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]], dtype=torch.uint8)
     mask_2 = torch.tensor([[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]], dtype=torch.uint8)
@@ -69,13 +70,10 @@ def test_data_handler():
 
 
 # noinspection PyProtectedMember
-class TestMRIEnvs:
-
-    mock_config_dict = json.loads(mocks.cfg_json_str)
-
+class TestActiveMRIEnv:
     def test_init_from_config_dict(self):
         env = envs.ActiveMRIEnv(32, 64)
-        env._init_from_config_dict(self.mock_config_dict)
+        env._init_from_config_dict(mocks.config_dict)
         assert env.reward_metric == "ssim"
         assert type(env._reconstructor) == mocks.Reconstructor
         assert env._reconstructor.option1 == 1
@@ -89,7 +87,7 @@ class TestMRIEnvs:
 
         batch_size = 3
         mask = env._mask_func(batch_size, "rng")
-        assert mask.shape == (batch_size, mocks.Dataset.size)
+        assert mask.shape == (batch_size, env._cfg["mask"]["args"]["size"])
 
     def test_init_sets_action_space(self):
         env = envs.ActiveMRIEnv(32, 64)
@@ -99,46 +97,153 @@ class TestMRIEnvs:
 
     def test_reset_and_step(self):
         env = envs.ActiveMRIEnv(32, 64, batch_size=2)
-        env._init_from_config_dict(self.mock_config_dict)
+        # the config dict sets up the environment to use mocks.Reconstructor
+        # and mocks.mask_function.
+        # The mask and data will be tensors of size D (data.tensor_size)
+        # Initial mask will be:
+        #       [1 1 1 0 0 .... 0] (needs 7 actions)
+        #       [1 1 0 0 0 .... 0] (needs 8 actions)
+        # Ground truth is X * ones(D, D)
+        # K-space is (X - 1) * ones(D D)
+        # Reconstruction is K-space + Mask. So, with the initial mask we have
+        # sum |reconstruction - gt| = D^2 - 3D for first element of batch,
+        # and = D^2 - 2D for second element.
+        env._init_from_config_dict(mocks.config_dict)
 
         def compute_score(x, y):
             return {"ssim": (x - y).abs().sum()}
 
         env._compute_score_given_tensors = compute_score
 
-        data = mocks.Dataset()
+        data = mocks.Dataset(env._cfg["mask"]["args"]["size"], 2)
         handler = envs.DataHandler(data, None, batch_size=env._batch_size, loops=1)
-        env._train_data_handler = handler
+        env._current_data_handler = handler
 
         obs, _ = env.reset()
+        # env works with shape (batch, height, width, {real/img})
         assert tuple(obs["reconstruction"].shape) == (
             env._batch_size,
-            data.size,
-            data.size,
+            data.tensor_size,
+            data.tensor_size,
             2,
         )
         assert "ssim" in env._current_score
 
+        mask_idx0_initial_active = env._cfg["mask"]["args"]["how_many"]
+        mask_idx1_initial_active = mask_idx0_initial_active - 1
+
         def expected_score(step):
-            s = mocks.Dataset.size
+            # See explanation above, plus every steps adds one more 1 to mask.
+            s = data.tensor_size
             total = s ** 2
-            return 2 * ((total - (3 + step) * s) + (total - (2 + step) * s))
+            return 2 * (
+                (total - (mask_idx0_initial_active + step) * s)
+                + (total - (mask_idx1_initial_active + step) * s)
+            )
 
         assert env._current_score["ssim"] == expected_score(0)
         prev_score = env._current_score["ssim"]
-        for action in range(3, 10):
+        for action in range(mask_idx0_initial_active, data.tensor_size):
             obs, reward, done, _ = env.step(action)
-            assert env._current_score["ssim"] == expected_score(action - 2)
+            assert env._current_score["ssim"] == expected_score(
+                action - mask_idx1_initial_active
+            )
             assert reward == env._current_score["ssim"] - prev_score
             prev_score = env._current_score["ssim"]
             if action < 9:
                 assert done == [False, False]
             else:
                 assert done == [True, False]
-        obs, reward, done, _ = env.step(2)
+        obs, reward, done, _ = env.step(mask_idx1_initial_active)
         assert env._current_score["ssim"] == 0.0
         assert reward == -prev_score
         assert done == [True, True]
+
+    def test_training_loop_ends(self):
+        env = envs.ActiveMRIEnv(32, 64, batch_size=2)
+        env._num_loops_train_data = 3
+        env._init_from_config_dict(mocks.config_dict)
+
+        num_train = 10
+        tensor_size = env._cfg["mask"]["args"]["size"]
+
+        data_init_fn = mocks.make_data_init_fn(tensor_size, num_train, 0, 0)
+        env._setup_data_handlers(data_init_fn)
+
+        seen = dict([(x, 0) for x in range(num_train)])
+        for i in range(1000):
+            obs, meta = env.reset()
+            if not obs:
+                cnt_seen = functools.reduce(lambda x, y: x + y, seen.values())
+                assert cnt_seen == num_train * env._num_loops_train_data
+                break
+            slice_ids = meta["slice_id"]
+            for id in slice_ids:
+                assert id < num_train
+                seen[id] = seen[id] + 1
+        for i in range(num_train):
+            assert seen[i] == env._num_loops_train_data
+
+    def test_alternate_loop_modes(self):
+        env = envs.ActiveMRIEnv(32, 64, batch_size=1)
+        env._num_loops_train_data = 2
+        env._init_from_config_dict(mocks.config_dict)
+
+        num_train, num_val, num_test = 10, 7, 5
+        tensor_size = env._cfg["mask"]["args"]["size"]
+
+        data_init_fn = mocks.make_data_init_fn(
+            tensor_size, num_train, num_val, num_test
+        )
+        env._setup_data_handlers(data_init_fn)
+
+        seen_train = dict([(x, 0) for x in range(num_train)])
+        seen_val = dict([(x, 0) for x in range(num_val)])
+        seen_test = dict([(x, 0) for x in range(num_test)])
+        for i in range(1000):
+            env.set_training()
+            obs, meta = env.reset()
+            if not obs:
+                break
+            for id in meta["slice_id"]:
+                seen_train[id] = seen_train[id] + 1
+
+            env.set_val()
+            for j in range(num_val + 1):
+                obs, meta = env.reset()
+                if not obs:
+                    cnt_seen = functools.reduce(lambda x, y: x + y, seen_val.values())
+                    assert cnt_seen == (i + 1) * num_val
+                    break
+                assert j < num_val
+                for id in meta["slice_id"]:
+                    seen_val[id] = seen_val[id] + 1
+
+            # With num_test - 1 we check that next call starts from 0 index again
+            # even if not all images visited. One of the elements in test set should have
+            # never been seen (data_handler will permute the indices so we don't know
+            # which index it will be)
+            env.set_test()
+            for j in range(num_test - 1):
+                print(j)
+                obs, meta = env.reset()
+                assert obs
+                for id in meta["slice_id"]:
+                    seen_test[id] = seen_test[id] + 1
+
+        for i in range(num_train):
+            assert seen_train[i] == env._num_loops_train_data
+
+        for i in range(num_val):
+            assert seen_val[i] == env._num_loops_train_data * num_train
+
+        cnt_not_seen = 0
+        for i in range(num_test):
+            if seen_test[i] != 0:
+                assert seen_test[i] == env._num_loops_train_data * num_train
+            else:
+                cnt_not_seen += 1
+        assert cnt_not_seen == 1
 
 
 # noinspection PyProtectedMember
