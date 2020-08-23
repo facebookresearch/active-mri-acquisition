@@ -150,6 +150,7 @@ class ActiveMRIEnv(gym.Env):
         self._transform_wrapper = None
         self._current_k_space = None
         self._current_score = None
+        self._did_reset = False
         self._steps_since_reset = 0
 
     # -------------------------------------------------------------------------
@@ -293,10 +294,20 @@ class ActiveMRIEnv(gym.Env):
     ) -> Dict[str, np.ndarray]:
         pass
 
+    def _clear_cache_and_unset_did_reset(self):
+        self._current_mask = None
+        self._current_ground_truth = None
+        self._transform_wrapper = None
+        self._current_k_space = None
+        self._current_score = None
+        self._steps_since_reset = 0
+        self._did_reset = False
+
     # -------------------------------------------------------------------------
     # Public methods
     # -------------------------------------------------------------------------
     def reset(self,) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        self._did_reset = True
         try:
             kspace, _, ground_truth, attrs, fname, slice_id = next(
                 self._current_data_handler
@@ -321,6 +332,10 @@ class ActiveMRIEnv(gym.Env):
     def step(
         self, action: Union[int, Sequence[int]]
     ) -> Tuple[Dict[str, Any], np.ndarray, List[bool], Dict]:
+        if not self._did_reset:
+            raise RuntimeError(
+                "Attempting to call env.step() before calling env.reset()."
+            )
         if isinstance(action, int):
             action = [action for _ in range(self._batch_size)]
         self._current_mask = activemri.envs.masks.update_masks_from_indices(
@@ -349,16 +364,19 @@ class ActiveMRIEnv(gym.Env):
         if reset:
             self._train_data_handler.reset()
         self._current_data_handler = self._train_data_handler
+        self._clear_cache_and_unset_did_reset()
 
     def set_val(self, reset: bool = True):
         if reset:
             self._val_data_handler.reset()
         self._current_data_handler = self._val_data_handler
+        self._clear_cache_and_unset_did_reset()
 
     def set_test(self, reset: bool = True):
         if reset:
             self._test_data_handler.reset()
         self._current_data_handler = self._test_data_handler
+        self._clear_cache_and_unset_did_reset()
 
     def valid_actions(self) -> List[int]:
         pass
