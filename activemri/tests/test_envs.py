@@ -96,10 +96,9 @@ class TestActiveMRIEnv:
         assert env.action_space.n == 32
 
     def test_reset_and_step(self):
-        env = envs.ActiveMRIEnv(32, 64, batch_size=2)
-        # the config dict sets up the environment to use mocks.Reconstructor
+        # the mock environment is set up to use mocks.Reconstructor
         # and mocks.mask_function.
-        # The mask and data will be tensors of size D (data.tensor_size)
+        # The mask and data will be tensors of size D (env._tensor_size)
         # Initial mask will be:
         #       [1 1 1 0 0 .... 0] (needs 7 actions)
         #       [1 1 0 0 0 .... 0] (needs 8 actions)
@@ -108,23 +107,19 @@ class TestActiveMRIEnv:
         # Reconstruction is K-space + Mask. So, with the initial mask we have
         # sum |reconstruction - gt| = D^2 - 3D for first element of batch,
         # and = D^2 - 2D for second element.
-        env._init_from_config_dict(mocks.config_dict)
 
         def compute_score(x, y):
             return {"ssim": (x - y).abs().sum()}
 
-        env._compute_score_given_tensors = compute_score
-
-        data = mocks.Dataset(env._cfg["mask"]["args"]["size"], 2)
-        handler = envs.DataHandler(data, None, batch_size=env._batch_size, loops=1)
-        env._current_data_handler = handler
-
+        env = mocks.MRIEnv(
+            batch_size=2, loops_train=1, num_train=2, score_fn=compute_score
+        )
         obs, _ = env.reset()
         # env works with shape (batch, height, width, {real/img})
         assert tuple(obs["reconstruction"].shape) == (
             env._batch_size,
-            data.tensor_size,
-            data.tensor_size,
+            env._tensor_size,
+            env._tensor_size,
             2,
         )
         assert "ssim" in env._current_score
@@ -134,7 +129,7 @@ class TestActiveMRIEnv:
 
         def expected_score(step):
             # See explanation above, plus every steps adds one more 1 to mask.
-            s = data.tensor_size
+            s = env._tensor_size
             total = s ** 2
             return 2 * (
                 (total - (mask_idx0_initial_active + step) * s)
@@ -143,7 +138,7 @@ class TestActiveMRIEnv:
 
         assert env._current_score["ssim"] == expected_score(0)
         prev_score = env._current_score["ssim"]
-        for action in range(mask_idx0_initial_active, data.tensor_size):
+        for action in range(mask_idx0_initial_active, env._tensor_size):
             obs, reward, done, _ = env.step(action)
             assert env._current_score["ssim"] == expected_score(
                 action - mask_idx1_initial_active
@@ -185,18 +180,19 @@ class TestActiveMRIEnv:
             assert seen[i] == env._num_loops_train_data
 
     def test_alternate_loop_modes(self):
-        env = envs.ActiveMRIEnv(32, 64, batch_size=1)
-        env._num_loops_train_data = 2
-        env._init_from_config_dict(mocks.config_dict)
-
+        # This tests if the environment can change correctly between train, val, and test
+        # datasets.
         num_train, num_val, num_test = 10, 7, 5
-        tensor_size = env._cfg["mask"]["args"]["size"]
-
-        data_init_fn = mocks.make_data_init_fn(
-            tensor_size, num_train, num_val, num_test
+        env = mocks.MRIEnv(
+            batch_size=1,
+            loops_train=2,
+            num_train=num_train,
+            num_val=num_val,
+            num_test=num_test,
         )
-        env._setup_data_handlers(data_init_fn)
 
+        # For each iteration of train data we will do a full loop over validation
+        # and a partial loop over test.
         seen_train = dict([(x, 0) for x in range(num_train)])
         seen_val = dict([(x, 0) for x in range(num_val)])
         seen_test = dict([(x, 0) for x in range(num_test)])
@@ -244,6 +240,29 @@ class TestActiveMRIEnv:
             else:
                 cnt_not_seen += 1
         assert cnt_not_seen == 1
+
+    def test_seed(self):
+        num_train = 10
+        env = mocks.MRIEnv(batch_size=1, loops_train=1, num_train=num_train, seed=0)
+
+        def get_current_order():
+            order = []
+            for i in range(num_train):
+                obs, _ = env.reset()
+                order.append(obs["reconstruction"].sum().int().item())
+            return order
+
+        order_1 = get_current_order()
+
+        env.seed(123)
+        order_2 = get_current_order()
+
+        env.seed(0)
+        order_3 = get_current_order()
+
+        assert set(order_1) == set(order_2)
+        assert any([a != b for a, b in zip(order_1, order_2)])
+        assert all([a == b for a, b in zip(order_1, order_3)])
 
 
 # noinspection PyProtectedMember

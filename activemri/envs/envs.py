@@ -24,7 +24,7 @@ import torch.utils.data
 import activemri.data.singlecoil_knee_data as scknee_data
 import activemri.envs.masks
 import activemri.envs.util
-import activemri.models.singlecoil_knee_transforms as sc_transforms
+import activemri.models.singlecoil_knee_transforms as scknee_transforms
 
 
 # -----------------------------------------------------------------------------
@@ -76,6 +76,20 @@ class DataHandler:
         loops: int = 1,
         collate_fn: Optional[Callable] = None,
     ):
+        self._iter = None
+        self._collate_fn = collate_fn
+        self._batch_size = batch_size
+        self._loops = loops
+        self._init_impl(data_source, seed, batch_size, loops, collate_fn)
+
+    def _init_impl(
+        self,
+        data_source: Sized,
+        seed: Optional[int],
+        batch_size: int = 1,
+        loops: int = 1,
+        collate_fn: Optional[Callable] = None,
+    ):
         rng = np.random.RandomState(seed)
         order = rng.permutation(len(data_source))
         sampler = CyclicSampler(data_source, order, loops=loops)
@@ -101,6 +115,15 @@ class DataHandler:
     def __next__(self):
         return next(self._iter)
 
+    def seed(self, seed: int):
+        self._init_impl(
+            self._data_loader.dataset,
+            seed,
+            self._batch_size,
+            self._loops,
+            self._collate_fn,
+        )
+
 
 # -----------------------------------------------------------------------------
 #                           BASE ACTIVE MRI ENV
@@ -118,6 +141,7 @@ class ActiveMRIEnv(gym.Env):
         img_height: int,
         batch_size: int = 1,
         budget: Optional[int] = None,
+        seed: Optional[int] = None,
     ):
         # Default initialization
         self._cfg = None
@@ -132,8 +156,8 @@ class ActiveMRIEnv(gym.Env):
         self._budget = budget
 
         self.horizon = None
-        self.seed = None
-        self.rng = np.random.RandomState()
+        self._seed = seed
+        self.rng = np.random.RandomState(seed)
         self.reward_metric = "mse"
 
         # Init from provided configuration
@@ -147,6 +171,7 @@ class ActiveMRIEnv(gym.Env):
         self._current_data_handler = None
         self._current_mask = None
         self._current_ground_truth = None
+        self._current_reconstruction_numpy = None
         self._transform_wrapper = None
         self._current_k_space = None
         self._current_score = None
@@ -170,21 +195,21 @@ class ActiveMRIEnv(gym.Env):
         train_data, val_data, test_data = data_init_func()
         self._train_data_handler = DataHandler(
             train_data,
-            self.seed,
+            self._seed,
             batch_size=self._batch_size,
             loops=self._num_loops_train_data,
             collate_fn=_env_collate_fn,
         )
         self._val_data_handler = DataHandler(
             val_data,
-            self.seed + 1 if self.seed else None,
+            self._seed + 1 if self._seed else None,
             batch_size=self._batch_size,
             loops=1,
             collate_fn=_env_collate_fn,
         )
         self._test_data_handler = DataHandler(
             test_data,
-            self.seed + 2 if self.seed else None,
+            self._seed + 2 if self._seed else None,
             batch_size=self._batch_size,
             loops=1,
             collate_fn=_env_collate_fn,
@@ -267,10 +292,13 @@ class ActiveMRIEnv(gym.Env):
         )
 
         reconstructor_input = self._send_tuple_to_device(reconstructor_input)
-        extra_outputs = self._reconstructor(*reconstructor_input)
+        with torch.no_grad():
+            extra_outputs = self._reconstructor(*reconstructor_input)
 
         extra_outputs = self._send_dict_to_cpu_and_detach(extra_outputs)
         reconstruction = extra_outputs["reconstruction"]
+
+        self._current_reconstruction_numpy = reconstruction.cpu().numpy()
         del extra_outputs["reconstruction"]
 
         # noinspection PyUnusedLocal
@@ -297,6 +325,7 @@ class ActiveMRIEnv(gym.Env):
     def _clear_cache_and_unset_did_reset(self):
         self._current_mask = None
         self._current_ground_truth = None
+        self._current_reconstruction_numpy = None
         self._transform_wrapper = None
         self._current_k_space = None
         self._current_score = None
@@ -326,6 +355,7 @@ class ActiveMRIEnv(gym.Env):
         meta = {
             "fname": fname,
             "slice_id": slice_id,
+            "current_score": self._current_score,
         }
         return obs, meta
 
@@ -351,14 +381,17 @@ class ActiveMRIEnv(gym.Env):
         done = activemri.envs.masks.check_masks_complete(self._current_mask)
         if self._budget and self._steps_since_reset >= self._budget:
             done = [True for _ in range(len(done))]
-        return obs, reward, done, {}
+        return obs, reward, done, {"current_score": self._current_score}
 
     def render(self, mode="human"):
         pass
 
     def seed(self, seed: Optional[int] = None):
-        self.seed = seed
+        self._seed = seed
         self.rng = np.random.RandomState(seed)
+        self._train_data_handler.seed(seed)
+        self._val_data_handler.seed(seed)
+        self._test_data_handler.seed(seed)
 
     def set_training(self, reset: bool = False):
         if reset:
@@ -378,7 +411,8 @@ class ActiveMRIEnv(gym.Env):
         self._current_data_handler = self._test_data_handler
         self._clear_cache_and_unset_did_reset()
 
-    def valid_actions(self) -> List[int]:
+    @abc.abstractmethod
+    def score_keys(self) -> List[str]:
         pass
 
 
@@ -427,13 +461,13 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
     ) -> Dict[str, np.ndarray]:
         # Compute magnitude (for metrics)
-        reconstruction = sc_transforms.to_magnitude(reconstruction, dim=3)
-        ground_truth = sc_transforms.to_magnitude(ground_truth, dim=3)
+        reconstruction = scknee_transforms.to_magnitude(reconstruction, dim=3)
+        ground_truth = scknee_transforms.to_magnitude(ground_truth, dim=3)
 
-        reconstruction = sc_transforms.center_crop(
+        reconstruction = scknee_transforms.center_crop(
             reconstruction, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
         )
-        ground_truth = sc_transforms.center_crop(
+        ground_truth = scknee_transforms.center_crop(
             ground_truth, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
         )
 
@@ -451,3 +485,19 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         obs, meta = super().reset()
         obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
         return obs, meta
+
+    def render(self, mode="human"):
+        img_tensor = self._current_reconstruction_numpy.cpu().unsqueeze(0)
+        img_tensor = scknee_transforms.to_magnitude(img_tensor, dim=3)
+        img_tensor = scknee_transforms.center_crop(
+            img_tensor, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
+        )
+        img_tensor = img_tensor.view(self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE, 1)
+        img = img_tensor.numpy()
+        t_min = img.min()
+        t_max = img.max()
+        img = 255 * (img - t_min) / (t_max - t_min)
+        return img.astype(np.uint8)
+
+    def score_keys(self) -> List[str]:
+        return ["mse", "nmse", "ssim", "psnr"]

@@ -18,5 +18,6 @@ class Policy:
 
 from .simple_baselines import RandomPolicy, LowestIndexPolicy
 from .cvpr19_evaluator import CVPR19Evaluator
+from .evaluation import evaluate
 
-__all__ = ["RandomPolicy", "LowestIndexPolicy", "CVPR19Evaluator"]
+__all__ = ["RandomPolicy", "LowestIndexPolicy", "CVPR19Evaluator", "evaluate"]
