@@ -221,7 +221,6 @@ class TestActiveMRIEnv:
             # which index it will be)
             env.set_test()
             for j in range(num_test - 1):
-                print(j)
                 obs, meta = env.reset()
                 assert obs
                 for id in meta["slice_id"]:

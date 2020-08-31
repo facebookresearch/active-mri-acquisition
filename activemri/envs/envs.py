@@ -155,17 +155,20 @@ class ActiveMRIEnv(gym.Env):
         self._batch_size = batch_size
         self._budget = budget
 
+        self.action_space = gym.spaces.Discrete(img_width)
+
         self.horizon = None
         self._seed = seed
         self.rng = np.random.RandomState(seed)
         self.reward_metric = "mse"
 
         # Init from provided configuration
-        self._img_width = img_width
-        self._img_height = img_height
+        self.img_width = img_width
+        self.img_height = img_height
 
         # Gym init
-        self.observation_space = None  # Observation will be a dictionary
+        # This is actually
+        self.observation_space = None
         self.action_space = gym.spaces.Discrete(img_width)
 
         self._current_data_handler = None
@@ -311,7 +314,7 @@ class ActiveMRIEnv(gym.Env):
         obs = {
             "reconstruction": reconstruction,
             "extra_outputs": extra_outputs,
-            "mask": self._current_mask,
+            "mask": self._current_mask.clone(),
         }
 
         return obs, score

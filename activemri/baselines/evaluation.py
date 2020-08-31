@@ -6,20 +6,27 @@ import activemri.envs as envs
 import activemri.baselines as baselines
 
 
+# TODO make batch_size and budget non protected in env
 def evaluate(
+    env: envs.envs.ActiveMRIEnv,
     policy: baselines.Policy,
-    budget: int,
-    batch_size: int,
     num_episodes: int,
     seed: int,
+    split: str,
     verbose: Optional[bool] = False,
 ) -> Tuple[Dict[str, np.ndarray], List[Tuple[Any, Any]]]:
-    env = envs.SingleCoilKneeRAWEnv(budget=budget, batch_size=batch_size)
     env.seed(seed)
+    if split == "test":
+        env.set_test()
+    elif split == "val":
+        env.set_val()
+    else:
+        raise ValueError(f"Invalid evaluation split: {split}.")
 
     score_keys = env.score_keys()
     all_scores = dict(
-        (k, np.zeros((num_episodes * batch_size, budget + 1))) for k in score_keys
+        (k, np.zeros((num_episodes * env._batch_size, env._budget + 1)))
+        for k in score_keys
     )
     all_img_ids = []
     trajectories_written = 0
@@ -52,4 +59,5 @@ def evaluate(
             for k in score_keys:
                 all_scores[k][batch_idx, step] = meta["current_score"][k]
             all_done = all(done)
+
     return all_scores, all_img_ids

@@ -14,9 +14,11 @@ class RandomPolicy(Policy):
     def __init__(self):
         super().__init__()
 
-    def get_action(self, obs: Dict[str, Any]) -> List[int]:
+    def get_action(self, obs: Dict[str, Any], **_kwargs) -> List[int]:
         """ Returns a random action without replacement. """
-        return (obs["mask"].logical_not().float() + 1e-6).multinomial(1).tolist()
+        return (
+            (obs["mask"].logical_not().float() + 1e-6).multinomial(1).squeeze().tolist()
+        )
 
 
 class LowestIndexPolicy(Policy):
@@ -36,7 +38,7 @@ class LowestIndexPolicy(Policy):
         self.alternate_sides = alternate_sides
         self.bottom_side = True
 
-    def get_action(self, obs: Dict[str, Any]) -> List[int]:
+    def get_action(self, obs: Dict[str, Any], **_kwargs) -> List[int]:
         """ Returns a random action without replacement. """
         mask = obs["mask"]
         if self.bottom_side:

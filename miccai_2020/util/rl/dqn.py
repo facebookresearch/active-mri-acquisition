@@ -608,7 +608,6 @@ class DQNTester:
             return os.path.isfile(DQNTrainer.get_done_filename(self.training_dir))
 
     def checkpoint(self):
-        self.logger.info("Received preemption signal.")
         self.save_tester_checkpoint()
 
     def save_tester_checkpoint(self):
@@ -996,7 +995,6 @@ class DQNTrainer:
         return self._train_dqn_policy()
 
     def checkpoint(self, save_memory=True):
-        self.logger.info("Received preemption signal.")
         policy_path = DQNTrainer.get_name_latest_checkpoint(
             self.options.checkpoints_dir
         )
