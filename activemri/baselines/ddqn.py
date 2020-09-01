@@ -485,6 +485,10 @@ class DDQNTrainer:
         self.device = device
         self.replay_memory = None
 
+        self.window_size = 1000
+        self.reward_images_in_window = np.zeros(self.window_size)
+        self.current_score_auc_window = np.zeros(self.window_size)
+
         # ------- Init loggers ------
         self.writer = tensorboardX.SummaryWriter(
             os.path.join(self.options.checkpoints_dir)
@@ -623,10 +627,12 @@ class DDQNTrainer:
             self.logger.info(f"Episode started with images {msg}.")
             all_done = False
             total_reward = 0
+            auc_score = 0
             while not all_done:
                 epsilon = _get_epsilon(steps_epsilon, self.options)
                 action = self.policy.get_action(obs, eps_threshold=epsilon)
-                next_obs, reward, done, _ = self.env.step(action)
+                next_obs, reward, done, meta = self.env.step(action)
+                auc_score += meta["current_score"][self.options.reward_metric]
                 all_done = all(done)
                 self.steps += 1
                 obs_tensor = _encode_obs_dict(obs)
@@ -666,8 +672,22 @@ class DDQNTrainer:
                 obs = next_obs
 
             # Adding per-episode tensorboard logs
+            total_reward = total_reward.mean().item()
+            auc_score = auc_score.mean().item()
+            self.reward_images_in_window[self.episode % self.window_size] = total_reward
+            self.current_score_auc_window[self.episode % self.window_size] = auc_score
+            self.writer.add_scalar("episode_reward", total_reward, self.episode)
             self.writer.add_scalar(
-                "episode_reward", total_reward.mean().item(), self.episode
+                "average_reward_images_in_window",
+                np.sum(self.reward_images_in_window)
+                / min(self.episode + 1, self.window_size),
+                self.episode,
+            )
+            self.writer.add_scalar(
+                "average_auc_score_in_window",
+                np.sum(self.current_score_auc_window)
+                / min(self.episode + 1, self.window_size),
+                self.episode,
             )
 
             self.episode += 1
@@ -712,6 +732,8 @@ class DDQNTrainer:
                     "episode": self.episode,
                     "steps": self.steps,
                     "best_test_score": self.best_test_score,
+                    "reward_images_in_window": self.reward_images_in_window,
+                    "current_score_auc_window": self.current_score_auc_window,
                 },
                 path,
             )
@@ -724,3 +746,5 @@ class DDQNTrainer:
             self.target_net.load_state_dict(checkpoint["target_weights"])
             self.steps = checkpoint["steps"]
             self.best_test_score = checkpoint["best_test_score"]
+            self.reward_images_in_window = checkpoint["reward_images_in_window"]
+            self.current_score_auc_window = checkpoint["current_score_auc_window"]
