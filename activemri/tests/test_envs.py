@@ -266,7 +266,7 @@ class TestActiveMRIEnv:
 
 # noinspection PyProtectedMember
 class TestSingleCoilRawEnv:
-    env = envs.SingleCoilKneeRAWEnv()
+    env = envs.MICCAI2020Env()
 
     def test_singlecoil_raw_env_batch_content(self):
         for i, batch in enumerate(self.env._train_data_handler):

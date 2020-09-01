@@ -1,7 +1,7 @@
 {
   "data_location": "/private/home/lep/fastmri",
   "reconstructor": {
-    "cls": "activemri.models.miccai_reconstructor.MICCAIReconstructor",
+    "cls": "activemri.models.miccai2020_reconstructor.MICCAI2020Reconstructor",
     "options": {
       "number_of_filters": 256,
       "dropout_probability": 0.2,
@@ -12,8 +12,8 @@
       "img_width": 368,
       "use_deconv": true
     },
-    "checkpoint_path": "/private/home/lep/tmp/singlecoil_knee.pth",
-    "transform": "activemri.models.singlecoil_knee_transforms.raw_transform_miccai20"
+    "checkpoint_path": "saved_models/miccai2020_reconstructor_raw_normal.pth",
+    "transform": "activemri.models.singlecoil_knee_transforms.raw_transform_miccai2020"
   },
   "mask": {
     "function": "activemri.envs.masks.sample_low_frequency_mask",

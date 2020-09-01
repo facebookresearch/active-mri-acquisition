@@ -422,18 +422,18 @@ class ActiveMRIEnv(gym.Env):
 # -----------------------------------------------------------------------------
 #                             CUSTOM ENVIRONMENTS
 # -----------------------------------------------------------------------------
-class SingleCoilKneeRAWEnv(ActiveMRIEnv):
-    IMAGE_WIDTH = scknee_data.RawSliceData.IMAGE_WIDTH
-    IMAGE_HEIGHT = scknee_data.RawSliceData.IMAGE_HEIGHT
-    START_PADDING = scknee_data.RawSliceData.START_PADDING
-    END_PADDING = scknee_data.RawSliceData.END_PADDING
-    CENTER_CROP_SIZE = scknee_data.RawSliceData.CENTER_CROP_SIZE
+class MICCAI2020Env(ActiveMRIEnv):
+    IMAGE_WIDTH = scknee_data.MICCAI2020Data.IMAGE_WIDTH
+    IMAGE_HEIGHT = scknee_data.MICCAI2020Data.IMAGE_HEIGHT
+    START_PADDING = scknee_data.MICCAI2020Data.START_PADDING
+    END_PADDING = scknee_data.MICCAI2020Data.END_PADDING
+    CENTER_CROP_SIZE = scknee_data.MICCAI2020Data.CENTER_CROP_SIZE
 
     def __init__(self, batch_size: int = 1, budget: Optional[int] = None):
         super().__init__(
             self.IMAGE_WIDTH, self.IMAGE_HEIGHT, batch_size=batch_size, budget=budget
         )
-        self._setup("configs/miccai_raw.json", self._create_dataset)
+        self._setup("configs/miccai2020.json", self._create_dataset)
 
     # -------------------------------------------------------------------------
     # Protected methods
@@ -443,16 +443,16 @@ class SingleCoilKneeRAWEnv(ActiveMRIEnv):
         train_path = root_path.joinpath("knee_singlecoil_train")
         val_and_test_path = root_path.joinpath("knee_singlecoil_val")
 
-        train_data = scknee_data.RawSliceData(
+        train_data = scknee_data.MICCAI2020Data(
             train_path, ActiveMRIEnv._void_transform, num_cols=self.IMAGE_WIDTH,
         )
-        val_data = scknee_data.RawSliceData(
+        val_data = scknee_data.MICCAI2020Data(
             val_and_test_path,
             ActiveMRIEnv._void_transform,
             custom_split="val",
             num_cols=self.IMAGE_WIDTH,
         )
-        test_data = scknee_data.RawSliceData(
+        test_data = scknee_data.MICCAI2020Data(
             val_and_test_path,
             ActiveMRIEnv._void_transform,
             custom_split="test",

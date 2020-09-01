@@ -10,9 +10,11 @@ import torch.utils.data
 
 
 # -----------------------------------------------------------------------------
-#                      RAW DATASET (as used in MICCAI'20)
+#                Single coil knee dataset (as used in MICCAI'20)
 # -----------------------------------------------------------------------------
-class RawSliceData(torch.utils.data.Dataset):
+class MICCAI2020Data(torch.utils.data.Dataset):
+    # This is the same as fastMRI singlecoil_knee, except we provide a custom test split
+    # and also normalize images by the mean norm of the k-space over training data
     IMAGE_WIDTH = 368
     IMAGE_HEIGHT = 640
     START_PADDING = 166

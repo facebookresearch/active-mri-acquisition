@@ -8,7 +8,7 @@ import miccai_2020.models.reconstruction
 
 # This is just a wrapper for the model in miccai_2020 folder
 # noinspection PyAbstractClass
-class MICCAIReconstructor(activemri.models.Reconstructor):
+class MICCAI2020Reconstructor(activemri.models.Reconstructor):
     def __init__(
         self,
         number_of_encoder_input_channels: int = 2,
