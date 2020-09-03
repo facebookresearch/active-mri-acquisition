@@ -155,7 +155,7 @@ class TestActiveMRIEnv:
         assert done == [True, True]
 
     def test_training_loop_ends(self):
-        env = envs.ActiveMRIEnv(32, 64, batch_size=2)
+        env = envs.ActiveMRIEnv(32, 64, batch_size=3)
         env._num_loops_train_data = 3
         env._init_from_config_dict(mocks.config_dict)
 

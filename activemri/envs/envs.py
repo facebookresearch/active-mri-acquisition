@@ -133,7 +133,7 @@ class DataHandler:
 # TODO Add reward scaling option
 # TODO Add with torch no grad
 class ActiveMRIEnv(gym.Env):
-    _num_loops_train_data = 1000
+    _num_loops_train_data = 100000
 
     def __init__(
         self,
@@ -302,7 +302,7 @@ class ActiveMRIEnv(gym.Env):
         reconstruction = extra_outputs["reconstruction"]
 
         self._current_reconstruction_numpy = reconstruction.cpu().numpy()
-        del extra_outputs["reconstruction"]
+        del extra_outputs["reconstruction"]  # this dict is only for the other outputs
 
         # noinspection PyUnusedLocal
         reconstructor_input = None  # de-referencing GPU tensors

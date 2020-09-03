@@ -33,6 +33,8 @@ def evaluate(
     for episode in range(num_episodes):
         step = 0
         obs, meta = env.reset()
+        if not obs:
+            break  # no more images
         # in case the last batch is smaller
         actual_batch_size = len(obs["reconstruction"])
         if verbose:

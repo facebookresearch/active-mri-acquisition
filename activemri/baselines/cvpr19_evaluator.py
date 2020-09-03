@@ -11,7 +11,7 @@ import miccai_2020.models.evaluator
 # TODO fix evaluator height
 class CVPR19Evaluator(Policy):
     def __init__(
-        self, evaluator_path: str, device: torch.device, add_mask_eval: bool = False,
+        self, evaluator_path: str, device: torch.device, add_mask: bool = False,
     ):
         super().__init__()
         evaluator_checkpoint = torch.load(evaluator_path)
@@ -39,10 +39,10 @@ class CVPR19Evaluator(Policy):
         )
         self.evaluator.eval()
         self.evaluator.to(device)
-        self.add_mask_eval = add_mask_eval
+        self.add_mask = add_mask
         self.device = device
 
-    def get_action(self, obs: Dict[str, Any]) -> List[int]:
+    def get_action(self, obs: Dict[str, Any], **_kwargs) -> List[int]:
         with torch.no_grad():
             mask_embedding = (
                 None
@@ -50,10 +50,11 @@ class CVPR19Evaluator(Policy):
                 else obs["extra_outputs"]["mask_embedding"].to(self.device)
             )
             mask = obs["mask"].bool().to(self.device)
+            mask = mask.view(mask.shape[0], 1, 1, -1)
             k_space_scores = self.evaluator(
                 obs["reconstruction"].permute(0, 3, 1, 2).to(self.device),
                 mask_embedding,
-                mask if self.add_mask_eval else None,
+                mask if self.add_mask else None,
             )
             # Just fill chosen actions with some very large number to prevent from selecting again.
             k_space_scores.masked_fill_(mask.squeeze(), 100000)
