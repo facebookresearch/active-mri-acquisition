@@ -65,7 +65,8 @@ def make_data_init_fn(tensor_size, num_train, num_val, num_test):
 
 
 # noinspection PyUnresolvedReferences
-def mask_func(args, batch_size, _rng):
+def mask_func(args, kspace_shapes, _rng):
+    batch_size = len(kspace_shapes)
     mask = torch.zeros(batch_size, args["size"])
     mask[0, : args["how_many"]] = 1
     if batch_size > 1:

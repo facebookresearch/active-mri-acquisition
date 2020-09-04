@@ -8,7 +8,6 @@ import pytest
 import torch
 
 import activemri.envs.envs as envs
-import activemri.envs.masks as masks
 import activemri.envs.util as util
 import activemri.tests.mocks as mocks
 
@@ -18,20 +17,6 @@ def test_import_object_from_str():
     assert 3 == ceil(2.5)
     det = util.import_object_from_str("numpy.linalg.det")
     assert det(np.array([[1, 0], [0, 1]])) == 1
-
-
-# noinspection PyCallingNonCallable,PyUnresolvedReferences
-def test_update_masks_from_indices():
-    mask_1 = torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]], dtype=torch.uint8)
-    mask_2 = torch.tensor([[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]], dtype=torch.uint8)
-    mask = torch.stack([mask_1, mask_2])
-    mask = masks.update_masks_from_indices(mask, np.array([2, 0]))
-    assert mask.shape == torch.Size([2, 3, 4])
-
-    expected = torch.tensor(
-        [[1, 0, 1, 0], [1, 0, 1, 0], [1, 0, 1, 0]], dtype=torch.uint8
-    ).repeat(2, 1, 1)
-    assert (mask - expected).sum().item() == 0
 
 
 def test_random_cyclic_sampler_default_order():
@@ -86,7 +71,8 @@ class TestActiveMRIEnv:
         assert env._transform("x", "m") == ("x", "m")
 
         batch_size = 3
-        mask = env._mask_func(batch_size, "rng")
+        shapes = [(1, 2) for _ in range(batch_size)]
+        mask = env._mask_func(shapes, "rng")
         assert mask.shape == (batch_size, env._cfg["mask"]["args"]["size"])
 
     def test_init_sets_action_space(self):

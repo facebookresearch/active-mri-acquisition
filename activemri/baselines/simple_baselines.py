@@ -47,4 +47,5 @@ class LowestIndexPolicy(Policy):
             idx = torch.arange(mask.shape[1])
         if self.alternate_sides:
             self.bottom_side = not self.bottom_side
+        # Next line finds the first non-zero index (from edge to center) and returns it
         return (mask.logical_not() * idx).argmax(dim=1).int().tolist()

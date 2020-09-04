@@ -351,7 +351,8 @@ class ActiveMRIEnv(gym.Env):
         self._transform_wrapper = functools.partial(
             self._transform, attrs=attrs, fname=fname, slice_id=slice_id
         )
-        self._current_mask = self._mask_func(self._batch_size, self.rng)
+        kspace_shapes = [tuple(k.shape) for k in kspace]
+        self._current_mask = self._mask_func(kspace_shapes, self.rng)
         obs, self._current_score = self._compute_obs_and_score()
         self._steps_since_reset = 0
 
