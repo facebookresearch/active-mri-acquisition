@@ -152,14 +152,13 @@ class ActiveMRIEnv(gym.Env):
         self._val_data_handler = None
         self._test_data_handler = None
         self._device = torch.device("cpu")
-        self._batch_size = batch_size
-        self._budget = budget
+        self.batch_size = batch_size
+        self.budget = budget
 
         self.action_space = gym.spaces.Discrete(img_width)
 
-        self.horizon = None
         self._seed = seed
-        self.rng = np.random.RandomState(seed)
+        self._rng = np.random.RandomState(seed)
         self.reward_metric = "mse"
 
         # Init from provided configuration
@@ -199,21 +198,21 @@ class ActiveMRIEnv(gym.Env):
         self._train_data_handler = DataHandler(
             train_data,
             self._seed,
-            batch_size=self._batch_size,
+            batch_size=self.batch_size,
             loops=self._num_loops_train_data,
             collate_fn=_env_collate_fn,
         )
         self._val_data_handler = DataHandler(
             val_data,
             self._seed + 1 if self._seed else None,
-            batch_size=self._batch_size,
+            batch_size=self.batch_size,
             loops=1,
             collate_fn=_env_collate_fn,
         )
         self._test_data_handler = DataHandler(
             test_data,
             self._seed + 2 if self._seed else None,
-            batch_size=self._batch_size,
+            batch_size=self.batch_size,
             loops=1,
             collate_fn=_env_collate_fn,
         )
@@ -352,7 +351,7 @@ class ActiveMRIEnv(gym.Env):
             self._transform, attrs=attrs, fname=fname, slice_id=slice_id
         )
         kspace_shapes = [tuple(k.shape) for k in kspace]
-        self._current_mask = self._mask_func(kspace_shapes, self.rng)
+        self._current_mask = self._mask_func(kspace_shapes, self._rng)
         obs, self._current_score = self._compute_obs_and_score()
         self._steps_since_reset = 0
 
@@ -371,7 +370,7 @@ class ActiveMRIEnv(gym.Env):
                 "Attempting to call env.step() before calling env.reset()."
             )
         if isinstance(action, int):
-            action = [action for _ in range(self._batch_size)]
+            action = [action for _ in range(self.batch_size)]
         self._current_mask = activemri.envs.masks.update_masks_from_indices(
             self._current_mask, action
         )
@@ -383,7 +382,7 @@ class ActiveMRIEnv(gym.Env):
         self._steps_since_reset += 1
 
         done = activemri.envs.masks.check_masks_complete(self._current_mask)
-        if self._budget and self._steps_since_reset >= self._budget:
+        if self.budget and self._steps_since_reset >= self.budget:
             done = [True for _ in range(len(done))]
         return obs, reward, done, {"current_score": self._current_score}
 
@@ -392,7 +391,7 @@ class ActiveMRIEnv(gym.Env):
 
     def seed(self, seed: Optional[int] = None):
         self._seed = seed
-        self.rng = np.random.RandomState(seed)
+        self._rng = np.random.RandomState(seed)
         self._train_data_handler.seed(seed)
         self._val_data_handler.seed(seed)
         self._test_data_handler.seed(seed)
@@ -487,6 +486,8 @@ class MICCAI2020Env(ActiveMRIEnv):
     # -------------------------------------------------------------------------
     def reset(self,) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         obs, meta = super().reset()
+        if not obs:
+            return obs, meta
         obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
         return obs, meta
 

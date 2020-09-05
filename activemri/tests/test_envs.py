@@ -103,7 +103,7 @@ class TestActiveMRIEnv:
         obs, _ = env.reset()
         # env works with shape (batch, height, width, {real/img})
         assert tuple(obs["reconstruction"].shape) == (
-            env._batch_size,
+            env.batch_size,
             env._tensor_size,
             env._tensor_size,
             2,
@@ -258,15 +258,15 @@ class TestSingleCoilRawEnv:
         for i, batch in enumerate(self.env._train_data_handler):
             # No check for batch[1], since it's the mask and will be replaced later
             assert batch[0].shape == (
-                self.env._batch_size,
+                self.env.batch_size,
                 640,
                 368,
                 2,
             )  # reconstruction input
-            assert batch[2].shape == (self.env._batch_size, 640, 368, 2)  # target image
+            assert batch[2].shape == (self.env.batch_size, 640, 368, 2)  # target image
             for j in range(3, 6):
-                assert len(batch[j]) == self.env._batch_size
-            for l in range(self.env._batch_size):
+                assert len(batch[j]) == self.env.batch_size
+            for l in range(self.env.batch_size):
                 # data.attrs
                 assert len(batch[3][l]) == 4
                 for key in ["norm", "max", "patient_id", "acquisition"]:
@@ -284,5 +284,5 @@ class TestSingleCoilRawEnv:
         assert "reconstruction" in obs
         assert "mask" in obs
         assert "extra_outputs" in obs
-        assert obs["reconstruction"].shape == (self.env._batch_size, 640, 368, 2)
-        assert obs["mask"].shape == (self.env._batch_size, 368)
+        assert obs["reconstruction"].shape == (self.env.batch_size, 640, 368, 2)
+        assert obs["mask"].shape == (self.env.batch_size, 368)

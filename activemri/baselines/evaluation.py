@@ -6,7 +6,6 @@ import activemri.envs as envs
 import activemri.baselines as baselines
 
 
-# TODO make batch_size and budget non protected in env
 def evaluate(
     env: envs.envs.ActiveMRIEnv,
     policy: baselines.Policy,
@@ -25,7 +24,7 @@ def evaluate(
 
     score_keys = env.score_keys()
     all_scores = dict(
-        (k, np.zeros((num_episodes * env._batch_size, env._budget + 1)))
+        (k, np.zeros((num_episodes * env.batch_size, env.budget + 1)))
         for k in score_keys
     )
     all_img_ids = []
