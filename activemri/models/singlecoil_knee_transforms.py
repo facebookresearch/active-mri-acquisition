@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import fastmri
+import fastmri.data.transforms as fastmri_transforms
 import torch
 
 import activemri.data.singlecoil_knee_data as scknee_data
@@ -58,3 +59,93 @@ def raw_transform_miccai2020(kspace=None, mask=None, **_kwargs):
     )
     reconstructor_input = ifft_permute_maybe_shift(masked_true_k_space, ifft_shift=True)
     return reconstructor_input, mask
+
+
+def apply_mask(data, mask, padding=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    if padding is not None:
+        mask[:, :, : padding[0]] = 0
+        mask[:, :, padding[1] :] = 0  # padding value inclusive on right of zeros
+
+    masked_data = data * mask + 0.0  # the + 0.0 removes the sign of the zeros
+
+    return masked_data, mask
+
+
+# Based on
+# https://github.com/facebookresearch/fastMRI/blob/master/experimental/unet/unet_module.py
+def _base_fastmri_unet_transform(
+    kspace, mask, ground_truth, attrs, which_challenge="singlecoil",
+):
+    kspace = fastmri_transforms.to_tensor(kspace)
+
+    # TODO remove this part once mask function is changed to return correct shape
+    num_cols = kspace.shape[-2]
+    mask = mask[:num_cols]  # accounting for variable size masks
+    mask_shape = [1 for _ in kspace.shape]
+    mask_shape[-2] = num_cols
+    mask = mask.view(*mask_shape)
+    masked_kspace, _ = apply_mask(kspace, mask)
+
+    # inverse Fourier transform to get zero filled solution
+    image = fastmri.ifft2c(masked_kspace)
+
+    # crop input to correct size
+    if ground_truth is not None:
+        crop_size = (ground_truth.shape[-2], ground_truth.shape[-1])
+    else:
+        crop_size = (attrs["recon_size"][0], attrs["recon_size"][1])
+
+    # check for FLAIR 203
+    if image.shape[-2] < crop_size[1]:
+        crop_size = (image.shape[-2], image.shape[-2])
+
+    # noinspection PyTypeChecker
+    image = fastmri_transforms.complex_center_crop(image, crop_size)
+
+    # absolute value
+    image = fastmri.complex_abs(image)
+
+    # apply Root-Sum-of-Squares if multicoil data
+    if which_challenge == "multicoil":
+        image = fastmri.rss(image)
+
+    # normalize input
+    image, *_ = fastmri_transforms.normalize_instance(image, eps=1e-11)
+    image = image.clamp(-6, 6)
+
+    return image.unsqueeze(0)
+
+
+def _batched_fastmri_unet_transform(
+    kspace, mask, ground_truth, attrs, which_challenge="singlecoil"
+):
+    batch_size = len(kspace)
+    images = []
+    for i in range(batch_size):
+        image = _base_fastmri_unet_transform(
+            kspace[i],
+            mask[i],
+            ground_truth[i],
+            attrs[i],
+            which_challenge=which_challenge,
+        )
+        images.append(image)
+    return tuple([torch.stack(images)])  # environment expects a tuple
+
+
+# noinspection PyUnusedLocal
+def fastmri_unet_transform_singlecoil(
+    kspace=None, mask=None, ground_truth=None, attrs=None, fname=None, slice_id=None
+):
+    return _batched_fastmri_unet_transform(
+        kspace, mask, ground_truth, attrs, "singlecoil"
+    )
+
+
+# noinspection PyUnusedLocal
+def fastmri_unet_transform_multicoil(
+    kspace=None, mask=None, ground_truth=None, attrs=None, fname=None, slice_id=None
+):
+    return _batched_fastmri_unet_transform(
+        kspace, mask, ground_truth, attrs, "multicoil"
+    )

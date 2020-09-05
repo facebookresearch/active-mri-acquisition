@@ -16,6 +16,7 @@ from typing import (
     Union,
 )
 
+import fastmri.data
 import gym
 import numpy as np
 import torch
@@ -53,17 +54,14 @@ class CyclicSampler(torch.utils.data.Sampler):
         return len(self.data_source) * self.loops
 
 
+# TODO Add a fastMRI batch type (make it the return of void_transform)
 # noinspection PyUnresolvedReferences
-def _env_collate_fn(batch: Tuple[torch.Tensor]) -> Tuple:
-    ret = [
-        torch.stack([item[0] for item in batch]),  # kspace
-        torch.stack([item[1] for item in batch]),  # mask
-        torch.stack([item[2] for item in batch]),  # target
-    ]
-    for i in range(3, 6):  # attrs, fname, slice_id
-        arg_i = [item[i] for item in batch]
-        ret.append(arg_i)
-
+def _env_collate_fn(
+    batch: Tuple[Union[np.array, list], ...]
+) -> Tuple[Union[np.array, list], ...]:
+    ret = []
+    for i in range(6):  # kspace, mask, target, attrs, fname, slice_id
+        ret.append([item[i] for item in batch])
     return tuple(ret)
 
 
@@ -130,8 +128,6 @@ class DataHandler:
 # -----------------------------------------------------------------------------
 
 # TODO Add option to resize default img size (need to pass this option to reconstructor)
-# TODO Add reward scaling option
-# TODO Add with torch no grad
 class ActiveMRIEnv(gym.Env):
     _num_loops_train_data = 100000
 
@@ -301,7 +297,8 @@ class ActiveMRIEnv(gym.Env):
         reconstruction = extra_outputs["reconstruction"]
 
         self._current_reconstruction_numpy = reconstruction.cpu().numpy()
-        del extra_outputs["reconstruction"]  # this dict is only for the other outputs
+        # this dict is only for storing the other outputs
+        del extra_outputs["reconstruction"]
 
         # noinspection PyUnusedLocal
         reconstructor_input = None  # de-referencing GPU tensors
@@ -318,12 +315,6 @@ class ActiveMRIEnv(gym.Env):
 
         return obs, score
 
-    @abc.abstractmethod
-    def _compute_score_given_tensors(
-        self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
-    ) -> Dict[str, np.ndarray]:
-        pass
-
     def _clear_cache_and_unset_did_reset(self):
         self._current_mask = None
         self._current_ground_truth = None
@@ -333,6 +324,12 @@ class ActiveMRIEnv(gym.Env):
         self._current_score = None
         self._steps_since_reset = 0
         self._did_reset = False
+
+    @abc.abstractmethod
+    def _compute_score_given_tensors(
+        self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
+    ) -> Dict[str, np.ndarray]:
+        pass
 
     # -------------------------------------------------------------------------
     # Public methods
@@ -345,13 +342,20 @@ class ActiveMRIEnv(gym.Env):
             )
         except StopIteration:
             return {}, {}
-        self._current_ground_truth = ground_truth
+
+        # TODO fix this for MICCAI transform which returns torch tensors
+        assert isinstance(ground_truth[0], np.ndarray)
+        self._current_ground_truth = torch.from_numpy(np.stack(ground_truth))
+
+        # Converting k-space to torch is better handled by transform,
+        # since we have both complex and non-complex versions
         self._current_k_space = kspace
+
         self._transform_wrapper = functools.partial(
             self._transform, attrs=attrs, fname=fname, slice_id=slice_id
         )
         kspace_shapes = [tuple(k.shape) for k in kspace]
-        self._current_mask = self._mask_func(kspace_shapes, self._rng)
+        self._current_mask = self._mask_func(kspace_shapes, self._rng, attrs=attrs)
         obs, self._current_score = self._compute_obs_and_score()
         self._steps_since_reset = 0
 
@@ -381,6 +385,7 @@ class ActiveMRIEnv(gym.Env):
         self._current_score = new_score
         self._steps_since_reset += 1
 
+        # TODO This needs to be fixed for variable size masks
         done = activemri.envs.masks.check_masks_complete(self._current_mask)
         if self.budget and self._steps_since_reset >= self.budget:
             done = [True for _ in range(len(done))]
@@ -433,15 +438,15 @@ class MICCAI2020Env(ActiveMRIEnv):
         super().__init__(
             self.IMAGE_WIDTH, self.IMAGE_HEIGHT, batch_size=batch_size, budget=budget
         )
-        self._setup("configs/miccai2020.json", self._create_dataset)
+        self._setup("configs/miccai-2020.json", self._create_dataset)
 
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
     def _create_dataset(self) -> Tuple[Sized, Sized, Sized]:
         root_path = pathlib.Path(self._data_location)
-        train_path = root_path.joinpath("knee_singlecoil_train")
-        val_and_test_path = root_path.joinpath("knee_singlecoil_val")
+        train_path = root_path / "knee_singlecoil_train"
+        val_and_test_path = root_path / "knee_singlecoil_val"
 
         train_data = scknee_data.MICCAI2020Data(
             train_path, ActiveMRIEnv._void_transform, num_cols=self.IMAGE_WIDTH,
@@ -503,6 +508,60 @@ class MICCAI2020Env(ActiveMRIEnv):
         t_max = img.max()
         img = 255 * (img - t_min) / (t_max - t_min)
         return img.astype(np.uint8)
+
+    def score_keys(self) -> List[str]:
+        return ["mse", "nmse", "ssim", "psnr"]
+
+
+class SingleCoilKneeEnv(ActiveMRIEnv):
+    def __init__(
+        self,
+        batch_size: int = 1,
+        budget: Optional[int] = None,
+        num_cols: Sequence[int] = (368, 372),
+    ):
+        super().__init__(320, 320, batch_size=batch_size, budget=budget)
+        self.num_cols = num_cols
+        self._setup("configs/single-coil-knee.json", self._create_dataset)
+
+    # -------------------------------------------------------------------------
+    # Protected methods
+    # -------------------------------------------------------------------------
+    def _create_dataset(self) -> Tuple[Sized, Sized, Sized]:
+        root_path = pathlib.Path(self._data_location)
+        train_path = root_path / "knee_singlecoil_train"
+        val_path = root_path / "knee_singlecoil_val"
+
+        train_data = fastmri.data.SliceDataset(
+            train_path,
+            ActiveMRIEnv._void_transform,
+            challenge="singlecoil",
+            num_cols=self.num_cols,
+        )
+        val_data = fastmri.data.SliceDataset(
+            val_path,
+            ActiveMRIEnv._void_transform,
+            challenge="singlecoil",
+            num_cols=self.num_cols,
+        )
+        test_data = fastmri.data.SliceDataset(
+            val_path,
+            ActiveMRIEnv._void_transform,
+            challenge="singlecoil",
+            num_cols=self.num_cols,
+        )
+        return train_data, val_data, test_data
+
+    # TODO replace for the functions used in fastmri
+    def _compute_score_given_tensors(
+        self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
+    ) -> Dict[str, np.ndarray]:
+        mse = activemri.envs.util.compute_mse(reconstruction, ground_truth)
+        nmse = activemri.envs.util.compute_nmse(reconstruction, ground_truth)
+        ssim = activemri.envs.util.compute_ssim(reconstruction, ground_truth)
+        psnr = activemri.envs.util.compute_psnr(reconstruction, ground_truth)
+
+        return {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
 
     def score_keys(self) -> List[str]:
         return ["mse", "nmse", "ssim", "psnr"]
