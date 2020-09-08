@@ -18,7 +18,7 @@
   "mask": {
     "function": "activemri.envs.masks.sample_low_frequency_mask",
     "args": {
-      "width_dim": 2,
+      "width_dim": 1,
       "max_width": 368,
       "min_cols": 15,
       "max_cols": 15

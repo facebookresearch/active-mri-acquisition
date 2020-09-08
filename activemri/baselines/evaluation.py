@@ -61,4 +61,6 @@ def evaluate(
                 all_scores[k][batch_idx, step] = meta["current_score"][k]
             all_done = all(done)
 
+    for k in score_keys:
+        all_scores[k] = all_scores[k][: len(all_img_ids), :]
     return all_scores, all_img_ids
