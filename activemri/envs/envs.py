@@ -364,6 +364,8 @@ class ActiveMRIEnv(gym.Env):
         }
         return obs, meta
 
+    # TODO look how to handle the batch_size=1 special case
+    # TODO change batch_size by parallel episodes
     def step(
         self, action: Union[int, Sequence[int]]
     ) -> Tuple[Dict[str, Any], np.ndarray, List[bool], Dict]:
@@ -380,13 +382,15 @@ class ActiveMRIEnv(gym.Env):
         reward = new_score[self.reward_metric] - self._current_score[self.reward_metric]
         if self.reward_metric in ["mse", "nmse"]:
             reward *= -1
+        else:
+            assert self.reward_metric in ["ssim", "psnr"]
         self._current_score = new_score
         self._steps_since_reset += 1
 
         # TODO This needs to be fixed for variable size masks
         done = activemri.envs.masks.check_masks_complete(self._current_mask)
         if self.budget and self._steps_since_reset >= self.budget:
-            done = [True for _ in range(len(done))]
+            done = [True] * len(done)
         return obs, reward, done, {"current_score": self._current_score}
 
     def render(self, mode="human"):

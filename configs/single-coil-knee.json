@@ -19,7 +19,8 @@
       "max_width": 372,
       "min_cols": 15,
       "max_cols": 15,
-      "apply_attrs_padding": true
+      "apply_attrs_padding": true,
+      "centered": true
     }
   },
   "reward_metric": "ssim",

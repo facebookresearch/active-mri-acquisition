@@ -21,7 +21,8 @@
       "width_dim": 1,
       "max_width": 368,
       "min_cols": 15,
-      "max_cols": 15
+      "max_cols": 15,
+      "centered": false
     }
   },
   "reward_metric": "ssim",
