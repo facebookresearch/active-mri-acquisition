@@ -251,30 +251,30 @@ class TestActiveMRIEnv:
 
 
 # noinspection PyProtectedMember
-class TestSingleCoilRawEnv:
+class TestMICCAIEnv:
     env = envs.MICCAI2020Env()
 
-    def test_singlecoil_raw_env_batch_content(self):
+    def test_miccai_env_batch_content(self):
         for i, batch in enumerate(self.env._train_data_handler):
-            # No check for batch[1], since it's the mask and will be replaced later
-            assert batch[0].shape == (
-                self.env.batch_size,
-                640,
-                368,
-                2,
-            )  # reconstruction input
-            assert batch[2].shape == (self.env.batch_size, 640, 368, 2)  # target image
-            for j in range(3, 6):
+            # No check below for batch[1], since it's the mask and will be replaced later
+
+            for j in [0, 1, 3, 4, 5]:
+                assert isinstance(batch[j], list)
                 assert len(batch[j]) == self.env.batch_size
-            for l in range(self.env.batch_size):
+            for batch_idx in range(self.env.batch_size):
+                assert isinstance(batch[0][batch_idx], np.ndarray)
+                assert batch[0][batch_idx].shape == (640, 368, 2,)  # k-space
+                assert isinstance(batch[2][batch_idx], np.ndarray)
+                assert batch[2][batch_idx].shape == (640, 368, 2)  # ground truth image
+
                 # data.attrs
-                assert len(batch[3][l]) == 4
+                assert len(batch[3][batch_idx]) == 4
                 for key in ["norm", "max", "patient_id", "acquisition"]:
-                    assert key in batch[3][l]
+                    assert key in batch[3][batch_idx]
                 # file name
-                assert isinstance(batch[4][l], pathlib.Path)
+                assert isinstance(batch[4][batch_idx], pathlib.Path)
                 # slice_id
-                assert isinstance(batch[5][l], int)
+                assert isinstance(batch[5][batch_idx], int)
             if i == 1:
                 break
 

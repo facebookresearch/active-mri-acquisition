@@ -47,13 +47,18 @@ def ifft_permute_maybe_shift(
 
 
 def raw_transform_miccai2020(kspace=None, mask=None, **_kwargs):
-    k_space = kspace.permute(0, 3, 1, 2)
     # alter mask to always include the highest frequencies that include padding
     mask[
         :,
         scknee_data.MICCAI2020Data.START_PADDING : scknee_data.MICCAI2020Data.END_PADDING,
     ] = 1
     mask = mask.view(mask.shape[0], 1, 1, -1)
+
+    all_kspace = []
+    for ksp in kspace:
+        all_kspace.append(torch.from_numpy(ksp).permute(2, 0, 1))
+    k_space = torch.stack(all_kspace)
+
     masked_true_k_space = torch.where(
         mask.byte(), k_space, torch.tensor(0.0).to(mask.device),
     )

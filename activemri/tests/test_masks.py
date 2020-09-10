@@ -22,8 +22,9 @@ def test_update_masks_from_indices():
 
 
 def test_sample_low_freq_masks():
+    max_width = 20
     mask_args = {
-        "max_width": 20,
+        "max_width": max_width,
         "width_dim": 1,
         "min_cols": 1,
         "max_cols": 4,
@@ -40,8 +41,8 @@ def test_sample_low_freq_masks():
             assert torch.all(
                 the_masks[j, : w // 2] == torch.flip(the_masks[j, w // 2 : w], dims=[0])
             )
-            assert the_masks[j, w:].sum().item() == 0
-            active = the_masks[j].sum().int().item()
+            assert the_masks[j, w:].sum().item() == max_width - w
+            active = the_masks[j, :w].sum().int().item()
             assert active >= 2 * mask_args["min_cols"]
             assert active <= 2 * mask_args["max_cols"]
             assert active % 2 == 0

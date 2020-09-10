@@ -343,8 +343,6 @@ class ActiveMRIEnv(gym.Env):
         except StopIteration:
             return {}, {}
 
-        # TODO fix this for MICCAI transform which returns torch tensors
-        assert isinstance(ground_truth[0], np.ndarray)
         self._current_ground_truth = torch.from_numpy(np.stack(ground_truth))
 
         # Converting k-space to torch is better handled by transform,

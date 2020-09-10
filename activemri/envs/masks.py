@@ -25,7 +25,7 @@ def check_masks_complete(masks: torch.Tensor) -> List[bool]:
 # TODO change code so that mask returns same num of dims as kspace
 def sample_low_frequency_mask(
     mask_args: Dict[str, Any],
-    kspace_shapes: List[Tuple[int]],
+    kspace_shapes: List[Tuple[int, ...]],
     rng: np.random.RandomState,
     attrs: Optional[Dict[str, Any]] = None,
 ) -> torch.Tensor:
@@ -42,9 +42,9 @@ def sample_low_frequency_mask(
             padding_left = attrs[i]["padding_left"]
             padding_right = attrs[i]["padding_right"]
         else:
-            padding_left, padding_right = 0, 0
+            padding_left, padding_right = 0, num_cols[i]
         left_active = slice(0, num_lowf[i] + padding_left)
-        right_active = slice(padding_right - num_lowf[i], num_cols[i])
+        right_active = slice(padding_right - num_lowf[i], mask_args["max_width"])
         mask[i, left_active] = 1
         mask[i, right_active] = 1
     return mask
