@@ -66,16 +66,6 @@ def raw_transform_miccai2020(kspace=None, mask=None, **_kwargs):
     return reconstructor_input, mask
 
 
-def apply_mask(data, mask, padding=None) -> Tuple[torch.Tensor, torch.Tensor]:
-    if padding is not None:
-        mask[:, :, : padding[0]] = 0
-        mask[:, :, padding[1] :] = 0  # padding value inclusive on right of zeros
-
-    masked_data = data * mask + 0.0  # the + 0.0 removes the sign of the zeros
-
-    return masked_data, mask
-
-
 # Based on
 # https://github.com/facebookresearch/fastMRI/blob/master/experimental/unet/unet_module.py
 def _base_fastmri_unet_transform(
@@ -89,7 +79,7 @@ def _base_fastmri_unet_transform(
     mask_shape = [1 for _ in kspace.shape]
     mask_shape[-2] = num_cols
     mask = mask.view(*mask_shape)
-    masked_kspace, _ = apply_mask(kspace, mask)
+    masked_kspace = kspace * mask + 0.0
 
     # inverse Fourier transform to get zero filled solution
     image = fastmri.ifft2c(masked_kspace)
