@@ -312,7 +312,7 @@ class ActiveMRIEnv(gym.Env):
         obs = {
             "reconstruction": reconstruction,
             "extra_outputs": extra_outputs,
-            "mask": self._current_mask.clone(),
+            "mask": self._current_mask.clone().view(self._current_mask.shape[0], -1),
         }
 
         return obs, score
@@ -541,18 +541,90 @@ class SingleCoilKneeEnv(ActiveMRIEnv):
             ActiveMRIEnv._void_transform,
             challenge="singlecoil",
             num_cols=self.num_cols,
+            dataset_cache_file=pathlib.Path(
+                "__datacache__/train_singlecoil_dataset_cache.pkl"
+            ),
         )
         val_data = fastmri.data.SliceDataset(
             val_path,
             ActiveMRIEnv._void_transform,
             challenge="singlecoil",
             num_cols=self.num_cols,
+            dataset_cache_file=pathlib.Path(
+                "__datacache__/val_singlecoil_dataset_cache.pkl"
+            ),
         )
         test_data = fastmri.data.SliceDataset(
             val_path,
             ActiveMRIEnv._void_transform,
             challenge="singlecoil",
             num_cols=self.num_cols,
+            dataset_cache_file=pathlib.Path(
+                "__datacache__/val_singlecoil_dataset_cache.pkl"
+            ),
+        )
+        return train_data, val_data, test_data
+
+    # TODO replace for the functions used in fastmri
+    def _compute_score_given_tensors(
+        self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
+    ) -> Dict[str, np.ndarray]:
+        mse = activemri.envs.util.compute_mse(reconstruction, ground_truth)
+        nmse = activemri.envs.util.compute_nmse(reconstruction, ground_truth)
+        ssim = activemri.envs.util.compute_ssim(reconstruction, ground_truth)
+        psnr = activemri.envs.util.compute_psnr(reconstruction, ground_truth)
+
+        return {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
+
+    def score_keys(self) -> List[str]:
+        return ["mse", "nmse", "ssim", "psnr"]
+
+
+class MultiCoilKneeEnv(ActiveMRIEnv):
+    def __init__(
+        self,
+        batch_size: int = 1,
+        budget: Optional[int] = None,
+        num_cols: Sequence[int] = (368, 372),
+    ):
+        super().__init__(320, 320, batch_size=batch_size, budget=budget)
+        self.num_cols = num_cols
+        self._setup("configs/multi-coil-knee.json", self._create_dataset)
+
+    # -------------------------------------------------------------------------
+    # Protected methods
+    # -------------------------------------------------------------------------
+    def _create_dataset(self) -> Tuple[Sized, Sized, Sized]:
+        root_path = pathlib.Path(self._data_location)
+        train_path = root_path / "multicoil_train"
+        val_path = root_path / "multicoil_val"
+
+        train_data = fastmri.data.SliceDataset(
+            train_path,
+            ActiveMRIEnv._void_transform,
+            challenge="multicoil",
+            num_cols=self.num_cols,
+            dataset_cache_file=pathlib.Path(
+                "__datacache__/train_multicoil_dataset_cache.pkl"
+            ),
+        )
+        val_data = fastmri.data.SliceDataset(
+            val_path,
+            ActiveMRIEnv._void_transform,
+            challenge="multicoil",
+            num_cols=self.num_cols,
+            dataset_cache_file=pathlib.Path(
+                "__datacache__/val_multicoil_dataset_cache.pkl"
+            ),
+        )
+        test_data = fastmri.data.SliceDataset(
+            val_path,
+            ActiveMRIEnv._void_transform,
+            challenge="multicoil",
+            num_cols=self.num_cols,
+            dataset_cache_file=pathlib.Path(
+                "__datacache__/val_multicoil_dataset_cache.pkl"
+            ),
         )
         return train_data, val_data, test_data
 

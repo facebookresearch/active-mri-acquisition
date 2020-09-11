@@ -7,3 +7,4 @@ misc
 *personal*
 *.orig
 docs/_build
+__datacache__*

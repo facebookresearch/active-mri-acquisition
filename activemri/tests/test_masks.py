@@ -37,7 +37,8 @@ def test_sample_low_freq_masks():
         for i in range(1000):
             dummy_shapes = [(0, w) for w in widths]  # w is in args.width_dim
             the_masks = masks.sample_low_frequency_mask(mask_args, dummy_shapes, rng)
-            assert the_masks.shape == (len(widths), 20)
+            assert the_masks.shape == (len(widths), 1, 20)
+            the_masks = the_masks.squeeze()
 
             for j, w in enumerate(widths):
                 # Mask is symmetrical

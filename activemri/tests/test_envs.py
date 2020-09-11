@@ -278,7 +278,7 @@ class TestMICCAIEnv:
             if i == 10:
                 break
 
-    def test_reset(self):
+    def test_miccai_reset(self):
         obs, _ = self.env.reset()
         assert len(obs) == 3
         assert "reconstruction" in obs
@@ -290,9 +290,9 @@ class TestMICCAIEnv:
 
 # noinspection PyProtectedMember
 class TestSingleCoilKneeEnv:
-    env = envs.SingleCoilKneeEnv(num_cols=(368,))
+    env = envs.SingleCoilKneeEnv()
 
-    def test_singlecoilknee_env_batch_content(self):
+    def test_singlecoil_knee_env_batch_content(self):
         for i, batch in enumerate(self.env._train_data_handler):
             # No check below for batch[1], since it's the mask and will be replaced later
 
@@ -306,7 +306,7 @@ class TestSingleCoilKneeEnv:
                 assert np.all(
                     np.iscomplex(kspace[batch_idx][np.nonzero(kspace[batch_idx])])
                 )
-                assert kspace[batch_idx].shape == (640, 368)  # k-space
+                assert kspace[batch_idx].shape in [(640, 368), (640, 372)]  # k-space
                 assert isinstance(ground_truth[batch_idx], np.ndarray)
                 assert not np.any(np.iscomplex(ground_truth[batch_idx]))
                 assert ground_truth[batch_idx].shape == (320, 320)  # ground_truth
@@ -331,11 +331,14 @@ class TestSingleCoilKneeEnv:
             if i == 10:
                 break
 
-    def test_reset(self):
+    def test_singlecoil_knee_reset(self):
         obs, _ = self.env.reset()
         assert len(obs) == 3
         assert "reconstruction" in obs
         assert "mask" in obs
         assert "extra_outputs" in obs
         assert obs["reconstruction"].shape == (self.env.batch_size, 320, 320)
-        assert obs["mask"].shape == (self.env.batch_size, 368)
+        assert obs["mask"].shape in [
+            (self.env.batch_size, 368),
+            (self.env.batch_size, 372),
+        ]

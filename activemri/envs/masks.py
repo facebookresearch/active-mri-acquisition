@@ -51,4 +51,7 @@ def sample_low_frequency_mask(
         if not mask_args["centered"]:
             mask[i, : num_cols[i]] = fastmri.ifftshift(mask[i, : num_cols[i]])
         mask[i, num_cols[i] : mask_args["max_width"]] = 1
-    return mask
+
+    mask_shape = [batch_size] + [1] * (mask_args["width_dim"] + 1)
+    mask_shape[mask_args["width_dim"] + 1] = mask_args["max_width"]
+    return mask.view(*mask_shape)

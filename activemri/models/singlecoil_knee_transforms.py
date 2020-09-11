@@ -50,9 +50,10 @@ def raw_transform_miccai2020(kspace=None, mask=None, **_kwargs):
     # alter mask to always include the highest frequencies that include padding
     mask[
         :,
+        :,
         scknee_data.MICCAI2020Data.START_PADDING : scknee_data.MICCAI2020Data.END_PADDING,
     ] = 1
-    mask = mask.view(mask.shape[0], 1, 1, -1)
+    mask = mask.unsqueeze(1)
 
     all_kspace = []
     for ksp in kspace:
@@ -73,13 +74,8 @@ def _base_fastmri_unet_transform(
 ):
     kspace = fastmri_transforms.to_tensor(kspace)
 
-    # TODO remove this part once mask function is changed to return correct shape
-    num_cols = kspace.shape[-2]
-    mask = mask[:num_cols]  # accounting for variable size masks
-    mask_shape = [1 for _ in kspace.shape]
-    mask_shape[-2] = num_cols
-    mask = mask.view(*mask_shape)
-    masked_kspace = kspace * mask + 0.0
+    mask = mask[..., : kspace.shape[-2]]  # accounting for variable size masks
+    masked_kspace = kspace * mask.unsqueeze(-1) + 0.0
 
     # inverse Fourier transform to get zero filled solution
     image = fastmri.ifft2c(masked_kspace)
