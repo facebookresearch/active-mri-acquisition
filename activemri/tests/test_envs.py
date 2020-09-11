@@ -275,7 +275,7 @@ class TestMICCAIEnv:
                 assert isinstance(batch[4][batch_idx], str)
                 # slice_id
                 assert isinstance(batch[5][batch_idx], int)
-            if i == 1:
+            if i == 10:
                 break
 
     def test_reset(self):
@@ -285,4 +285,57 @@ class TestMICCAIEnv:
         assert "mask" in obs
         assert "extra_outputs" in obs
         assert obs["reconstruction"].shape == (self.env.batch_size, 640, 368, 2)
+        assert obs["mask"].shape == (self.env.batch_size, 368)
+
+
+# noinspection PyProtectedMember
+class TestSingleCoilKneeEnv:
+    env = envs.SingleCoilKneeEnv(num_cols=(368,))
+
+    def test_singlecoilknee_env_batch_content(self):
+        for i, batch in enumerate(self.env._train_data_handler):
+            # No check below for batch[1], since it's the mask and will be replaced later
+
+            kspace, _, ground_truth, attrs, fname, slice_id = batch
+
+            for j in [0, 1, 3, 4, 5]:
+                assert isinstance(batch[j], list)
+                assert len(batch[j]) == self.env.batch_size
+            for batch_idx in range(self.env.batch_size):
+                assert isinstance(kspace[batch_idx], np.ndarray)
+                assert np.all(
+                    np.iscomplex(kspace[batch_idx][np.nonzero(kspace[batch_idx])])
+                )
+                assert kspace[batch_idx].shape == (640, 368)  # k-space
+                assert isinstance(ground_truth[batch_idx], np.ndarray)
+                assert not np.any(np.iscomplex(ground_truth[batch_idx]))
+                assert ground_truth[batch_idx].shape == (320, 320)  # ground_truth
+
+                # data.attrs
+                assert len(attrs[batch_idx]) == 8
+                for key in [
+                    "acquisition",
+                    "max",
+                    "norm",
+                    "patient_id",
+                    "padding_left",
+                    "padding_right",
+                    "encoding_size",
+                    "recon_size",
+                ]:
+                    assert key in attrs[batch_idx]
+                # file name
+                assert isinstance(fname[batch_idx], str)
+                # slice_id
+                assert isinstance(slice_id[batch_idx], int)
+            if i == 10:
+                break
+
+    def test_reset(self):
+        obs, _ = self.env.reset()
+        assert len(obs) == 3
+        assert "reconstruction" in obs
+        assert "mask" in obs
+        assert "extra_outputs" in obs
+        assert obs["reconstruction"].shape == (self.env.batch_size, 320, 320)
         assert obs["mask"].shape == (self.env.batch_size, 368)
