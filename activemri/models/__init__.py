@@ -14,5 +14,5 @@ class Reconstructor(torch.nn.Module):
         pass
 
     @abc.abstractmethod
-    def init_from_checkpoint(self, filename: str) -> Optional[Dict[str, Any]]:
+    def init_from_checkpoint(self, checkpoint: Dict[str, Any]) -> Optional[Any]:
         pass

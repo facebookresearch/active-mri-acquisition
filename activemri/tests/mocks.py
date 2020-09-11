@@ -45,10 +45,10 @@ class Dataset:
         return self.length
 
     def __getitem__(self, item):
-        mock_kspace = (item + 1) * torch.ones(
-            self.tensor_size, self.tensor_size, 2  # 2 is for mocking (real, img.)
+        mock_kspace = (item + 1) * np.ones(
+            (self.tensor_size, self.tensor_size, 2)  # 2 is for mocking (real, img.)
         )
-        mock_mask = torch.zeros(self.tensor_size)
+        mock_mask = np.zeros(self.tensor_size)
         mock_ground_truth = mock_kspace + 1
         return mock_kspace, mock_mask, mock_ground_truth, {}, "fname", item
 
@@ -64,8 +64,8 @@ def make_data_init_fn(tensor_size, num_train, num_val, num_test):
     return data_init_fn
 
 
-# noinspection PyUnresolvedReferences
-def mask_func(args, kspace_shapes, _rng):
+# noinspection PyUnresolvedReferences,PyUnusedLocal
+def mask_func(args, kspace_shapes, _rng, attrs=None):
     batch_size = len(kspace_shapes)
     mask = torch.zeros(batch_size, args["size"])
     mask[0, : args["how_many"]] = 1
@@ -77,6 +77,13 @@ def mask_func(args, kspace_shapes, _rng):
 def transform(kspace=None, mask=None, **_kwargs):
     if isinstance(mask, torch.Tensor):
         mask = mask.view(mask.shape[0], 1, -1, 1)
+    elif isinstance(mask, np.ndarray):
+        mask = torch.from_numpy(mask)
+    if isinstance(kspace, list):
+        new_kspace = []
+        for array in kspace:
+            new_kspace.append(torch.from_numpy(array))
+        return torch.stack(new_kspace), mask
     return kspace, mask
 
 

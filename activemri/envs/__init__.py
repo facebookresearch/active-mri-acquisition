@@ -1,3 +1,3 @@
-__all__ = ["MICCAI2020Env"]
+__all__ = ["MICCAI2020Env", "SingleCoilKneeEnv"]
 
-from .envs import MICCAI2020Env
+from .envs import MICCAI2020Env, SingleCoilKneeEnv

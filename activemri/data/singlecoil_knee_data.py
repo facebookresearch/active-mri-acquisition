@@ -83,12 +83,19 @@ class MICCAI2020Data(torch.utils.data.Dataset):
             # Normalize using mean of k-space in training data
             target /= 7.072103529760345e-07
             kspace /= 7.072103529760345e-07
+
+            # Environment expects numpy arrays. The code above was used with an older
+            # version of the environment to generate the results of the MICCAI'20 paper.
+            # So, to keep this consistent with the version in the paper, we convert
+            # the tensors back to numpy rather than changing the original code.
+            kspace = kspace.numpy()
+            target = target.numpy()
             return self.transform(
                 kspace,
                 torch.zeros(kspace.shape[1]),
                 target,
                 dict(data.attrs),
-                fname,
+                fname.name,
                 slice_id,
             )
 
