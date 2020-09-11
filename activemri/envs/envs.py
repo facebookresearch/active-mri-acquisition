@@ -230,7 +230,9 @@ class ActiveMRIEnv(gym.Env):
             reconstructor_cfg["cls"]
         )
         checkpoint_path = pathlib.Path(reconstructor_cfg["checkpoint_path"])
-        checkpoint = torch.load(checkpoint_path) if checkpoint_path.is_file() else None
+        checkpoint = (
+            torch.load(str(checkpoint_path)) if checkpoint_path.is_file() else None
+        )
         options = reconstructor_cfg["options"]
         if checkpoint and "options" in checkpoint:
             msg = (

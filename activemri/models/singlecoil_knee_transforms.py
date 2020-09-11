@@ -105,19 +105,19 @@ def _base_fastmri_unet_transform(
         image = fastmri.rss(image)
 
     # normalize input
-    image, *_ = fastmri_transforms.normalize_instance(image, eps=1e-11)
+    image, mean, std = fastmri_transforms.normalize_instance(image, eps=1e-11)
     image = image.clamp(-6, 6)
 
-    return image.unsqueeze(0)
+    return image.unsqueeze(0), mean, std
 
 
 def _batched_fastmri_unet_transform(
     kspace, mask, ground_truth, attrs, which_challenge="singlecoil"
 ):
     batch_size = len(kspace)
-    images = []
+    images, means, stds = [], [], []
     for i in range(batch_size):
-        image = _base_fastmri_unet_transform(
+        image, mean, std = _base_fastmri_unet_transform(
             kspace[i],
             mask[i],
             ground_truth[i],
@@ -125,7 +125,9 @@ def _batched_fastmri_unet_transform(
             which_challenge=which_challenge,
         )
         images.append(image)
-    return tuple([torch.stack(images)])  # environment expects a tuple
+        means.append(mean)
+        stds.append(std)
+    return torch.stack(images), torch.stack(means), torch.stack(stds)
 
 
 # noinspection PyUnusedLocal

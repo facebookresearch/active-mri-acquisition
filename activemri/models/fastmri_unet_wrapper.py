@@ -20,9 +20,15 @@ class Unet(activemri.models.Reconstructor):
             drop_prob=drop_prob,
         )
 
-    def forward(self, image: torch.Tensor) -> Dict[str, torch.Tensor]:
-        return {"reconstruction": self.unet(image).squeeze(1)}
+    def forward(
+        self, image: torch.Tensor, mean: torch.Tensor, std: torch.Tensor
+    ) -> Dict[str, torch.Tensor]:
+        output = self.unet(image).squeeze(1)
+        std = std.unsqueeze(1).unsqueeze(2)
+        mean = mean.unsqueeze(1).unsqueeze(2)
+        reconstruction = output * std + mean
+        return {"reconstruction": reconstruction}
 
     def init_from_checkpoint(self, checkpoint: Dict[str, Any]) -> Optional[Any]:
-        self.unet.load_state_dict(checkpoint["state_dict"])
+        self.load_state_dict(checkpoint["state_dict"])
         return None
