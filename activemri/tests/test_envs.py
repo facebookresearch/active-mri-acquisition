@@ -272,7 +272,7 @@ class TestMICCAIEnv:
                 for key in ["norm", "max", "patient_id", "acquisition"]:
                     assert key in batch[3][batch_idx]
                 # file name
-                assert isinstance(batch[4][batch_idx], pathlib.Path)
+                assert isinstance(batch[4][batch_idx], str)
                 # slice_id
                 assert isinstance(batch[5][batch_idx], int)
             if i == 1:

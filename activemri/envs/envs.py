@@ -258,7 +258,7 @@ class ActiveMRIEnv(gym.Env):
         mask: torch.Tensor,
         target: torch.Tensor,
         attrs: List[Dict[str, Any]],
-        fname: List[pathlib.Path],
+        fname: List[str],
         slice_id: List[int],
     ) -> Tuple:
         return kspace, mask, target, attrs, fname, slice_id

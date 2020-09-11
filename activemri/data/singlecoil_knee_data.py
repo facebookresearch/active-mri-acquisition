@@ -95,7 +95,7 @@ class MICCAI2020Data(torch.utils.data.Dataset):
                 torch.zeros(kspace.shape[1]),
                 target,
                 dict(data.attrs),
-                fname,
+                fname.name,
                 slice_id,
             )
 

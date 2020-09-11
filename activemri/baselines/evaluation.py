@@ -39,7 +39,7 @@ def evaluate(
         if verbose:
             msg = ", ".join(
                 [
-                    f"({meta['fname'][i].name}, {meta['slice_id'][i]})"
+                    f"({meta['fname'][i]}, {meta['slice_id'][i]})"
                     for i in range(actual_batch_size)
                 ]
             )
