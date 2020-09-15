@@ -577,8 +577,9 @@ class DDQNTrainer:
                 self.load(policy_path)
                 self.logger.info(f"Loaded DQN policy found at {policy_path}.")
             else:
-                self.logger.error(f"No DQN policy found at {policy_path}.")
-                raise FileNotFoundError
+                self.logger.warning(f"No DQN policy found at {policy_path}.")
+                if self.options.dqn_only_test:
+                    raise FileNotFoundError
 
     def _train_dqn_policy(self):
         """ Trains the DQN policy. """
@@ -620,7 +621,7 @@ class DDQNTrainer:
             obs, meta = self.env.reset()
             msg = ", ".join(
                 [
-                    f"({meta['fname'][i].name}, {meta['slice_id'][i]})"
+                    f"({meta['fname'][i]}, {meta['slice_id'][i]})"
                     for i in range(len(meta["slice_id"]))
                 ]
             )
