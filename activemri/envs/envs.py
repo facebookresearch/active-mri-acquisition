@@ -27,6 +27,10 @@ import activemri.envs.masks
 import activemri.envs.util
 import activemri.models.singlecoil_knee_transforms as scknee_transforms
 
+DataInitFnReturnType = Tuple[
+    torch.utils.data.Dataset, torch.utils.data.Dataset, torch.utils.data.Dataset
+]
+
 
 # -----------------------------------------------------------------------------
 #                               DATA HANDLING
@@ -68,7 +72,7 @@ def _env_collate_fn(
 class DataHandler:
     def __init__(
         self,
-        data_source: Sized,
+        data_source: torch.utils.data.Dataset,
         seed: Optional[int],
         batch_size: int = 1,
         loops: int = 1,
@@ -82,7 +86,7 @@ class DataHandler:
 
     def _init_impl(
         self,
-        data_source: Sized,
+        data_source: torch.utils.data.Dataset,
         seed: Optional[int],
         batch_size: int = 1,
         loops: int = 1,
@@ -180,15 +184,13 @@ class ActiveMRIEnv(gym.Env):
     # Protected methods
     # -------------------------------------------------------------------------
     def _setup(
-        self,
-        cfg_filename: str,
-        data_init_func: Callable[[], Tuple[Sized, Sized, Sized]],
+        self, cfg_filename: str, data_init_func: Callable[[], DataInitFnReturnType],
     ):
         self._init_from_config_file(cfg_filename)
         self._setup_data_handlers(data_init_func)
 
     def _setup_data_handlers(
-        self, data_init_func: Callable[[], Tuple[Sized, Sized, Sized]]
+        self, data_init_func: Callable[[], DataInitFnReturnType],
     ):
         train_data, val_data, test_data = data_init_func()
         self._train_data_handler = DataHandler(
@@ -447,7 +449,7 @@ class MICCAI2020Env(ActiveMRIEnv):
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
-    def _create_dataset(self) -> Tuple[Sized, Sized, Sized]:
+    def _create_dataset(self) -> DataInitFnReturnType:
         root_path = pathlib.Path(self._data_location)
         train_path = root_path / "knee_singlecoil_train"
         val_and_test_path = root_path / "knee_singlecoil_val"
@@ -531,7 +533,7 @@ class SingleCoilKneeEnv(ActiveMRIEnv):
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
-    def _create_dataset(self) -> Tuple[Sized, Sized, Sized]:
+    def _create_dataset(self) -> DataInitFnReturnType:
         root_path = pathlib.Path(self._data_location)
         train_path = root_path / "knee_singlecoil_train"
         val_path = root_path / "knee_singlecoil_val"
@@ -594,7 +596,7 @@ class MultiCoilKneeEnv(ActiveMRIEnv):
     # -------------------------------------------------------------------------
     # Protected methods
     # -------------------------------------------------------------------------
-    def _create_dataset(self) -> Tuple[Sized, Sized, Sized]:
+    def _create_dataset(self) -> DataInitFnReturnType:
         root_path = pathlib.Path(self._data_location)
         train_path = root_path / "multicoil_train"
         val_path = root_path / "multicoil_val"
