@@ -7,7 +7,6 @@ import torch
 import activemri.envs.masks as masks
 
 
-# noinspection PyCallingNonCallable,PyUnresolvedReferences
 def test_update_masks_from_indices():
     mask_1 = torch.tensor([[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]], dtype=torch.uint8)
     mask_2 = torch.tensor([[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]], dtype=torch.uint8)

@@ -9,9 +9,10 @@ def update_masks_from_indices(
     masks: torch.Tensor, indices: Sequence[int]
 ) -> torch.Tensor:
     assert masks.shape[0] == len(indices)
+    new_masks = masks.clone()
     for i in range(len(indices)):
-        masks[i, ..., indices[i]] = 1
-    return masks
+        new_masks[i, ..., indices[i]] = 1
+    return new_masks
 
 
 def check_masks_complete(masks: torch.Tensor) -> List[bool]:

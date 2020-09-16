@@ -16,7 +16,7 @@ class Policy:
         return self.get_action(obs, **kwargs)
 
 
-from .simple_baselines import RandomPolicy, LowestIndexPolicy
+from .simple_baselines import RandomPolicy, LowestIndexPolicy, OneStepGreedyOracle
 from .cvpr19_evaluator import CVPR19Evaluator
 from .ddqn import DDQN, DDQNTrainer
 from .evaluation import evaluate
@@ -24,6 +24,7 @@ from .evaluation import evaluate
 __all__ = [
     "RandomPolicy",
     "LowestIndexPolicy",
+    "OneStepGreedyOracle",
     "CVPR19Evaluator",
     "DDQN",
     "DDQNTrainer",
