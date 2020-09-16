@@ -21,7 +21,6 @@ def check_masks_complete(masks: torch.Tensor) -> List[bool]:
     return done
 
 
-# TODO change code so that mask returns same num of dims as kspace
 def sample_low_frequency_mask(
     mask_args: Dict[str, Any],
     kspace_shapes: List[Tuple[int, ...]],
