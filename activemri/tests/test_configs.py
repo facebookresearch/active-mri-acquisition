@@ -11,7 +11,6 @@ def test_all_configs():
     configs_root = "configs/"
     for fname in os.listdir(configs_root):
         with open(os.path.join(configs_root, fname), "r") as f:
-            print(fname)
             cfg = json.load(f)
             assert "data_location" in cfg
             assert "device" in cfg

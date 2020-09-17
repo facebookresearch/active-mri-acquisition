@@ -13,44 +13,123 @@ class RandomPolicy(Policy):
         Returns one of the valid actions uniformly at random.
     """
 
-    def __init__(self):
+    def __init__(self, seed: Optional[int] = None):
         super().__init__()
+        self.rng = torch.Generator()
+        if seed:
+            self.rng.manual_seed(seed)
 
     def get_action(self, obs: Dict[str, Any], **_kwargs) -> List[int]:
         """ Returns a random action without replacement. """
         return (
-            (obs["mask"].logical_not().float() + 1e-6).multinomial(1).squeeze().tolist()
+            (obs["mask"].logical_not().float() + 1e-6)
+            .multinomial(1, generator=self.rng)
+            .squeeze()
+            .tolist()
         )
+
+
+class RandomLowBiasPolicy(Policy):
+    """ A policy representing random k-space selection biased towards low frequencies.
+    """
+
+    def __init__(
+        self, acceleration: float, centered: bool = True, seed: Optional[int] = None
+    ):
+        super().__init__()
+        self.acceleration = acceleration
+        self.centered = centered
+        self.rng = np.random.RandomState(seed)
+
+    def get_action(self, obs: Dict[str, Any], **_kwargs) -> List[int]:
+        """ Returns a random inactive k-space column with a bias to low frequencies.
+        """
+        mask = obs["mask"].squeeze().cpu().numpy()
+        new_mask = self._cartesian_mask(mask)
+        action = (new_mask - mask).argmax(axis=1)
+        return action.tolist()
+
+    @staticmethod
+    def _normal_pdf(length: int, sensitivity: float):
+        return np.exp(-sensitivity * (np.arange(length) - length / 2) ** 2)
+
+    def _cartesian_mask(self, current_mask: np.ndarray) -> np.ndarray:
+        batch_size, image_width = current_mask.shape
+        pdf_x = RandomLowBiasPolicy._normal_pdf(
+            image_width, 0.5 / (image_width / 10.0) ** 2
+        )
+        pdf_x = np.expand_dims(pdf_x, axis=0)
+        lmda = image_width / (2.0 * self.acceleration)
+        # add uniform distribution
+        pdf_x += lmda * 1.0 / image_width
+        # remove previously chosen columns
+        # note that pdf_x designed for centered masks
+        new_mask = (
+            np.fft.ifftshift(current_mask, axes=1)
+            if not self.centered
+            else current_mask.copy()
+        )
+        pdf_x = pdf_x * np.logical_not(new_mask)
+        # normalize probabilities and choose accordingly
+        pdf_x /= pdf_x.sum(axis=1, keepdims=True)
+        indices = [
+            self.rng.choice(image_width, 1, False, pdf_x[i]).item()
+            for i in range(batch_size)
+        ]
+        new_mask[range(batch_size), indices] = 1
+        if not self.centered:
+            new_mask = np.fft.ifftshift(new_mask, axes=1)
+        return new_mask
 
 
 class LowestIndexPolicy(Policy):
     """ A policy that represents low-to-high frequency k-space selection.
 
         Args:
-            alternate_sides(bool): If ``True`` the indices of selected actions will move
-                    symmetrically towards the center. For example, for an image with 100
-                    columns, the order will be 0, 99, 1, 98, 2, 97, ...
+            alternate_sides(bool): If ``True`` the indices of selected actions will alternate
+            between the sides of the mask. For example, for an image with 100
+            columns, and non-centered k-space, the order will be 0, 99, 1, 98, 2, 97, ..., etc.
+            For the same size and centered, the order will be 49, 50, 48, 51, 47, 52, ..., etc.
 
         Returns the lowest inactive column in the mask, corresponding to the lowest
         frequency assuming high frequencies are in the center of k-space.
     """
 
-    def __init__(self, alternate_sides: bool):
+    def __init__(
+        self, alternate_sides: bool, centered: bool = True,
+    ):
         super().__init__()
         self.alternate_sides = alternate_sides
+        self.centered = centered
         self.bottom_side = True
 
     def get_action(self, obs: Dict[str, Any], **_kwargs) -> List[int]:
         """ Returns a random action without replacement. """
-        mask = obs["mask"]
+        mask = obs["mask"].squeeze().cpu().numpy()
+        new_mask = self._get_new_mask(mask)
+        action = (new_mask - mask).argmax(axis=1)
+        return action.tolist()
+
+    def _get_new_mask(self, current_mask: np.ndarray) -> np.ndarray:
+        # The code below assumes mask in non centered
+        new_mask = (
+            np.fft.ifftshift(current_mask, axes=1)
+            if self.centered
+            else current_mask.copy()
+        )
         if self.bottom_side:
-            idx = torch.arange(mask.shape[1], 0, -1)
+            idx = np.arange(new_mask.shape[1], 0, -1)
         else:
-            idx = torch.arange(mask.shape[1])
+            idx = np.arange(new_mask.shape[1])
         if self.alternate_sides:
             self.bottom_side = not self.bottom_side
         # Next line finds the first non-zero index (from edge to center) and returns it
-        return (mask.logical_not() * idx).argmax(dim=1).int().tolist()
+        indices = (np.logical_not(new_mask) * idx).argmax(axis=1)
+        indices = np.expand_dims(indices, axis=1)
+        new_mask[range(new_mask.shape[0]), indices] = 1
+        if self.centered:
+            new_mask = np.fft.ifftshift(new_mask, axes=1)
+        return new_mask
 
 
 class OneStepGreedyOracle(Policy):

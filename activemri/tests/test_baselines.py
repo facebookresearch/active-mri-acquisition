@@ -27,7 +27,7 @@ def test_random():
 
 
 def test_low_to_high_no_alternate():
-    policy = baselines.LowestIndexPolicy(alternate_sides=False)
+    policy = baselines.LowestIndexPolicy(alternate_sides=False, centered=False)
 
     mask = torch.zeros(2, 10)
     mask[0, 0::2] = 1
@@ -45,7 +45,7 @@ def test_low_to_high_no_alternate():
 
 
 def test_low_to_high_alternate():
-    policy = baselines.LowestIndexPolicy(alternate_sides=True)
+    policy = baselines.LowestIndexPolicy(alternate_sides=True, centered=False)
 
     mask = torch.zeros(2, 10)
     mask[0, 0::2] = 1
@@ -53,6 +53,25 @@ def test_low_to_high_alternate():
     obs = {"mask": mask}
 
     order = [[1, 9, 3, 7, 5], [0, 8, 2, 6, 4]]
+    for i in range(5):
+        action = policy(obs)
+        assert len(action) == 2
+        assert action[0] == order[0][i]
+        assert action[1] == order[1][i]
+        obs["mask"][:, action] = 1
+
+    assert obs["mask"].sum().item() == 20
+
+
+def test_low_to_high_alternate_centered():
+    policy = baselines.LowestIndexPolicy(alternate_sides=True, centered=True)
+
+    mask = torch.zeros(2, 10)
+    mask[0, 0::2] = 1
+    mask[1, 1::2] = 1
+    obs = {"mask": mask}
+
+    order = [[5, 3, 7, 1, 9], [6, 4, 8, 2, 0]]
     for i in range(5):
         action = policy(obs)
         assert len(action) == 2

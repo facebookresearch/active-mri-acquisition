@@ -14,7 +14,6 @@ def import_object_from_str(classname: str):
 
 def compute_ssim(xs: torch.Tensor, ys: torch.Tensor) -> np.ndarray:
     ssims = []
-    print(xs.shape, ys.shape)
     for i in range(xs.shape[0]):
         ssim = skimage.metrics.structural_similarity(
             xs[i].cpu().numpy(),
