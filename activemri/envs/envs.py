@@ -357,6 +357,31 @@ class ActiveMRIEnv(gym.Env):
 
         return {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
 
+    @staticmethod
+    def _render_arrays(
+        ground_truth: np.ndarray, reconstruction: np.ndarray, mask: np.ndarray
+    ) -> List[np.ndarray]:
+        batch_size, img_height, img_width = ground_truth.shape
+        frames = []
+        for i in range(batch_size):
+            scale = np.quantile(ground_truth[i], 0.75)
+            mask_i = np.tile(mask[i], (1, img_height, 1)) * scale
+
+            pad = 30
+            mask_begin = pad
+            mask_end = mask_begin + mask.shape[-1]
+            gt_begin = mask_end + pad
+            gt_end = gt_begin + img_width
+            rec_begin = gt_end + pad
+            rec_end = rec_begin + img_width
+            frame = 0.4 * scale * np.ones((img_height, rec_end + pad))
+            frame[:, mask_begin:mask_end] = mask_i
+            frame[:, gt_begin:gt_end] = ground_truth[i]
+            frame[:, rec_begin:rec_end] = reconstruction[i]
+
+            frames.append(frame)
+        return frames
+
     # -------------------------------------------------------------------------
     # Public methods
     # -------------------------------------------------------------------------
@@ -537,17 +562,17 @@ class MICCAI2020Env(ActiveMRIEnv):
         return obs, meta
 
     def render(self, mode="human"):
-        img_tensor = self._current_reconstruction_numpy.cpu().unsqueeze(0)
-        img_tensor = activemri.data.transforms.to_magnitude(img_tensor, dim=3)
-        img_tensor = activemri.data.transforms.center_crop(
-            img_tensor, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
+        gt = self._current_ground_truth.cpu().numpy()
+        rec = self._current_reconstruction_numpy
+
+        gt = activemri.data.transforms.center_crop(
+            (gt ** 2).sum(axis=3) ** 0.5, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
         )
-        img_tensor = img_tensor.view(self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE, 1)
-        img = img_tensor.numpy()
-        t_min = img.min()
-        t_max = img.max()
-        img = 255 * (img - t_min) / (t_max - t_min)
-        return img.astype(np.uint8)
+        rec = activemri.data.transforms.center_crop(
+            (rec ** 2).sum(axis=3) ** 0.5,
+            (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE),
+        )
+        return ActiveMRIEnv._render_arrays(gt, rec, self._current_mask.cpu().numpy())
 
 
 class FastMRIEnv(ActiveMRIEnv):
@@ -602,30 +627,11 @@ class FastMRIEnv(ActiveMRIEnv):
         return train_data, val_data, test_data
 
     def render(self, mode="human"):
-        gt = self._current_ground_truth.cpu().numpy()
-        rec = self._current_reconstruction_numpy
-
-        frames = []
-        for i in range(gt.shape[0]):
-            scale = np.quantile(gt[i], 0.75)
-            mask = (
-                self._current_mask[i].cpu().repeat(self.img_height, 1).numpy() * scale
-            )
-
-            pad = 30
-            mask_begin = pad
-            mask_end = mask_begin + mask.shape[-1]
-            gt_begin = mask_end + pad
-            gt_end = gt_begin + self.img_width
-            rec_begin = gt_end + pad
-            rec_end = rec_begin + self.img_width
-            frame = 0.4 * scale * np.ones((self.img_height, rec_end + pad))
-            frame[:, mask_begin:mask_end] = mask
-            frame[:, gt_begin:gt_end] = gt[i]
-            frame[:, rec_begin:rec_end] = rec[i]
-
-            frames.append(frame)
-        return frames
+        return ActiveMRIEnv._render_arrays(
+            self._current_ground_truth.cpu().numpy(),
+            self._current_reconstruction_numpy,
+            self._current_mask.cpu().numpy(),
+        )
 
 
 class SingleCoilKneeEnv(FastMRIEnv):

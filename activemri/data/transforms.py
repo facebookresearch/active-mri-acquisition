@@ -1,10 +1,13 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import fastmri
 import fastmri.data.transforms as fastmri_transforms
+import numpy as np
 import torch
 
 import activemri.data.singlecoil_knee_data as scknee_data
+
+TensorType = Union[np.ndarray, torch.Tensor]
 
 
 def dicom_to_0_1_range(tensor: torch.Tensor):
@@ -23,7 +26,7 @@ def to_magnitude(tensor: torch.Tensor, dim: int) -> torch.Tensor:
     return (tensor ** 2).sum(dim=dim) ** 0.5
 
 
-def center_crop(x: torch.Tensor, shape: Tuple[int, int]) -> torch.Tensor:
+def center_crop(x: TensorType, shape: Tuple[int, int]) -> TensorType:
     # Expects tensor to be (bs, H, W) and shape to be 2-dim
     assert len(x.shape) == 3
     assert 0 < shape[0] <= x.shape[1]
