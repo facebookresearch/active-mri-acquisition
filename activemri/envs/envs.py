@@ -1,4 +1,3 @@
-import abc
 import functools
 import json
 import pathlib
@@ -318,7 +317,9 @@ class ActiveMRIEnv(gym.Env):
         reconstructor_input = None  # de-referencing GPU tensors
 
         score = self._compute_score_given_tensors(
-            reconstruction, self._current_ground_truth
+            *self._process_tensors_for_score_fns(
+                reconstruction, self._current_ground_truth
+            )
         )
 
         obs = {
@@ -339,11 +340,22 @@ class ActiveMRIEnv(gym.Env):
         self._steps_since_reset = 0
         self._did_reset = False
 
-    @abc.abstractmethod
-    def _compute_score_given_tensors(
+    # noinspection PyMethodMayBeStatic
+    def _process_tensors_for_score_fns(
         self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        return reconstruction, ground_truth
+
+    @staticmethod
+    def _compute_score_given_tensors(
+        reconstruction: torch.Tensor, ground_truth: torch.Tensor
     ) -> Dict[str, np.ndarray]:
-        pass
+        mse = activemri.envs.util.compute_mse(reconstruction, ground_truth)
+        nmse = activemri.envs.util.compute_nmse(reconstruction, ground_truth)
+        ssim = activemri.envs.util.compute_ssim(reconstruction, ground_truth)
+        psnr = activemri.envs.util.compute_psnr(reconstruction, ground_truth)
+
+        return {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
 
     # -------------------------------------------------------------------------
     # Public methods
@@ -453,9 +465,9 @@ class ActiveMRIEnv(gym.Env):
         self._current_data_handler = self._test_data_handler
         self._clear_cache_and_unset_did_reset()
 
-    @abc.abstractmethod
-    def score_keys(self) -> List[str]:
-        pass
+    @staticmethod
+    def score_keys() -> List[str]:
+        return ["mse", "nmse", "ssim", "psnr"]
 
 
 # -----------------------------------------------------------------------------
@@ -499,9 +511,9 @@ class MICCAI2020Env(ActiveMRIEnv):
         )
         return train_data, val_data, test_data
 
-    def _compute_score_given_tensors(
+    def _process_tensors_for_score_fns(
         self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
-    ) -> Dict[str, np.ndarray]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Compute magnitude (for metrics)
         reconstruction = scknee_transforms.to_magnitude(reconstruction, dim=3)
         ground_truth = scknee_transforms.to_magnitude(ground_truth, dim=3)
@@ -512,13 +524,7 @@ class MICCAI2020Env(ActiveMRIEnv):
         ground_truth = scknee_transforms.center_crop(
             ground_truth, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
         )
-
-        mse = activemri.envs.util.compute_mse(reconstruction, ground_truth)
-        nmse = activemri.envs.util.compute_nmse(reconstruction, ground_truth)
-        ssim = activemri.envs.util.compute_ssim(reconstruction, ground_truth)
-        psnr = activemri.envs.util.compute_psnr(reconstruction, ground_truth)
-
-        return {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
+        return reconstruction, ground_truth
 
     # -------------------------------------------------------------------------
     # Public methods
@@ -542,9 +548,6 @@ class MICCAI2020Env(ActiveMRIEnv):
         t_max = img.max()
         img = 255 * (img - t_min) / (t_max - t_min)
         return img.astype(np.uint8)
-
-    def score_keys(self) -> List[str]:
-        return ["mse", "nmse", "ssim", "psnr"]
 
 
 class FastMRIEnv(ActiveMRIEnv):
@@ -597,20 +600,6 @@ class FastMRIEnv(ActiveMRIEnv):
             ),
         )
         return train_data, val_data, test_data
-
-    # TODO replace for the functions used in fastmri
-    def _compute_score_given_tensors(
-        self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
-    ) -> Dict[str, np.ndarray]:
-        mse = activemri.envs.util.compute_mse(reconstruction, ground_truth)
-        nmse = activemri.envs.util.compute_nmse(reconstruction, ground_truth)
-        ssim = activemri.envs.util.compute_ssim(reconstruction, ground_truth)
-        psnr = activemri.envs.util.compute_psnr(reconstruction, ground_truth)
-
-        return {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
-
-    def score_keys(self) -> List[str]:
-        return ["mse", "nmse", "ssim", "psnr"]
 
     def render(self, mode="human"):
         gt = self._current_ground_truth.cpu().numpy()

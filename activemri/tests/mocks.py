@@ -1,5 +1,5 @@
 import json
-from typing import List, Dict
+from typing import Dict
 
 import numpy as np
 import torch
@@ -119,14 +119,7 @@ class Reconstructor:
 
 class MRIEnv(envs.ActiveMRIEnv):
     def __init__(
-        self,
-        batch_size,
-        loops_train,
-        num_train=1,
-        num_val=1,
-        num_test=1,
-        score_fn=None,
-        seed=None,
+        self, batch_size, loops_train, num_train=1, num_val=1, num_test=1, seed=None,
     ):
         super().__init__(32, 64, batch_size=batch_size, seed=seed)
         self._num_loops_train_data = loops_train
@@ -138,13 +131,9 @@ class MRIEnv(envs.ActiveMRIEnv):
             self._tensor_size, num_train, num_val, num_test
         )
         self._setup_data_handlers(data_init_fn)
-        self._score_fn = score_fn
 
+    @staticmethod
     def _compute_score_given_tensors(
-        self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
+        reconstruction: torch.Tensor, ground_truth: torch.Tensor
     ) -> Dict[str, np.ndarray]:
-        if self._score_fn:
-            return self._score_fn(reconstruction, ground_truth)
-
-    def score_keys(self) -> List[str]:
-        pass
+        return {"ssim": (reconstruction - ground_truth).abs().sum().numpy()}

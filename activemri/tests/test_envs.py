@@ -1,5 +1,4 @@
 import functools
-import pathlib
 
 import numpy as np
 
@@ -94,12 +93,7 @@ class TestActiveMRIEnv:
         # sum |reconstruction - gt| = D^2 - 3D for first element of batch,
         # and = D^2 - 2D for second element.
 
-        def compute_score(x, y):
-            return {"ssim": (x - y).abs().sum()}
-
-        env = mocks.MRIEnv(
-            batch_size=2, loops_train=1, num_train=2, score_fn=compute_score
-        )
+        env = mocks.MRIEnv(batch_size=2, loops_train=1, num_train=2)
         obs, _ = env.reset()
         # env works with shape (batch, height, width, {real/img})
         assert tuple(obs["reconstruction"].shape) == (
@@ -145,6 +139,8 @@ class TestActiveMRIEnv:
         env._num_loops_train_data = 3
         env._init_from_config_dict(mocks.config_dict)
 
+        env._compute_score_given_tensors = lambda x, y: {"mock": 0}
+
         num_train = 10
         tensor_size = env._cfg["mask"]["args"]["size"]
 
@@ -159,9 +155,9 @@ class TestActiveMRIEnv:
                 assert cnt_seen == num_train * env._num_loops_train_data
                 break
             slice_ids = meta["slice_id"]
-            for id in slice_ids:
-                assert id < num_train
-                seen[id] = seen[id] + 1
+            for slice_id in slice_ids:
+                assert slice_id < num_train
+                seen[slice_id] = seen[slice_id] + 1
         for i in range(num_train):
             assert seen[i] == env._num_loops_train_data
 
@@ -187,8 +183,8 @@ class TestActiveMRIEnv:
             obs, meta = env.reset()
             if not obs:
                 break
-            for id in meta["slice_id"]:
-                seen_train[id] = seen_train[id] + 1
+            for slice_id in meta["slice_id"]:
+                seen_train[slice_id] = seen_train[slice_id] + 1
 
             env.set_val()
             for j in range(num_val + 1):
@@ -198,8 +194,8 @@ class TestActiveMRIEnv:
                     assert cnt_seen == (i + 1) * num_val
                     break
                 assert j < num_val
-                for id in meta["slice_id"]:
-                    seen_val[id] = seen_val[id] + 1
+                for slice_id in meta["slice_id"]:
+                    seen_val[slice_id] = seen_val[slice_id] + 1
 
             # With num_test - 1 we check that next call starts from 0 index again
             # even if not all images visited. One of the elements in test set should have
@@ -209,8 +205,8 @@ class TestActiveMRIEnv:
             for j in range(num_test - 1):
                 obs, meta = env.reset()
                 assert obs
-                for id in meta["slice_id"]:
-                    seen_test[id] = seen_test[id] + 1
+                for slice_id in meta["slice_id"]:
+                    seen_test[slice_id] = seen_test[slice_id] + 1
 
         for i in range(num_train):
             assert seen_train[i] == env._num_loops_train_data
