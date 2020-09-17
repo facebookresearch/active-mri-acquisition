@@ -22,9 +22,9 @@ import torch
 import torch.utils.data
 
 import activemri.data.singlecoil_knee_data as scknee_data
+import activemri.data.transforms
 import activemri.envs.masks
 import activemri.envs.util
-import activemri.models.singlecoil_knee_transforms as scknee_transforms
 
 DataInitFnReturnType = Tuple[
     torch.utils.data.Dataset, torch.utils.data.Dataset, torch.utils.data.Dataset
@@ -515,13 +515,13 @@ class MICCAI2020Env(ActiveMRIEnv):
         self, reconstruction: torch.Tensor, ground_truth: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Compute magnitude (for metrics)
-        reconstruction = scknee_transforms.to_magnitude(reconstruction, dim=3)
-        ground_truth = scknee_transforms.to_magnitude(ground_truth, dim=3)
+        reconstruction = activemri.data.transforms.to_magnitude(reconstruction, dim=3)
+        ground_truth = activemri.data.transforms.to_magnitude(ground_truth, dim=3)
 
-        reconstruction = scknee_transforms.center_crop(
+        reconstruction = activemri.data.transforms.center_crop(
             reconstruction, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
         )
-        ground_truth = scknee_transforms.center_crop(
+        ground_truth = activemri.data.transforms.center_crop(
             ground_truth, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
         )
         return reconstruction, ground_truth
@@ -538,8 +538,8 @@ class MICCAI2020Env(ActiveMRIEnv):
 
     def render(self, mode="human"):
         img_tensor = self._current_reconstruction_numpy.cpu().unsqueeze(0)
-        img_tensor = scknee_transforms.to_magnitude(img_tensor, dim=3)
-        img_tensor = scknee_transforms.center_crop(
+        img_tensor = activemri.data.transforms.to_magnitude(img_tensor, dim=3)
+        img_tensor = activemri.data.transforms.center_crop(
             img_tensor, (self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE)
         )
         img_tensor = img_tensor.view(self.CENTER_CROP_SIZE, self.CENTER_CROP_SIZE, 1)

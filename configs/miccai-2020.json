@@ -13,7 +13,7 @@
       "use_deconv": true
     },
     "checkpoint_path": "saved_models/miccai2020_reconstructor_raw_normal.pth",
-    "transform": "activemri.models.singlecoil_knee_transforms.raw_transform_miccai2020"
+    "transform": "activemri.data.transforms.raw_transform_miccai2020"
   },
   "mask": {
     "function": "activemri.envs.masks.sample_low_frequency_mask",

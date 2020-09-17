@@ -10,7 +10,7 @@
       "drop_prob": 0.0
     },
     "checkpoint_path": "saved_models/multicoil_knee_unet.pth",
-    "transform": "activemri.models.singlecoil_knee_transforms.fastmri_unet_transform_multicoil"
+    "transform": "activemri.data.transforms.fastmri_unet_transform_multicoil"
   },
   "mask": {
     "function": "activemri.envs.masks.sample_low_frequency_mask",
