@@ -1,7 +1,7 @@
 {
   "data_location": "/private/home/lep/fastmri",
   "reconstructor": {
-    "cls": "activemri.models.miccai2020_reconstructor.MICCAI2020Reconstructor",
+    "cls": "activemri.models.cvpr19_reconstructor.CVPR19Reconstructor",
     "options": {
       "number_of_filters": 256,
       "dropout_probability": 0.2,

@@ -3,10 +3,10 @@ from typing import Any, Dict, List
 import torch
 
 from . import Policy
-import miccai_2020.models.evaluator
+import cvpr19_models.models.evaluator
 
 
-# This is just a wrapper for the model in miccai_2020 folder
+# This is just a wrapper for the model in cvpr19_models folder
 # noinspection PyAbstractClass
 # TODO fix evaluator height
 class CVPR19Evaluator(Policy):
@@ -19,7 +19,7 @@ class CVPR19Evaluator(Policy):
             evaluator_checkpoint is not None
             and evaluator_checkpoint["evaluator"] is not None
         )
-        self.evaluator = miccai_2020.models.evaluator.EvaluatorNetwork(
+        self.evaluator = cvpr19_models.models.evaluator.EvaluatorNetwork(
             number_of_filters=evaluator_checkpoint[
                 "options"
             ].number_of_evaluator_filters,

@@ -67,7 +67,7 @@ class RawSliceData(torch.utils.data.Dataset):
 
         if custom_split is not None:
             split_info = []
-            with open(f"data/splits/raw_{custom_split}.txt") as f:
+            with open(f"cvpr19_models/data/splits/raw_{custom_split}.txt") as f:
                 for line in f:
                     split_info.append(line.rsplit("\n")[0])
             files = [f for f in files if f.name in split_info]

@@ -23,7 +23,7 @@ from . import Policy
 from . import RandomPolicy
 import activemri.envs.envs as mri_envs
 
-import miccai_2020.models.evaluator
+import cvpr19_models.models.evaluator
 
 
 def _encode_obs_dict(obs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -138,7 +138,7 @@ class SimpleMLP(nn.Module):
 class EvaluatorBasedValueNetwork(nn.Module):
     def __init__(self, image_width, mask_embed_dim):
         super(EvaluatorBasedValueNetwork, self).__init__()
-        self.evaluator = miccai_2020.models.evaluator.EvaluatorNetwork(
+        self.evaluator = cvpr19_models.models.evaluator.EvaluatorNetwork(
             number_of_filters=128,
             number_of_conv_layers=4,
             use_sigmoid=False,

@@ -87,4 +87,4 @@ python trainer.py \
     --gamma ${GAMMA} \
     --lambda_gan 0.1 \
     --add_mask_eval \
-    ${EXTRA_OPTIONS}
+    "${EXTRA_OPTIONS}"

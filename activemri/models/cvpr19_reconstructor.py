@@ -3,12 +3,12 @@ from typing import Any, Dict
 import torch
 
 import activemri.models
-import miccai_2020.models.reconstruction
+import cvpr19_models.models.reconstruction
 
 
-# This is just a wrapper for the model in miccai_2020 folder
+# This is just a wrapper for the model in cvpr19_models folder
 # noinspection PyAbstractClass
-class MICCAI2020Reconstructor(activemri.models.Reconstructor):
+class CVPR19Reconstructor(activemri.models.Reconstructor):
     def __init__(
         self,
         number_of_encoder_input_channels: int = 2,
@@ -24,7 +24,7 @@ class MICCAI2020Reconstructor(activemri.models.Reconstructor):
         use_deconv: bool = True,
     ):
         super().__init__()
-        self.reconstructor = miccai_2020.models.reconstruction.ReconstructorNetwork(
+        self.reconstructor = cvpr19_models.models.reconstruction.ReconstructorNetwork(
             number_of_encoder_input_channels=number_of_encoder_input_channels,
             number_of_decoder_output_channels=number_of_decoder_output_channels,
             number_of_filters=number_of_filters,
