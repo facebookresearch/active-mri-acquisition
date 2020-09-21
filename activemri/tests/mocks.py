@@ -127,7 +127,9 @@ class MRIEnv(envs.ActiveMRIEnv):
         num_test=1,
         seed=None,
     ):
-        super().__init__(32, 64, num_parallel_episodes=num_parallel_episodes, seed=seed)
+        super().__init__(
+            (32, 64), num_parallel_episodes=num_parallel_episodes, seed=seed
+        )
         self._num_loops_train_data = loops_train
         self._init_from_config_dict(config_dict)
 

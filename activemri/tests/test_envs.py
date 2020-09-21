@@ -53,10 +53,10 @@ def test_data_handler():
         assert cnt[x] == loops
 
 
-# noinspection PyProtectedMember
+# noinspection PyProtectedMember,PyClassHasNoInit
 class TestActiveMRIEnv:
     def test_init_from_config_dict(self):
-        env = envs.ActiveMRIEnv(32, 64)
+        env = envs.ActiveMRIEnv((32, 64))
         env._init_from_config_dict(mocks.config_dict)
         assert env.reward_metric == "ssim"
         assert type(env._reconstructor) == mocks.Reconstructor
@@ -75,10 +75,10 @@ class TestActiveMRIEnv:
         assert mask.shape == (batch_size, env._cfg["mask"]["args"]["size"])
 
     def test_init_sets_action_space(self):
-        env = envs.ActiveMRIEnv(32, 64)
-        for i in range(32):
+        env = envs.ActiveMRIEnv((32, 64))
+        for i in range(64):
             assert env.action_space.contains(i)
-        assert env.action_space.n == 32
+        assert env.action_space.n == 64
 
     def test_reset_and_step(self):
         # the mock environment is set up to use mocks.Reconstructor
@@ -135,7 +135,7 @@ class TestActiveMRIEnv:
         assert done == [True, True]
 
     def test_training_loop_ends(self):
-        env = envs.ActiveMRIEnv(32, 64, num_parallel_episodes=3)
+        env = envs.ActiveMRIEnv((32, 64), num_parallel_episodes=3)
         env._num_loops_train_data = 3
         env._init_from_config_dict(mocks.config_dict)
 
@@ -148,7 +148,7 @@ class TestActiveMRIEnv:
         env._setup_data_handlers(data_init_fn)
 
         seen = dict([(x, 0) for x in range(num_train)])
-        for i in range(1000):
+        for _ in range(1000):
             obs, meta = env.reset()
             if not obs:
                 cnt_seen = functools.reduce(lambda x, y: x + y, seen.values())
@@ -202,7 +202,7 @@ class TestActiveMRIEnv:
             # never been seen (data_handler will permute the indices so we don't know
             # which index it will be)
             env.set_test()
-            for j in range(num_test - 1):
+            for _ in range(num_test - 1):
                 obs, meta = env.reset()
                 assert obs
                 for slice_id in meta["slice_id"]:
@@ -230,7 +230,7 @@ class TestActiveMRIEnv:
 
         def get_current_order():
             order = []
-            for i in range(num_train):
+            for _ in range(num_train):
                 obs, _ = env.reset()
                 order.append(obs["reconstruction"].sum().int().item())
             return order
@@ -291,7 +291,7 @@ class TestMICCAIEnv:
         assert obs["mask"].shape == (self.env.num_parallel_episodes, 368)
 
 
-# noinspection PyProtectedMember
+# noinspection PyProtectedMember,PyClassHasNoInit
 class TestSingleCoilKneeEnv:
     env = envs.SingleCoilKneeEnv()
 

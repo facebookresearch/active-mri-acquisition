@@ -15,8 +15,8 @@ import torch.utils.data
 class MICCAI2020Data(torch.utils.data.Dataset):
     # This is the same as fastMRI singlecoil_knee, except we provide a custom test split
     # and also normalize images by the mean norm of the k-space over training data
-    IMAGE_WIDTH = 368
-    IMAGE_HEIGHT = 640
+    KSPACE_WIDTH = 368
+    KSPACE_HEIGHT = 640
     START_PADDING = 166
     END_PADDING = 202
     CENTER_CROP_SIZE = 320

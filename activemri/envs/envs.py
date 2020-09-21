@@ -135,7 +135,7 @@ class DataHandler:
 #                           BASE ACTIVE MRI ENV
 # -----------------------------------------------------------------------------
 
-# TODO remove img_width, img_height. Make sure no other code is using this (DDQN uses it)
+
 class ActiveMRIEnv(gym.Env):
     """ Base class for all active MRI acquisition environments.
 
@@ -143,14 +143,16 @@ class ActiveMRIEnv(gym.Env):
     The class is not to be used directly, but rather one of its subclasses should be
     instantiated. Subclasses of `ActiveMRIEnv` are responsible for data initialization
     and specifying configuration options for the environment.
+
+    Args:
+
     """
 
     _num_loops_train_data = 100000
 
     def __init__(
         self,
-        img_width: int,
-        img_height: int,
+        kspace_shape: Tuple[int, int],
         num_parallel_episodes: int = 1,
         budget: Optional[int] = None,
         seed: Optional[int] = None,
@@ -167,20 +169,17 @@ class ActiveMRIEnv(gym.Env):
         self.num_parallel_episodes = num_parallel_episodes
         self.budget = budget
 
-        self.action_space = gym.spaces.Discrete(img_width)
-
         self._seed = seed
         self._rng = np.random.RandomState(seed)
         self.reward_metric = "mse"
 
         # Init from provided configuration
-        self.img_width = img_width
-        self.img_height = img_height
+        self.kspace_height, self.kspace_width = kspace_shape
 
         # Gym init
         # Observation is a dictionary
         self.observation_space = None
-        self.action_space = gym.spaces.Discrete(img_width)
+        self.action_space = gym.spaces.Discrete(self.kspace_width)
 
         # This is changed by `set_training()`, `set_val()`, `set_test()`
         self._current_data_handler = None
@@ -569,16 +568,14 @@ class ActiveMRIEnv(gym.Env):
 #                             CUSTOM ENVIRONMENTS
 # -----------------------------------------------------------------------------
 class MICCAI2020Env(ActiveMRIEnv):
-    IMAGE_WIDTH = scknee_data.MICCAI2020Data.IMAGE_WIDTH
-    IMAGE_HEIGHT = scknee_data.MICCAI2020Data.IMAGE_HEIGHT
+    KSPACE_WIDTH = scknee_data.MICCAI2020Data.KSPACE_WIDTH
     START_PADDING = scknee_data.MICCAI2020Data.START_PADDING
     END_PADDING = scknee_data.MICCAI2020Data.END_PADDING
     CENTER_CROP_SIZE = scknee_data.MICCAI2020Data.CENTER_CROP_SIZE
 
     def __init__(self, num_parallel_episodes: int = 1, budget: Optional[int] = None):
         super().__init__(
-            self.IMAGE_WIDTH,
-            self.IMAGE_HEIGHT,
+            (640, self.KSPACE_WIDTH),
             num_parallel_episodes=num_parallel_episodes,
             budget=budget,
         )
@@ -593,19 +590,19 @@ class MICCAI2020Env(ActiveMRIEnv):
         val_and_test_path = root_path / "knee_singlecoil_val"
 
         train_data = scknee_data.MICCAI2020Data(
-            train_path, ActiveMRIEnv._void_transform, num_cols=self.IMAGE_WIDTH,
+            train_path, ActiveMRIEnv._void_transform, num_cols=self.KSPACE_WIDTH,
         )
         val_data = scknee_data.MICCAI2020Data(
             val_and_test_path,
             ActiveMRIEnv._void_transform,
             custom_split="val",
-            num_cols=self.IMAGE_WIDTH,
+            num_cols=self.KSPACE_WIDTH,
         )
         test_data = scknee_data.MICCAI2020Data(
             val_and_test_path,
             ActiveMRIEnv._void_transform,
             custom_split="test",
-            num_cols=self.IMAGE_WIDTH,
+            num_cols=self.KSPACE_WIDTH,
         )
         return train_data, val_data, test_data
 
@@ -660,7 +657,9 @@ class FastMRIEnv(ActiveMRIEnv):
     ):
         assert challenge in ["singlecoil", "multicoil"]
         super().__init__(
-            320, 320, num_parallel_episodes=num_parallel_episodes, budget=budget
+            (640, np.max(num_cols)),
+            num_parallel_episodes=num_parallel_episodes,
+            budget=budget,
         )
         self.num_cols = num_cols
         self.dataset_name = dataset_name

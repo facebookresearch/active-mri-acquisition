@@ -478,7 +478,7 @@ class DDQNTrainer:
     def __init__(self, options, env: mri_envs.ActiveMRIEnv, device: torch.device):
         self.options = options
         self.env = env
-        self.options.image_width = self.env.img_width
+        self.options.image_width = self.env.kspace_width
         self.steps = 0
         self.episode = 0
         self.best_test_score = -np.inf
@@ -518,7 +518,7 @@ class DDQNTrainer:
 
         # ------- Create replay buffer and networks ------
         # See _encode_obs_dict() for tensor format
-        self.obs_shape = (2, self.env.img_height + 2, self.env.img_width)
+        self.obs_shape = (2, self.env.kspace_height + 2, self.env.kspace_width)
         self.replay_memory = replay_buffer.ReplayMemory(
             options.mem_capacity,
             self.obs_shape,
