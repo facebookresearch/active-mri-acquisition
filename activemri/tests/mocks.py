@@ -119,9 +119,15 @@ class Reconstructor:
 
 class MRIEnv(envs.ActiveMRIEnv):
     def __init__(
-        self, batch_size, loops_train, num_train=1, num_val=1, num_test=1, seed=None,
+        self,
+        num_parallel_episodes,
+        loops_train,
+        num_train=1,
+        num_val=1,
+        num_test=1,
+        seed=None,
     ):
-        super().__init__(32, 64, batch_size=batch_size, seed=seed)
+        super().__init__(32, 64, num_parallel_episodes=num_parallel_episodes, seed=seed)
         self._num_loops_train_data = loops_train
         self._init_from_config_dict(config_dict)
 

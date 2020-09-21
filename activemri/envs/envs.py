@@ -151,7 +151,7 @@ class ActiveMRIEnv(gym.Env):
         self,
         img_width: int,
         img_height: int,
-        batch_size: int = 1,
+        num_parallel_episodes: int = 1,
         budget: Optional[int] = None,
         seed: Optional[int] = None,
     ):
@@ -164,7 +164,7 @@ class ActiveMRIEnv(gym.Env):
         self._val_data_handler = None
         self._test_data_handler = None
         self._device = torch.device("cpu")
-        self.batch_size = batch_size
+        self.num_parallel_episodes = num_parallel_episodes
         self.budget = budget
 
         self.action_space = gym.spaces.Discrete(img_width)
@@ -212,21 +212,21 @@ class ActiveMRIEnv(gym.Env):
         self._train_data_handler = DataHandler(
             train_data,
             self._seed,
-            batch_size=self.batch_size,
+            batch_size=self.num_parallel_episodes,
             loops=self._num_loops_train_data,
             collate_fn=_env_collate_fn,
         )
         self._val_data_handler = DataHandler(
             val_data,
             self._seed + 1 if self._seed else None,
-            batch_size=self.batch_size,
+            batch_size=self.num_parallel_episodes,
             loops=1,
             collate_fn=_env_collate_fn,
         )
         self._test_data_handler = DataHandler(
             test_data,
             self._seed + 2 if self._seed else None,
-            batch_size=self.batch_size,
+            batch_size=self.num_parallel_episodes,
             loops=1,
             collate_fn=_env_collate_fn,
         )
@@ -460,8 +460,7 @@ class ActiveMRIEnv(gym.Env):
         }
         return obs, meta
 
-    # TODO look how to handle the batch_size=1 special case
-    # TODO change batch_size by parallel episodes
+    # TODO look how to handle the num_parallel_episodes=1 special case
     def step(
         self, action: Union[int, Sequence[int]]
     ) -> Tuple[Dict[str, Any], np.ndarray, List[bool], Dict]:
@@ -497,7 +496,7 @@ class ActiveMRIEnv(gym.Env):
                 "Attempting to call env.step() before calling env.reset()."
             )
         if isinstance(action, int):
-            action = [action for _ in range(self.batch_size)]
+            action = [action for _ in range(self.num_parallel_episodes)]
         self._current_mask = activemri.envs.masks.update_masks_from_indices(
             self._current_mask, action
         )
@@ -525,7 +524,7 @@ class ActiveMRIEnv(gym.Env):
                 "Attempting to call env.try_action() before calling env.reset()."
             )
         if isinstance(action, int):
-            action = [action for _ in range(self.batch_size)]
+            action = [action for _ in range(self.num_parallel_episodes)]
         new_mask = activemri.envs.masks.update_masks_from_indices(
             self._current_mask, action
         )
@@ -576,9 +575,12 @@ class MICCAI2020Env(ActiveMRIEnv):
     END_PADDING = scknee_data.MICCAI2020Data.END_PADDING
     CENTER_CROP_SIZE = scknee_data.MICCAI2020Data.CENTER_CROP_SIZE
 
-    def __init__(self, batch_size: int = 1, budget: Optional[int] = None):
+    def __init__(self, num_parallel_episodes: int = 1, budget: Optional[int] = None):
         super().__init__(
-            self.IMAGE_WIDTH, self.IMAGE_HEIGHT, batch_size=batch_size, budget=budget
+            self.IMAGE_WIDTH,
+            self.IMAGE_HEIGHT,
+            num_parallel_episodes=num_parallel_episodes,
+            budget=budget,
         )
         self._setup("configs/miccai-2020.json", self._create_dataset)
 
@@ -652,12 +654,14 @@ class FastMRIEnv(ActiveMRIEnv):
         config_path: str,
         dataset_name: str,
         challenge: str,
-        batch_size: int = 1,
+        num_parallel_episodes: int = 1,
         budget: Optional[int] = None,
         num_cols: Sequence[int] = (368, 372),
     ):
         assert challenge in ["singlecoil", "multicoil"]
-        super().__init__(320, 320, batch_size=batch_size, budget=budget)
+        super().__init__(
+            320, 320, num_parallel_episodes=num_parallel_episodes, budget=budget
+        )
         self.num_cols = num_cols
         self.dataset_name = dataset_name
         self.challenge = challenge
@@ -708,7 +712,7 @@ class FastMRIEnv(ActiveMRIEnv):
 class SingleCoilKneeEnv(FastMRIEnv):
     def __init__(
         self,
-        batch_size: int = 1,
+        num_parallel_episodes: int = 1,
         budget: Optional[int] = None,
         num_cols: Sequence[int] = (368, 372),
     ):
@@ -716,7 +720,7 @@ class SingleCoilKneeEnv(FastMRIEnv):
             "configs/single-coil-knee.json",
             "knee_singlecoil",
             "singlecoil",
-            batch_size=batch_size,
+            num_parallel_episodes=num_parallel_episodes,
             budget=budget,
             num_cols=num_cols,
         )
@@ -725,7 +729,7 @@ class SingleCoilKneeEnv(FastMRIEnv):
 class MultiCoilKneeEnv(FastMRIEnv):
     def __init__(
         self,
-        batch_size: int = 1,
+        num_parallel_episodes: int = 1,
         budget: Optional[int] = None,
         num_cols: Sequence[int] = (368, 372),
     ):
@@ -734,7 +738,7 @@ class MultiCoilKneeEnv(FastMRIEnv):
             "configs/multi-coil-knee.json",
             "multicoil",
             "multicoil",
-            batch_size=batch_size,
+            batch_size=num_parallel_episodes,
             budget=budget,
             num_cols=num_cols,
         )

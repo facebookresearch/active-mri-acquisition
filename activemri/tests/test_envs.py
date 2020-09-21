@@ -93,11 +93,11 @@ class TestActiveMRIEnv:
         # sum |reconstruction - gt| = D^2 - 3D for first element of batch,
         # and = D^2 - 2D for second element.
 
-        env = mocks.MRIEnv(batch_size=2, loops_train=1, num_train=2)
+        env = mocks.MRIEnv(num_parallel_episodes=2, loops_train=1, num_train=2)
         obs, _ = env.reset()
         # env works with shape (batch, height, width, {real/img})
         assert tuple(obs["reconstruction"].shape) == (
-            env.batch_size,
+            env.num_parallel_episodes,
             env._tensor_size,
             env._tensor_size,
             2,
@@ -135,7 +135,7 @@ class TestActiveMRIEnv:
         assert done == [True, True]
 
     def test_training_loop_ends(self):
-        env = envs.ActiveMRIEnv(32, 64, batch_size=3)
+        env = envs.ActiveMRIEnv(32, 64, num_parallel_episodes=3)
         env._num_loops_train_data = 3
         env._init_from_config_dict(mocks.config_dict)
 
@@ -166,7 +166,7 @@ class TestActiveMRIEnv:
         # datasets.
         num_train, num_val, num_test = 10, 7, 5
         env = mocks.MRIEnv(
-            batch_size=1,
+            num_parallel_episodes=1,
             loops_train=2,
             num_train=num_train,
             num_val=num_val,
@@ -224,7 +224,9 @@ class TestActiveMRIEnv:
 
     def test_seed(self):
         num_train = 10
-        env = mocks.MRIEnv(batch_size=1, loops_train=1, num_train=num_train, seed=0)
+        env = mocks.MRIEnv(
+            num_parallel_episodes=1, loops_train=1, num_train=num_train, seed=0
+        )
 
         def get_current_order():
             order = []
@@ -246,7 +248,7 @@ class TestActiveMRIEnv:
         assert all([a == b for a, b in zip(order_1, order_3)])
 
 
-# noinspection PyProtectedMember
+# noinspection PyProtectedMember,PyClassHasNoInit
 class TestMICCAIEnv:
     env = envs.MICCAI2020Env()
 
@@ -256,8 +258,8 @@ class TestMICCAIEnv:
 
             for j in [0, 1, 3, 4, 5]:
                 assert isinstance(batch[j], list)
-                assert len(batch[j]) == self.env.batch_size
-            for batch_idx in range(self.env.batch_size):
+                assert len(batch[j]) == self.env.num_parallel_episodes
+            for batch_idx in range(self.env.num_parallel_episodes):
                 assert isinstance(batch[0][batch_idx], np.ndarray)
                 assert batch[0][batch_idx].shape == (640, 368, 2,)  # k-space
                 assert isinstance(batch[2][batch_idx], np.ndarray)
@@ -280,8 +282,13 @@ class TestMICCAIEnv:
         assert "reconstruction" in obs
         assert "mask" in obs
         assert "extra_outputs" in obs
-        assert obs["reconstruction"].shape == (self.env.batch_size, 640, 368, 2)
-        assert obs["mask"].shape == (self.env.batch_size, 368)
+        assert obs["reconstruction"].shape == (
+            self.env.num_parallel_episodes,
+            640,
+            368,
+            2,
+        )
+        assert obs["mask"].shape == (self.env.num_parallel_episodes, 368)
 
 
 # noinspection PyProtectedMember
@@ -296,8 +303,8 @@ class TestSingleCoilKneeEnv:
 
             for j in [0, 1, 3, 4, 5]:
                 assert isinstance(batch[j], list)
-                assert len(batch[j]) == self.env.batch_size
-            for batch_idx in range(self.env.batch_size):
+                assert len(batch[j]) == self.env.num_parallel_episodes
+            for batch_idx in range(self.env.num_parallel_episodes):
                 assert isinstance(kspace[batch_idx], np.ndarray)
                 assert np.all(
                     np.iscomplex(kspace[batch_idx][np.nonzero(kspace[batch_idx])])
@@ -333,8 +340,8 @@ class TestSingleCoilKneeEnv:
         assert "reconstruction" in obs
         assert "mask" in obs
         assert "extra_outputs" in obs
-        assert obs["reconstruction"].shape == (self.env.batch_size, 320, 320)
+        assert obs["reconstruction"].shape == (self.env.num_parallel_episodes, 320, 320)
         assert obs["mask"].shape in [
-            (self.env.batch_size, 368),
-            (self.env.batch_size, 372),
+            (self.env.num_parallel_episodes, 368),
+            (self.env.num_parallel_episodes, 372),
         ]

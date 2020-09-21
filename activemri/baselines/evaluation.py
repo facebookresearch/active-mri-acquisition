@@ -24,7 +24,7 @@ def evaluate(
 
     score_keys = env.score_keys()
     all_scores = dict(
-        (k, np.zeros((num_episodes * env.batch_size, env.budget + 1)))
+        (k, np.zeros((num_episodes * env.num_parallel_episodes, env.budget + 1)))
         for k in score_keys
     )
     all_img_ids = []
