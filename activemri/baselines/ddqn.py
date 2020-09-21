@@ -1,3 +1,10 @@
+"""
+activemri.baselines.ddqn.py
+=======================================
+Baseline implementation of Double DQN, as described in
+*Van Hasselt, Hado, Arthur Guez, and David Silver. "Deep reinforcement learning with
+double q-learning." arXiv preprint arXiv:1509.06461 (2015)*.
+"""
 import logging
 import math
 import os
@@ -136,6 +143,8 @@ class SimpleMLP(nn.Module):
 
 # noinspection PyAbstractClass
 class EvaluatorBasedValueNetwork(nn.Module):
+    """ Value network based on Zhang et al., CVPR'19 evaluator arquitecture. """
+
     def __init__(self, image_width, mask_embed_dim):
         super(EvaluatorBasedValueNetwork, self).__init__()
         self.evaluator = cvpr19_models.models.evaluator.EvaluatorNetwork(
@@ -185,6 +194,28 @@ def _get_model(options):
 
 
 class DDQN(nn.Module, Policy):
+    """ Implementation of Double DQN value network.
+
+        The configuration is given by the ``opts`` argument, which must contain the following
+        fields:
+
+            - mask_embedding_dim(int): See
+              :class:`cvpr19_models.models.evaluator.EvaluatorNetwork`.
+            - gamma(float): Discount factor for target updates.
+            - dqn_model_type(str): Describes the architecture of the neural net. Options
+                    are "simple_mlp" and "evaluator", to use :class:`SimpleMLP` and
+                    :class:`EvaluatorBasedValueNetwork`, respectively.
+            - budget(int): The environment's budget.
+            - image_width(int): The width of the input images.
+
+        Args:
+            num_actions(int): Number of actions to consider for the policy.
+            device(``torch.device``): Device to use.
+            memory(optional(``replay_buffer.ReplayMemory``)): Replay buffer to sample transitions
+                from. Can be ``None``, for example, if this is a target network.
+            opts(``types.SimpleNamespace``): Options for the algorithm as explained above.
+    """
+
     def __init__(
         self,
         num_actions: int,
@@ -281,10 +312,7 @@ class DDQN(nn.Module, Policy):
                 x(torch.Tensor): The observation tensor.
 
             Returns:
-                Dictionary(str, torch.Tensor): A dictionary with
-                three keys, "qvalue", "value", and "advantage", which return the corresponding
-                tensors. If ``self.use_dueling = False``, only "qvalue" will return a tensor,
-                and the other two will be ``None``.
+                Dictionary(torch.Tensor): The predicted Q-values.
 
             Note:
                 Values corresponding to active k-space columns in the observation are manually
@@ -475,7 +503,45 @@ class DDQNTester:
 
 
 class DDQNTrainer:
-    def __init__(self, options, env: mri_envs.ActiveMRIEnv, device: torch.device):
+    """ DDQN Trainer for active MRI acquisition.
+
+        Configuration for the trainer is provided by argument ``options``. Must contain the
+        following fields:
+
+            - "checkpoints_dir"(str): The directory where the model will be saved to (or
+              loaded from).
+            - dqn_batch_size(int): The batch size to use for updates.
+            - dqn_burn_in(int): How many steps to do before starting updating parameters.
+            - dqn_normalize(bool): ``True`` if running mean/st. deviation should be maintained
+              for observations.
+            - dqn_only_test(bool): ``True`` if the model will not be trained, thus only will
+              attempt to read from checkpoint and load only weights of the network (ignoring
+              training related information).
+            - dqn_test_episode_freq(optional(int)): How frequently (in number of env steps)
+              to perform test episodes.
+            - freq_dqn_checkpoint_save(int): How often (in episodes) to save the model.
+            - num_train_steps(int): How many environment steps to train for.
+            - replay_buffer_size(int): The capacity of the replay buffer.
+            - resume(bool): If true, will try to load weights from the checkpoints dir.
+            - num_test_episodes(int): How many test episodes to periodically evaluate for.
+            - seed(int): Sets the seed for the environment when running evaluation episodes.
+            - reward_metric(str): Which of the ``env.scores_keys()`` is used as reward. Mainly
+              used for logging purposes.
+            - target_net_update_freq(int): How often (in env's steps) to update the target
+              network.
+
+        Args:
+            options(``types.SimpleNamespace``): Options for the trainer.
+            env(``activemri.envs.ActiveMRIEnv``): Env for which the policy is trained.
+            device(``torch.device``): Device to use.
+    """
+
+    def __init__(
+        self,
+        options: types.SimpleNamespace,
+        env: mri_envs.ActiveMRIEnv,
+        device: torch.device,
+    ):
         self.options = options
         self.env = env
         self.options.image_width = self.env.kspace_width

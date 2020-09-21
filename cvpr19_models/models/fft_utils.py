@@ -1,8 +1,3 @@
-"""
-models.fft_utils.py
-====================================
-Utility functions for MRI reconstruction.
-"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

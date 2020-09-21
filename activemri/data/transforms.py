@@ -1,3 +1,8 @@
+"""
+activemri.data.transforms.py
+====================================
+Transform functions to process fastMRI data for reconstruction models.
+"""
 from typing import Tuple, Union
 
 import fastmri
@@ -22,12 +27,17 @@ def dicom_transform(image: torch.Tensor, mean: float, std: float):
     return image
 
 
-def to_magnitude(tensor: torch.Tensor, dim: int) -> torch.Tensor:
-    return (tensor ** 2).sum(dim=dim) ** 0.5
-
-
 def center_crop(x: TensorType, shape: Tuple[int, int]) -> TensorType:
-    # Expects tensor to be (bs, H, W) and shape to be 2-dim
+    """ Center crops a tensor to the desired 2D shape.
+
+        Args:
+            x(union(``torch.Tensor``, ``np.ndarray``)): The tensor to crop.
+                Shape should be ``(batch_size, height, width)``.
+            shape(tuple(int,int)): The desired shape to crop to.
+
+        Returns:
+            (union(``torch.Tensor``, ``np.ndarray``)): The cropped tensor.
+    """
     assert len(x.shape) == 3
     assert 0 < shape[0] <= x.shape[1]
     assert 0 < shape[1] <= x.shape[2]
@@ -50,6 +60,23 @@ def ifft_permute_maybe_shift(
 
 
 def raw_transform_miccai2020(kspace=None, mask=None, **_kwargs):
+    """ Transform to produce input for reconstructor used in Pineda et al. MICCAI'20.
+
+        Produces a zero-filled reconstruction and a mask that serve as a input to models of type
+        :class:`activemri.models.cvpr10_reconstructor.CVPR19Reconstructor`. The mask is almost
+        equal to the mask passed as argument, except that high-frequency padding columns are set
+        to 1, and the mask is reshaped to be compatible with the reconstructor.
+
+        Args:
+            kspace(``np.ndarray``): The array containing the k-space data returned by the dataset.
+            mask(``torch.Tensor``): The masks to apply to the k-space.
+
+        Returns:
+            tuple: A tuple containing:
+                - ``torch.Tensor``: The zero-filled reconstructor that will be passed to the
+                  reconstructor.
+                - ``torch.Tensor``: The mask to use as input to the reconstructor.
+    """
     # alter mask to always include the highest frequencies that include padding
     mask[
         :,
@@ -133,6 +160,11 @@ def _batched_fastmri_unet_transform(
 def fastmri_unet_transform_singlecoil(
     kspace=None, mask=None, ground_truth=None, attrs=None, fname=None, slice_id=None
 ):
+    """ Transform to use as input to fastMRI's Unet model for singlecoil data.
+
+        This is an adapted version of the code found in
+        `fastMRI <https://github.com/facebookresearch/fastMRI/blob/master/experimental/unet/unet_module.py#L190>`_.
+    """
     return _batched_fastmri_unet_transform(
         kspace, mask, ground_truth, attrs, "singlecoil"
     )
@@ -142,6 +174,11 @@ def fastmri_unet_transform_singlecoil(
 def fastmri_unet_transform_multicoil(
     kspace=None, mask=None, ground_truth=None, attrs=None, fname=None, slice_id=None
 ):
+    """ Transform to use as input to fastMRI's Unet model for multicoil data.
+
+        This is an adapted version of the code found in
+        `fastMRI <https://github.com/facebookresearch/fastMRI/blob/master/experimental/unet/unet_module.py#L190>`_.
+    """
     return _batched_fastmri_unet_transform(
         kspace, mask, ground_truth, attrs, "multicoil"
     )

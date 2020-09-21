@@ -18,6 +18,25 @@ implementing the core k-space acquisition logic.
     :members:
     :noindex:
 
+.. automodule:: cvpr19_models.models.reconstruction
+    :members:
+    :noindex:
+
+.. automodule:: cvpr19_models.models.evaluator
+    :members:
+    :noindex:
+
+.. automodule:: activemri.data.transforms
+    :members:
+    :noindex:
+
+.. automodule:: activemri.baselines.simple_baselines
+    :members:
+    :noindex:
+
+.. automodule:: activemri.baselines.ddqn
+    :members:
+    :noindex:
 
 Indices and tables
 ==================

@@ -1,6 +1,6 @@
 """
-models.evaluator.py
-====================================
+cvpr19_models.models.evaluator.py
+=================================
 Active acquisition model as described in `Zhang, Zizhao, et al. "Reducing uncertainty in
 undersampled mri reconstruction with active acquisition." Proceedings of the IEEE Conference on
 Computer Vision and Pattern Recognition. 2019.`

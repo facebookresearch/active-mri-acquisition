@@ -107,7 +107,7 @@ class Slice(torch.utils.data.Dataset):
     def __init__(
         self,
         transform: Callable,
-        root: str,
+        root: pathlib.PurePath,
         split: str = "train",
         resolution: int = 128,
         scan_type: Optional[str] = None,
@@ -149,7 +149,7 @@ class Slice(torch.utils.data.Dataset):
 class _DicomDataset:
     def __init__(
         self,
-        root: str,
+        root: pathlib.PurePath,
         scan_type: Optional[str] = None,
         num_volumes: Optional[int] = None,
     ):
