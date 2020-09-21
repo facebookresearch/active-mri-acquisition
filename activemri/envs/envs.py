@@ -925,7 +925,7 @@ class MultiCoilKneeEnv(FastMRIEnv):
         super().__init__(
             "configs/multi-coil-knee.json",
             "multicoil",
-            batch_size=num_parallel_episodes,
+            num_parallel_episodes=num_parallel_episodes,
             budget=budget,
             seed=seed,
             num_cols=num_cols,

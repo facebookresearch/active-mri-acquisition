@@ -14,6 +14,10 @@ implementing the core k-space acquisition logic.
     :members:
     :noindex:
 
+.. automodule:: activemri.envs.masks
+    :members:
+    :noindex:
+
 
 Indices and tables
 ==================
