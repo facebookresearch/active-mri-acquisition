@@ -26,7 +26,7 @@ import activemri.envs.envs as mri_envs
 import cvpr19_models.models.evaluator
 
 
-def _encode_obs_dict(obs: Dict[str, torch.Tensor]) -> torch.Tensor:
+def _encode_obs_dict(obs: Dict[str, Any]) -> torch.Tensor:
     reconstruction = obs["reconstruction"].permute(0, 3, 1, 2)
     mask_embedding = obs["extra_outputs"]["mask_embedding"]
     mask = obs["mask"]

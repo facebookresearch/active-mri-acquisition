@@ -1,3 +1,8 @@
+"""
+activemri.envs.envs.py
+====================================
+Gym-like environment for active MRI acquisition.
+"""
 import functools
 import json
 import pathlib
@@ -130,8 +135,16 @@ class DataHandler:
 #                           BASE ACTIVE MRI ENV
 # -----------------------------------------------------------------------------
 
-
+# TODO remove img_width, img_height. Make sure no other code is using this (DDQN uses it)
 class ActiveMRIEnv(gym.Env):
+    """ Base class for all active MRI acquisition environments.
+
+    This class provides the core logic implementation of the k-space acquisition process.
+    The class is not to be used directly, but rather one of its subclasses should be
+    instantiated. Subclasses of `ActiveMRIEnv` are responsible for data initialization
+    and specifying configuration options for the environment.
+    """
+
     _num_loops_train_data = 100000
 
     def __init__(
@@ -385,7 +398,38 @@ class ActiveMRIEnv(gym.Env):
     # -------------------------------------------------------------------------
     # Public methods
     # -------------------------------------------------------------------------
-    def reset(self,) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def reset(self) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """ Starts a new acquisition episode with a batch of images.
+
+            This methods performs the following steps:
+
+                1. Reads a batch of images from the environment's dataset.
+                2. Creates an initial acquisition mask for each image.
+                3. Passes the loaded data and the initial masks to the transform function,
+                producing a batch of inputs for the environment's reconstructor model.
+                4. Calls the reconstructor model on this input and returns its output
+                   as an observation.
+
+            The observation returned is a dictionary with the following keys:
+                - *"reconstruction"(torch.Tensor):* The reconstruction produced by the
+                  environment's reconstructor model, using the current
+                  acquisition mask.
+                - *"extra_outputs"(dict(str,Any)):* A dictionary with any additional
+                  outputs produced by the reconstructor  (e.g., uncertainty maps).
+                - *"mask"(torch.Tensor):* The current acquisition mask.
+
+            |
+
+            Returns:
+                (tuple): tuple containing:\n
+                - obs(dict(str,any): Observation dictionary.
+                - metadata(dict(str,any): Metadata information containing the following keys:
+                    - *"fname"(list(str)):* the filenames of the image read from the dataset.
+                    - *"slice_id"(list(int)):* slice indices for each image within the volume.
+                    - *"current_score"(dict(str,float):* A dictionary with the error measures
+                      for the reconstruction (e.g., "mse", "nmse", "ssim", "psnr"). The measures
+                      considered can be obtained with `ActiveMRIEnv.score_keys()`.
+        """
         self._did_reset = True
         try:
             kspace, _, ground_truth, attrs, fname, slice_id = next(
@@ -421,6 +465,33 @@ class ActiveMRIEnv(gym.Env):
     def step(
         self, action: Union[int, Sequence[int]]
     ) -> Tuple[Dict[str, Any], np.ndarray, List[bool], Dict]:
+        """ Performs a step of active MRI acquisition.
+
+            Given a set of indices for k-space columns to acquire, updates the current batch
+            of masks with their corresponding indices, creates a new batch of reconstructions,
+            and returns the corresponding observations and rewards (for the observation format
+            see `ActiveMRI::reset()`). The reward is the improvement in score with respect to
+            the reconstruction before adding the indices. The specific score metric used is
+            determined by `env.reward_metric`.
+
+            The method also returns a list of booleans, indicating whether any episodes in the
+            batch have already concluded.
+
+            The last return value is a metadata dictionary. It contains a single key
+            "current_score", which contains a dictionary with the error measures for the
+            reconstruction (e.g., "mse", "nmse", "ssim", "psnr"). The measures
+            considered can be obtained with `ActiveMRIEnv.score_keys()`.
+
+            Args:
+                action(union(int, sequence(int))): Indices for k-space columns to acquire. The
+                length of the sequence must be equal to the current batch size
+                (i.e., `obs["reconstruction"].shape[0]`). If only an `int` is passed, it will
+                be replicated for the whole batch.
+
+            Returns:
+                tuple(dict(str,any), np.ndarray, list(bool), dict(str, float)): the transition
+                information in the order (next_observation, reward, done, meta).
+        """
         if not self._did_reset:
             raise RuntimeError(
                 "Attempting to call env.step() before calling env.reset()."

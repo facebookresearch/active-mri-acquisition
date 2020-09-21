@@ -1,3 +1,8 @@
+"""
+activemri.baselines.simple_baselines.py
+====================================
+Simple baselines for active MRI acquisition.
+"""
 from typing import Any, Dict, List, Optional
 
 import numpy as np
