@@ -8,4 +8,5 @@ misc
 *.orig
 docs/_build
 __datacache__*
-*docs/build*
+docs/build*
+*.mp4

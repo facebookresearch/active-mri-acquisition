@@ -10,6 +10,7 @@ class Policy:
 
     @abc.abstractmethod
     def get_action(self, obs: Dict[str, Any], **kwargs: Any) -> List[int]:
+        """ Returns a list of actions for a batch of observations. """
         pass
 
     def __call__(self, obs: Dict[str, Any], **kwargs: Any) -> List[int]:

@@ -159,6 +159,8 @@ class ActiveMRIEnv(gym.Env):
 
     _num_loops_train_data = 100000
 
+    metadata = {"render.modes": ["human"], "video.frames_per_second": None}
+
     def __init__(
         self,
         kspace_shape: Tuple[int, int],
@@ -262,7 +264,7 @@ class ActiveMRIEnv(gym.Env):
         options = reconstructor_cfg["options"]
         if checkpoint and "options" in checkpoint:
             msg = (
-                f"Checkpoint at {checkpoint_path.name} has an 'options' field. "
+                f"Checkpoint at {checkpoint_path.name} has an 'options' key. "
                 f"This will override the options defined in configuration file."
             )
             warnings.warn(msg)
@@ -388,7 +390,7 @@ class ActiveMRIEnv(gym.Env):
             scale = np.quantile(ground_truth[i], 0.75)
             mask_i = np.tile(mask[i], (1, img_height, 1)) * scale
 
-            pad = 30
+            pad = 32
             mask_begin = pad
             mask_end = mask_begin + mask.shape[-1]
             gt_begin = mask_end + pad
@@ -681,6 +683,8 @@ class MICCAI2020Env(ActiveMRIEnv):
                                    columns have been acquired.
             seed(optional(int)): The seed for the environment's random number generator, which is
                                  an instance of ``numpy.random.RandomState``. Defaults to ``None``.
+            extreme(bool): ``True`` or ``False`` for running extreme acceleration or normal
+                           acceleration scenarios described in the paper, respectively.
     """
 
     KSPACE_WIDTH = scknee_data.MICCAI2020Data.KSPACE_WIDTH
@@ -693,6 +697,7 @@ class MICCAI2020Env(ActiveMRIEnv):
         num_parallel_episodes: int = 1,
         budget: Optional[int] = None,
         seed: Optional[int] = None,
+        extreme: bool = False,
     ):
         super().__init__(
             (640, self.KSPACE_WIDTH),
@@ -700,7 +705,10 @@ class MICCAI2020Env(ActiveMRIEnv):
             budget=budget,
             seed=seed,
         )
-        self._setup("configs/miccai-2020.json", self._create_dataset)
+        if extreme:
+            self._setup("configs/miccai-2020-extreme-acc.json", self._create_dataset)
+        else:
+            self._setup("configs/miccai-2020-normal-acc.json", self._create_dataset)
 
     # -------------------------------------------------------------------------
     # Protected methods

@@ -11,3 +11,4 @@ pyxb==1.2.6
 filelock
 gym
 tensorboardX
+imageio-ffmpeg

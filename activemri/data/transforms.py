@@ -27,6 +27,10 @@ def dicom_transform(image: torch.Tensor, mean: float, std: float):
     return image
 
 
+def to_magnitude(tensor: torch.Tensor, dim: int) -> torch.Tensor:
+    return (tensor ** 2).sum(dim=dim) ** 0.5
+
+
 def center_crop(x: TensorType, shape: Tuple[int, int]) -> TensorType:
     """ Center crops a tensor to the desired 2D shape.
 

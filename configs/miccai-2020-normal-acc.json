@@ -1,5 +1,5 @@
 {
-  "data_location": "/private/home/lep/fastmri",
+  "data_location": "fastmri_data",
   "reconstructor": {
     "cls": "activemri.models.cvpr19_reconstructor.CVPR19Reconstructor",
     "options": {
