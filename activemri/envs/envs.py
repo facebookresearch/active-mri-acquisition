@@ -381,14 +381,19 @@ class ActiveMRIEnv(gym.Env):
         return {"mse": mse, "nmse": nmse, "ssim": ssim, "psnr": psnr}
 
     @staticmethod
+    def _convert_to_gray(array: np.ndarray) -> np.ndarray:
+        M = np.max(array)
+        m = np.min(array)
+        return (255 * (array - m) / (M - m)).astype(np.uint8)
+
+    @staticmethod
     def _render_arrays(
         ground_truth: np.ndarray, reconstruction: np.ndarray, mask: np.ndarray
     ) -> List[np.ndarray]:
         batch_size, img_height, img_width = ground_truth.shape
         frames = []
         for i in range(batch_size):
-            scale = np.quantile(ground_truth[i], 0.75)
-            mask_i = np.tile(mask[i], (1, img_height, 1)) * scale
+            mask_i = np.tile(mask[i], (1, img_height, 1))
 
             pad = 32
             mask_begin = pad
@@ -397,10 +402,16 @@ class ActiveMRIEnv(gym.Env):
             gt_end = gt_begin + img_width
             rec_begin = gt_end + pad
             rec_end = rec_begin + img_width
-            frame = 0.4 * scale * np.ones((img_height, rec_end + pad))
-            frame[:, mask_begin:mask_end] = mask_i
-            frame[:, gt_begin:gt_end] = ground_truth[i]
-            frame[:, rec_begin:rec_end] = reconstruction[i]
+            error_begin = rec_end + pad
+            error_end = error_begin + img_width
+            frame = 128 * np.ones((img_height, error_end + pad), dtype=np.uint8)
+            frame[:, mask_begin:mask_end] = 255 * mask_i
+            frame[:, gt_begin:gt_end] = ActiveMRIEnv._convert_to_gray(ground_truth[i])
+            frame[:, rec_begin:rec_end] = ActiveMRIEnv._convert_to_gray(
+                reconstruction[i]
+            )
+            rel_error = np.abs((ground_truth[i] - reconstruction[i]) / ground_truth[i])
+            frame[:, error_begin:error_end] = 255 * rel_error.astype(np.uint8)
 
             frames.append(frame)
         return frames
@@ -583,7 +594,8 @@ class ActiveMRIEnv(gym.Env):
 
             Returns:
                 ``np.ndarray``: An image frame containing, from left to right: current
-                                acquisition mask, current ground image, current reconstruction.
+                                acquisition mask, current ground image, current reconstruction,
+                                and current relative reconstruction error.
         """
         pass
 
