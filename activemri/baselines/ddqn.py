@@ -145,15 +145,19 @@ class SimpleMLP(nn.Module):
 class EvaluatorBasedValueNetwork(nn.Module):
     """ Value network based on Zhang et al., CVPR'19 evaluator arquitecture. """
 
-    def __init__(self, image_width, mask_embed_dim):
-        super(EvaluatorBasedValueNetwork, self).__init__()
+    def __init__(self, image_width, mask_embed_dim, legacy_offset=None):
+        super().__init__()
+        num_actions = image_width
+        self.legacy_offset = legacy_offset
+        if legacy_offset:
+            num_actions -= 2 * legacy_offset
         self.evaluator = cvpr19_models.models.evaluator.EvaluatorNetwork(
             number_of_filters=128,
             number_of_conv_layers=4,
             use_sigmoid=False,
             width=image_width,
             mask_embed_dim=mask_embed_dim,
-            num_output_channels=image_width,
+            num_output_channels=num_actions,
         )
         self.mask_embed_dim = mask_embed_dim
 
@@ -174,6 +178,8 @@ class EvaluatorBasedValueNetwork(nn.Module):
             obs, self.evaluator.mask_embed_dim
         )
         qvalue = self.evaluator(reconstruction, mask_embedding)
+        if self.legacy_offset:
+            mask = mask[..., self.legacy_offset : -self.legacy_offset]
         return qvalue - 1e10 * mask.squeeze()
 
 
@@ -188,7 +194,9 @@ def _get_model(options):
         )
     if options.dqn_model_type == "evaluator":
         return EvaluatorBasedValueNetwork(
-            options.image_width, options.mask_embedding_dim
+            options.image_width,
+            options.mask_embedding_dim,
+            getattr(options, "legacy_offset", None),
         )
     raise ValueError("Unknown model specified for DQN.")
 
@@ -209,7 +217,6 @@ class DDQN(nn.Module, Policy):
             - image_width(int): The width of the input images.
 
         Args:
-            num_actions(int): Number of actions to consider for the policy.
             device(``torch.device``): Device to use.
             memory(optional(``replay_buffer.ReplayMemory``)): Replay buffer to sample transitions
                 from. Can be ``None``, for example, if this is a target network.
@@ -218,16 +225,14 @@ class DDQN(nn.Module, Policy):
 
     def __init__(
         self,
-        num_actions: int,
         device: torch.device,
         memory: Optional[replay_buffer.ReplayMemory],
         opts: types.SimpleNamespace,
     ):
-        super(DDQN, self).__init__()
+        super().__init__()
         self.model = _get_model(opts)
         self.memory = memory
         self.optimizer = optim.Adam(self.parameters(), lr=opts.dqn_learning_rate)
-        self.num_actions = num_actions
         self.opts = opts
         self.device = device
         self.random_sampler = RandomPolicy()
@@ -338,7 +343,8 @@ class DDQN(nn.Module, Policy):
             self.model.eval()
             obs_tensor = _encode_obs_dict(obs)
             q_values = self(obs_tensor.to(self.device))
-        return torch.argmax(q_values, dim=1).tolist()
+        actions = torch.argmax(q_values, dim=1) + getattr(self.opts, "legacy_offset", 0)
+        return actions.tolist()
 
 
 def _get_folder_lock(path):
@@ -409,7 +415,7 @@ class DDQNTester:
         )
 
         # Initialize policy
-        self.policy = DDQN(self.env.action_space.n, device, None, self.options)
+        self.policy = DDQN(device, None, self.options)
 
         # Load info about best checkpoint tested and timestamp
         self.load_tester_checkpoint_if_present()
@@ -593,10 +599,8 @@ class DDQNTrainer:
             use_normalization=self.options.dqn_normalize,
         )
         self.logger.info("Created replay buffer.")
-        self.policy = DDQN(
-            self.env.action_space.n, device, self.replay_memory, self.options
-        )
-        self.target_net = DDQN(self.env.action_space.n, device, None, self.options)
+        self.policy = DDQN(device, self.replay_memory, self.options)
+        self.target_net = DDQN(device, None, self.options)
         self.target_net.eval()
         self.logger.info(
             f"Created neural networks with {self.env.action_space.n} outputs."
