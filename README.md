@@ -15,18 +15,21 @@ This repository also contains scripts to replicate the experiments performed in
 # Getting started
 
 ## Installation
-`active-mri-acquisition` has been tested on Python 3.6.10. To install dependencies run 
-the following command:
+We recommend creating a dedicated Python environment for this project, for instance by running
+```bash
+$ conda create --name active_mri python=3.7
+$ conda activate active_mri
+```
+Once your conda environment is activated, make sure you have [PyTorch](https://pytorch.org/) 
+installed with the appropriate CUDA version. For instance, by running 
+(see PyTorch's website for right command for your system)
 
 ```bash
-$ conda env create -f environment.yml
+$ pip install torch==1.6.0+cu101 torchvision==0.7.0+cu101 -f https://download.pytorch.org/whl/torch_stable.html
 ```
 
-## Using the environment
-The following code creates an environment
-```python
-import gym
-import rl_env
-env = gym.make("ActiveMRIAcquisition-v0")
-
+Afterwards, run
+```bash
+$ pip install pyxb==1.2.6
+$ pip install -e .
 ```

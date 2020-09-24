@@ -10,3 +10,4 @@ docs/_build
 __datacache__*
 docs/build*
 *.mp4
+*egg-info*
