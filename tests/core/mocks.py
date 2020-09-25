@@ -10,7 +10,7 @@ cfg_json_str = """
 {
     "data_location": "dummy_location",
     "reconstructor": {
-        "cls": "activemri.tests.mocks.Reconstructor",
+        "cls": "tests.core.mocks.Reconstructor",
         "options": {
             "option1": 1,
             "option2": 0.5,
@@ -18,10 +18,10 @@ cfg_json_str = """
             "option4": true
         },
         "checkpoint_path": "null",
-        "transform": "activemri.tests.mocks.transform"
+        "transform": "tests.core.mocks.transform"
     },
     "mask": {
-        "function": "activemri.tests.mocks.mask_func",
+        "function": "tests.core.mocks.mask_func",
         "args": {
             "size": 10,
             "how_many": 3

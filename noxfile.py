@@ -16,10 +16,9 @@ def mypy(session):
     session.run("mypy", "activemri")
 
 
-# @nox.session()
-# def test_metrics(session) -> None:
-#     session.install("--upgrade", "setuptools", "pip")
-#
-#     session.install("pyxb==1.2.6")
-#     session.install("-r", "requirements/dev.txt")
-#     session.run("pytest", "tests")
+@nox.session()
+def pytest(session) -> None:
+    session.install("--upgrade", "setuptools", "pip")
+    session.install("pyxb==1.2.6")
+    session.install("-r", "requirements/main.txt")
+    session.run("pytest", "tests/core")
