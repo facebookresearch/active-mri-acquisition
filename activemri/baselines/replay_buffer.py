@@ -46,15 +46,15 @@ class ReplayMemory:
         self.count_seen = 1
 
         if not use_normalization:
-            self._normalize = lambda x: x
-            self._denormalize = lambda x: x
+            self._normalize = lambda x: x  # type: ignore
+            self._denormalize = lambda x: x  # type: ignore
 
-    def _normalize(self, observation: torch.Tensor) -> torch.Tensor:
+    def _normalize(self, observation: torch.Tensor) -> Optional[torch.Tensor]:
         if observation is None:
             return None
         return (observation - self.mean_obs) / self.std_obs
 
-    def _denormalize(self, observation: torch.Tensor) -> torch.Tensor:
+    def _denormalize(self, observation: torch.Tensor) -> Optional[torch.Tensor]:
         if observation is None:
             return None
         return self.std_obs * observation + self.mean_obs
@@ -85,7 +85,7 @@ class ReplayMemory:
         self._update_stats(self.observations[self.position])
         self.position = (self.position + 1) % len(self)
 
-    def sample(self) -> Optional[Dict[str, torch.Tensor]]:
+    def sample(self) -> Optional[Dict[str, Optional[torch.Tensor]]]:
         """ Samples a batch of transitions from the replay buffer.
 
 

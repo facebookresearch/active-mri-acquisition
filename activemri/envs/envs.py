@@ -11,6 +11,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -30,6 +31,7 @@ import activemri.data.singlecoil_knee_data as scknee_data
 import activemri.data.transforms
 import activemri.envs.masks
 import activemri.envs.util
+import activemri.models
 
 DataInitFnReturnType = Tuple[
     torch.utils.data.Dataset, torch.utils.data.Dataset, torch.utils.data.Dataset
@@ -81,7 +83,7 @@ class DataHandler:
         loops: int = 1,
         collate_fn: Optional[Callable] = None,
     ):
-        self._iter = None
+        self._iter = None  # type: Iterator[Any]
         self._collate_fn = collate_fn
         self._batch_size = batch_size
         self._loops = loops
@@ -168,13 +170,13 @@ class ActiveMRIEnv(gym.Env):
         seed: Optional[int] = None,
     ):
         # Default initialization
-        self._cfg = None
+        self._cfg: Mapping[str, Any] = None
         self._data_location = None
-        self._reconstructor = None
-        self._transform = None
-        self._train_data_handler = None
-        self._val_data_handler = None
-        self._test_data_handler = None
+        self._reconstructor: activemri.models.Reconstructor = None
+        self._transform: Callable = None
+        self._train_data_handler: DataHandler = None
+        self._val_data_handler: DataHandler = None
+        self._test_data_handler: DataHandler = None
         self._device = torch.device("cpu")
         self.num_parallel_episodes = num_parallel_episodes
         self.budget = budget
@@ -192,18 +194,18 @@ class ActiveMRIEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(self.kspace_width)
 
         # This is changed by `set_training()`, `set_val()`, `set_test()`
-        self._current_data_handler = None
+        self._current_data_handler: DataHandler = None
 
         # These are changed every call to `reset()`
-        self._current_ground_truth = None
-        self._transform_wrapper = None
-        self._current_k_space = None
+        self._current_ground_truth: torch.Tensor = None
+        self._transform_wrapper: Callable = None
+        self._current_k_space: torch.Tensor = None
         self._did_reset = False
         self._steps_since_reset = 0
         # These three are changed every call to `reset()` and every call to `step()`
-        self._current_reconstruction_numpy = None
-        self._current_score = None
-        self._current_mask = None
+        self._current_reconstruction_numpy: np.ndarray = None
+        self._current_score: Dict[str, np.ndarray] = None
+        self._current_mask: torch.Tensor = None
 
     # -------------------------------------------------------------------------
     # Protected methods

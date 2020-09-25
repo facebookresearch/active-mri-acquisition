@@ -84,8 +84,8 @@ def save_regular_checkpoint(
 
 class Trainer:
     def __init__(self, options: types.SimpleNamespace):
-        self.reconstructor = None
-        self.evaluator = None
+        self.reconstructor: torch.nn.Module = None
+        self.evaluator: torch.nn.Module = None
         self.options = options
         self.best_validation_score = -float("inf")
         self.completed_epochs = 0

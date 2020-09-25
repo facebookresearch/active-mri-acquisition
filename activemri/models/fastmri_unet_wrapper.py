@@ -22,7 +22,7 @@ class Unet(activemri.models.Reconstructor):
 
     def forward(
         self, image: torch.Tensor, mean: torch.Tensor, std: torch.Tensor
-    ) -> Dict[str, torch.Tensor]:
+    ) -> Dict[str, Any]:
         output = self.unet(image).squeeze(1)
         std = std.unsqueeze(1).unsqueeze(2)
         mean = mean.unsqueeze(1).unsqueeze(2)

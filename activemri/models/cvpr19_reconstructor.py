@@ -7,7 +7,6 @@ import activemri.models
 
 
 # This is just a wrapper for the model in cvpr19_models folder
-# noinspection PyAbstractClass
 class CVPR19Reconstructor(activemri.models.Reconstructor):
     def __init__(
         self,
@@ -38,10 +37,9 @@ class CVPR19Reconstructor(activemri.models.Reconstructor):
             use_deconv=use_deconv,
         )
 
-    # noinspection PyUnboundLocalVariable
     def forward(
         self, zero_filled_input: torch.Tensor, mask: torch.Tensor
-    ) -> Dict[str, torch.Tensor]:
+    ) -> Dict[str, Any]:
         reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(
             zero_filled_input, mask
         )

@@ -89,61 +89,59 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
-# noinspection PyAbstractClass
-class SimpleMLP(nn.Module):
-    def __init__(
-        self,
-        budget: int,
-        image_width: int,
-        initial_num_lines_per_side: int,
-        num_hidden_layers: int = 2,
-        hidden_size: int = 32,
-        ignore_mask: bool = True,
-        symmetric: bool = True,
-    ):
-        super(SimpleMLP, self).__init__()
-        self.initial_num_lines_per_side = initial_num_lines_per_side
-        self.ignore_mask = ignore_mask
-        self.symmetric = symmetric
-        self.num_inputs = budget if self.ignore_mask else self.image_width
-        num_actions = image_width - 2 * initial_num_lines_per_side
-        self.linear1 = nn.Sequential(nn.Linear(self.num_inputs, hidden_size), nn.ReLU())
-        hidden_layers = []
-        for i in range(num_hidden_layers):
-            hidden_layers.append(
-                nn.Sequential(nn.Linear(hidden_size, hidden_size), nn.ReLU())
-            )
-        self.hidden = nn.Sequential(*hidden_layers)
-        self.output = nn.Linear(hidden_size, num_actions)
-        self.model = nn.Sequential(self.linear1, self.hidden, self.output)
+# class SimpleMLP(nn.Module):
+#     def __init__(
+#         self,
+#         budget: int,
+#         image_width: int,
+#         initial_num_lines_per_side: int,
+#         num_hidden_layers: int = 2,
+#         hidden_size: int = 32,
+#         ignore_mask: bool = True,
+#         symmetric: bool = True,
+#     ):
+#         super(SimpleMLP, self).__init__()
+#         self.initial_num_lines_per_side = initial_num_lines_per_side
+#         self.ignore_mask = ignore_mask
+#         self.symmetric = symmetric
+#         self.num_inputs = budget if self.ignore_mask else self.image_width
+#         num_actions = image_width - 2 * initial_num_lines_per_side
+#         self.linear1 = nn.Sequential(nn.Linear(self.num_inputs, hidden_size), nn.ReLU())
+#         hidden_layers = []
+#         for i in range(num_hidden_layers):
+#             hidden_layers.append(
+#                 nn.Sequential(nn.Linear(hidden_size, hidden_size), nn.ReLU())
+#             )
+#         self.hidden = nn.Sequential(*hidden_layers)
+#         self.output = nn.Linear(hidden_size, num_actions)
+#         self.model = nn.Sequential(self.linear1, self.hidden, self.output)
+#
+#     def forward(self, x: torch.Tensor) -> torch.Tensor:
+#         raise NotImplementedError
+#         # previous_actions = x[
+#         #     :, self.initial_num_lines_per_side : -self.initial_num_lines_per_side
+#         # ]
+#         # if self.ignore_mask:
+#         #     input_tensor = torch.zeros(x.shape[0], self.num_inputs).to(x.device)
+#         #     time_steps = previous_actions.sum(1).unsqueeze(1)
+#         #     if self.symmetric:
+#         #         time_steps //= 2
+#         #     # We allow the model to receive observations that are over budget during test
+#         #     # Code below randomizes the input to the model for these observations
+#         #     index_over_budget = (time_steps >= self.num_inputs).squeeze()
+#         #     time_steps = time_steps.clamp(0, self.num_inputs - 1)
+#         #     input_tensor.scatter_(1, time_steps.long(), 1)
+#         #     input_tensor[index_over_budget] = torch.randn_like(
+#         #         input_tensor[index_over_budget]
+#         #     )
+#         # else:
+#         #     input_tensor = x
+#         # value = self.model(input_tensor)
+#         # return value - 1e10 * previous_actions
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
-        # previous_actions = x[
-        #     :, self.initial_num_lines_per_side : -self.initial_num_lines_per_side
-        # ]
-        # if self.ignore_mask:
-        #     input_tensor = torch.zeros(x.shape[0], self.num_inputs).to(x.device)
-        #     time_steps = previous_actions.sum(1).unsqueeze(1)
-        #     if self.symmetric:
-        #         time_steps //= 2
-        #     # We allow the model to receive observations that are over budget during test
-        #     # Code below randomizes the input to the model for these observations
-        #     index_over_budget = (time_steps >= self.num_inputs).squeeze()
-        #     time_steps = time_steps.clamp(0, self.num_inputs - 1)
-        #     input_tensor.scatter_(1, time_steps.long(), 1)
-        #     input_tensor[index_over_budget] = torch.randn_like(
-        #         input_tensor[index_over_budget]
-        #     )
-        # else:
-        #     input_tensor = x
-        # value = self.model(input_tensor)
-        # return value - 1e10 * previous_actions
 
-
-# noinspection PyAbstractClass
 class EvaluatorBasedValueNetwork(nn.Module):
-    """ Value network based on Zhang et al., CVPR'19 evaluator arquitecture. """
+    """ Value network based on Zhang et al., CVPR'19 evaluator architecture. """
 
     def __init__(self, image_width, mask_embed_dim, legacy_offset=None):
         super().__init__()
@@ -184,14 +182,10 @@ class EvaluatorBasedValueNetwork(nn.Module):
 
 
 def _get_model(options):
-    if options.dqn_model_type == "simple_mlp":
-        if options.use_dueling_dqn:
-            raise NotImplementedError(
-                "Dueling DQN only implemented with dqn_model_type=evaluator."
-            )
-        return SimpleMLP(
-            options.budget, options.image_width, options.initial_num_lines_per_side
-        )
+    # if options.dqn_model_type == "simple_mlp":
+    #     return SimpleMLP(
+    #         options.budget, options.image_width, options.initial_num_lines_per_side
+    #     )
     if options.dqn_model_type == "evaluator":
         return EvaluatorBasedValueNetwork(
             options.image_width,
@@ -292,11 +286,11 @@ class DDQN(nn.Module, Policy):
         loss.backward()
 
         # Compute total gradient norm (for logging purposes) and then clip gradients
-        grad_norm = 0
+        # TODO initialize with some tensor here (mypy error)
+        grad_norm: torch.Tensor = 0  # type: ignore
         for p in list(filter(lambda p: p.grad is not None, self.parameters())):
             grad_norm += p.grad.data.norm(2).item() ** 2
         grad_norm = grad_norm ** 0.5
-        # grad_norm = torch.nn.utils.clip_grad_norm_(self.parameters(), 100)
         torch.nn.utils.clip_grad_value_(self.parameters(), 1)
 
         self.optimizer.step()
