@@ -3,11 +3,18 @@ import setuptools
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-with open("requirements.txt") as f:
-    reqs = []
-    for line in f:
-        line = line.strip()
-        reqs.append(line.split("==")[0])
+
+def parse_requirements_file(path):
+    with open(path) as f:
+        reqs = []
+        for line in f:
+            line = line.strip()
+            reqs.append(line.split("==")[0])
+    return reqs
+
+
+reqs_main = parse_requirements_file("requirements/main.txt")
+reqs_dev = parse_requirements_file("requirements/dev.txt")
 
 setuptools.setup(
     name="active-mri-acquisition",
@@ -25,5 +32,6 @@ setuptools.setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence :: Medical Imaging",
     ],
     python_requires=">=3.7",
-    install_requires=reqs,
+    install_requires=reqs_main,
+    extras_require={"dev": reqs_main + reqs_dev},
 )
