@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.utils.data
 
-import cvpr19_models.models.fft_utils as fft_utils
+import activemri.experimental.cvpr19_models.models.fft_utils as fft_utils
 
 
 class Slice(torch.utils.data.Dataset):

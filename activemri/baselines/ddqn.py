@@ -30,7 +30,7 @@ from . import Policy
 from . import RandomPolicy
 import activemri.envs.envs as mri_envs
 
-import cvpr19_models.models.evaluator
+import activemri.experimental.cvpr19_models.models.evaluator as cvpr19_evaluator
 
 
 def _encode_obs_dict(obs: Dict[str, Any]) -> torch.Tensor:
@@ -151,7 +151,7 @@ class EvaluatorBasedValueNetwork(nn.Module):
         self.legacy_offset = legacy_offset
         if legacy_offset:
             num_actions -= 2 * legacy_offset
-        self.evaluator = cvpr19_models.models.evaluator.EvaluatorNetwork(
+        self.evaluator = cvpr19_evaluator.EvaluatorNetwork(
             number_of_filters=128,
             number_of_conv_layers=4,
             use_sigmoid=False,

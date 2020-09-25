@@ -60,7 +60,7 @@ def get_train_valid_loader(
             mask_func, fixed_seed=None, seed_per_image=False
         )
         train_data = raw_data_loader.RawSliceData(
-            os.path.join(raw_root, "singlecoil_train"),
+            os.path.join(raw_root, "knee_singlecoil_train"),
             transform=data_transform,
             num_cols=368,
             num_volumes=num_volumes_train,
@@ -69,7 +69,7 @@ def get_train_valid_loader(
             mask_func, fixed_seed=None, seed_per_image=True
         )
         valid_data = raw_data_loader.RawSliceData(
-            os.path.join(raw_root, "singlecoil_val"),
+            os.path.join(raw_root, "knee_singlecoil_val"),
             transform=data_transform,
             num_cols=368,
             num_volumes=num_volumes_val,
@@ -79,7 +79,7 @@ def get_train_valid_loader(
         raise ValueError
 
     def init_fun(_):
-        return np.random.seed()
+        return np.random.seed(None)
 
     train_loader = torch.utils.data.DataLoader(
         train_data,
@@ -157,14 +157,14 @@ def get_test_loader(
             mask_func, fixed_seed=None, seed_per_image=True
         )
         test_data = raw_data_loader.RawSliceData(
-            raw_root + "/singlecoil_val",
+            raw_root + "/knee_singlecoil_val",
             transform=data_transform,
             num_cols=368,
             custom_split="test",
         )
 
         def init_fun(_):
-            return np.random.seed()
+            return np.random.seed(None)
 
         data_loader = torch.utils.data.DataLoader(
             test_data,

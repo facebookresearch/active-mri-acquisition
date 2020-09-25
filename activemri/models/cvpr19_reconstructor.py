@@ -2,8 +2,8 @@ from typing import Any, Dict
 
 import torch
 
+import activemri.experimental.cvpr19_models.models.reconstruction as cvpr19_reconstruction
 import activemri.models
-import cvpr19_models.models.reconstruction
 
 
 # This is just a wrapper for the model in cvpr19_models folder
@@ -24,7 +24,7 @@ class CVPR19Reconstructor(activemri.models.Reconstructor):
         use_deconv: bool = True,
     ):
         super().__init__()
-        self.reconstructor = cvpr19_models.models.reconstruction.ReconstructorNetwork(
+        self.reconstructor = cvpr19_reconstruction.ReconstructorNetwork(
             number_of_encoder_input_channels=number_of_encoder_input_channels,
             number_of_decoder_output_channels=number_of_decoder_output_channels,
             number_of_filters=number_of_filters,

@@ -3,7 +3,8 @@ from typing import Any, Dict, List
 import torch
 
 from . import Policy
-import cvpr19_models.models.evaluator
+
+import activemri.experimental.cvpr19_models.models.evaluator as cvpr19_evaluator
 
 
 # This is just a wrapper for the model in cvpr19_models folder
@@ -19,7 +20,7 @@ class CVPR19Evaluator(Policy):
             evaluator_checkpoint is not None
             and evaluator_checkpoint["evaluator"] is not None
         )
-        self.evaluator = cvpr19_models.models.evaluator.EvaluatorNetwork(
+        self.evaluator = cvpr19_evaluator.EvaluatorNetwork(
             number_of_filters=evaluator_checkpoint[
                 "options"
             ].number_of_evaluator_filters,
