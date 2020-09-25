@@ -2,8 +2,7 @@ import functools
 
 import numpy as np
 
-# noinspection PyUnresolvedReferences
-import pytest
+import pytest  # noqa: F401
 import torch
 
 import activemri.envs.envs as envs

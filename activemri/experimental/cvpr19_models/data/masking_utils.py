@@ -41,12 +41,12 @@ def get_mask_func(mask_type, which_dataset, rnl_params=None):
             rnl_params=rnl_params,
         )
     if "symmetric_grid" in mask_type:
-        logging.info(f"Mask is symmetric grid.")
+        logging.info("Mask is symmetric grid.")
         return SymmetricUniformGridMaskFunc(
             [], [], which_dataset, random_num_lines=True, rnl_params=rnl_params
         )
     if "grid" in mask_type:
-        logging.info(f"Mask is grid (not symmetric).")
+        logging.info("Mask is grid (not symmetric).")
         return UniformGridMaskFunc(
             [], [], which_dataset, random_num_lines=True, rnl_params=rnl_params
         )

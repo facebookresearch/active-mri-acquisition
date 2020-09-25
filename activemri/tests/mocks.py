@@ -35,7 +35,6 @@ cfg_json_str = """
 config_dict = json.loads(cfg_json_str)
 
 
-# noinspection PyUnresolvedReferences
 class Dataset:
     def __init__(self, tensor_size, length):
         self.tensor_size = tensor_size
@@ -64,7 +63,7 @@ def make_data_init_fn(tensor_size, num_train, num_val, num_test):
     return data_init_fn
 
 
-# noinspection PyUnresolvedReferences,PyUnusedLocal
+# noinspection PyUnusedLocal
 def mask_func(args, kspace_shapes, _rng, attrs=None):
     batch_size = len(kspace_shapes)
     mask = torch.zeros(batch_size, args["size"])

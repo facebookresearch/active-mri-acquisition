@@ -63,7 +63,6 @@ class CyclicSampler(torch.utils.data.Sampler):
 
 
 # TODO Add a fastMRI batch type (make it the return of void_transform)
-# noinspection PyUnresolvedReferences
 def _env_collate_fn(
     batch: Tuple[Union[np.array, list], ...]
 ) -> Tuple[Union[np.array, list], ...]:

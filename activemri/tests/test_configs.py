@@ -1,8 +1,7 @@
 import json
 import os
 
-# noinspection PyUnresolvedReferences
-import pytest
+import pytest  # noqa: F401
 
 import activemri.envs.util
 

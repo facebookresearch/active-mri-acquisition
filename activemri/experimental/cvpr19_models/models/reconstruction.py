@@ -310,6 +310,7 @@ class ReconstructorNetwork(nn.Module):
             encoder_input = zero_filled_input
             mask_embedding = None
 
+        residual_bottleneck_output = None
         for cascade_block, (encoder, residual_bottleneck, decoder) in enumerate(
             zip(
                 self.encoders_all_cascade_blocks,
