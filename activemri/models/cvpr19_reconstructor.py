@@ -37,7 +37,7 @@ class CVPR19Reconstructor(activemri.models.Reconstructor):
             use_deconv=use_deconv,
         )
 
-    def forward(
+    def forward(  # type: ignore
         self, zero_filled_input: torch.Tensor, mask: torch.Tensor
     ) -> Dict[str, Any]:
         reconstructed_image, uncertainty_map, mask_embedding = self.reconstructor(

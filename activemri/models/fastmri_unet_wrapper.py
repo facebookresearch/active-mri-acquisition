@@ -20,7 +20,7 @@ class Unet(activemri.models.Reconstructor):
             drop_prob=drop_prob,
         )
 
-    def forward(
+    def forward(  # type: ignore
         self, image: torch.Tensor, mean: torch.Tensor, std: torch.Tensor
     ) -> Dict[str, Any]:
         output = self.unet(image).squeeze(1)

@@ -4,7 +4,8 @@ misc
 .ipynb_checkpoints
 .DS_Store
 .idea
-*personal*
+personal_scripts*
+notebooks/*personal*
 *.orig
 docs/_build
 __datacache__*

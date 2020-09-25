@@ -319,7 +319,9 @@ class DDQN(nn.Module, Policy):
         """
         return self.model(x)
 
-    def get_action(self, obs: Dict[str, Any], eps_threshold: float = 0.0) -> List[int]:
+    def get_action(  # type: ignore
+        self, obs: Dict[str, Any], eps_threshold: float = 0.0
+    ) -> List[int]:
         """ Returns an action sampled from an epsilon-greedy policy.
 
             With probability epsilon sample a random k-space column (ignoring active columns),

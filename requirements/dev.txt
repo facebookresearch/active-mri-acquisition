@@ -1,4 +1,6 @@
+black>=19.3b0
 flake8>=3.8.3
+mypy>=0.782
+nox>=2020.8.22
 sphinx>=3.2.1
 sphinxcontrib-napoleon>=0.7
-mypy>=0.782
