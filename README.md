@@ -1,3 +1,7 @@
+[![CircleCI](https://circleci.com/gh/facebookresearch/active-mri-acquisition/tree/master.svg?style=svg&circle-token=23a90ca66ff4c99cc0333b1f3ab46298bc5f3ec5)](https://circleci.com/gh/facebookresearch/active-mri-acquisition/tree/master) ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+
+
+
 # Reinforcement learning environment for Active MRI Acquisition
 
 A Reinforcement learning environment to facilitate research on 
@@ -20,9 +24,9 @@ We recommend creating a dedicated Python environment for this project, for insta
 $ conda create --name active_mri python=3.7
 $ conda activate active_mri
 ```
-Once your conda environment is activated, make sure you have [PyTorch](https://pytorch.org/) 
-installed with the appropriate CUDA version. For instance, by running 
-(see PyTorch's website for right command for your system)
+Once your conda environment is activated, install [PyTorch](https://pytorch.org/) 
+with your system's CUDA configuration. For instance, by running 
+(see PyTorch's website for the appropriate command for your system)
 
 ```bash
 $ pip install torch==1.6.0+cu101 torchvision==0.7.0+cu101 -f https://download.pytorch.org/whl/torch_stable.html
