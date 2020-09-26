@@ -1,0 +1,43 @@
+version: 2.1
+jobs:
+
+  py37_linux:
+    docker:
+      - image: circleci/python:3.7
+    steps:
+      - checkout
+      - run:
+          name: "Preparing environment"
+          command: |
+            sudo apt-get install -y expect
+            sudo pip install nox
+      - run:
+          name: "Testing active-mri-acquisition"
+          command: |
+              export NOX_PYTHON_VERSIONS=3.7
+              pip install nox
+              python3 -m nox
+
+  py38_linux:
+    docker:
+      - image: circleci/python:3.8
+    steps:
+      - checkout
+      - run:
+          name: "Preparing environment"
+          command: |
+            sudo apt-get install -y expect
+            sudo pip install nox
+      - run:
+          name: "Testing active-mri-acquisition"
+          command: |
+              export NOX_PYTHON_VERSIONS=3.8
+              pip install nox
+              python3 -m nox
+
+workflows:
+  version: 2.1
+  build:
+    jobs:
+      - py37_linux
+      - py38_linux
