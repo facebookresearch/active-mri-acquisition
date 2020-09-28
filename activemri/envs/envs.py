@@ -43,7 +43,10 @@ DataInitFnReturnType = Tuple[
 # -----------------------------------------------------------------------------
 class CyclicSampler(torch.utils.data.Sampler):
     def __init__(
-        self, data_source: Sized, order: Optional[Sized] = None, loops: int = 1,
+        self,
+        data_source: Sized,
+        order: Optional[Sized] = None,
+        loops: int = 1,
     ):
         torch.utils.data.Sampler.__init__(self, data_source)
         assert loops > 0
@@ -138,7 +141,7 @@ class DataHandler:
 
 
 class ActiveMRIEnv(gym.Env):
-    """ Base class for all active MRI acquisition environments.
+    """Base class for all active MRI acquisition environments.
 
     This class provides the core logic implementation of the k-space acquisition process.
     The class is not to be used directly, but rather one of its subclasses should be
@@ -211,13 +214,16 @@ class ActiveMRIEnv(gym.Env):
     # Protected methods
     # -------------------------------------------------------------------------
     def _setup(
-        self, cfg_filename: str, data_init_func: Callable[[], DataInitFnReturnType],
+        self,
+        cfg_filename: str,
+        data_init_func: Callable[[], DataInitFnReturnType],
     ):
         self._init_from_config_file(cfg_filename)
         self._setup_data_handlers(data_init_func)
 
     def _setup_data_handlers(
-        self, data_init_func: Callable[[], DataInitFnReturnType],
+        self,
+        data_init_func: Callable[[], DataInitFnReturnType],
     ):
         train_data, val_data, test_data = data_init_func()
         self._train_data_handler = DataHandler(
@@ -421,38 +427,38 @@ class ActiveMRIEnv(gym.Env):
     # Public methods
     # -------------------------------------------------------------------------
     def reset(self) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """ Starts a new acquisition episode with a batch of images.
+        """Starts a new acquisition episode with a batch of images.
 
-            This methods performs the following steps:
+        This methods performs the following steps:
 
-                1. Reads a batch of images from the environment's dataset.
-                2. Creates an initial acquisition mask for each image.
-                3. Passes the loaded data and the initial masks to the transform function,
-                   producing a batch of inputs for the environment's reconstructor model.
-                4. Calls the reconstructor model on this input and returns its output
-                   as an observation.
+            1. Reads a batch of images from the environment's dataset.
+            2. Creates an initial acquisition mask for each image.
+            3. Passes the loaded data and the initial masks to the transform function,
+               producing a batch of inputs for the environment's reconstructor model.
+            4. Calls the reconstructor model on this input and returns its output
+               as an observation.
 
 
-            The observation returned is a dictionary with the following keys:
-                - *"reconstruction"(torch.Tensor):* The reconstruction produced by the
-                  environment's reconstructor model, using the current
-                  acquisition mask.
-                - *"extra_outputs"(dict(str,Any)):* A dictionary with any additional
-                  outputs produced by the reconstructor  (e.g., uncertainty maps).
-                - *"mask"(torch.Tensor):* The current acquisition mask.
+        The observation returned is a dictionary with the following keys:
+            - *"reconstruction"(torch.Tensor):* The reconstruction produced by the
+              environment's reconstructor model, using the current
+              acquisition mask.
+            - *"extra_outputs"(dict(str,Any)):* A dictionary with any additional
+              outputs produced by the reconstructor  (e.g., uncertainty maps).
+            - *"mask"(torch.Tensor):* The current acquisition mask.
 
-            |
+        |
 
-            Returns:
-                tuple: tuple containing:
-                - obs(dict(str,any): Observation dictionary.
-                - metadata(dict(str,any): Metadata information containing the following keys:
+        Returns:
+            tuple: tuple containing:
+            - obs(dict(str,any): Observation dictionary.
+            - metadata(dict(str,any): Metadata information containing the following keys:
 
-                    - *"fname"(list(str)):* the filenames of the image read from the dataset.
-                    - *"slice_id"(list(int)):* slice indices for each image within the volume.
-                    - *"current_score"(dict(str,float):* A dictionary with the error measures
-                      for the reconstruction (e.g., "mse", "nmse", "ssim", "psnr"). The measures
-                      considered can be obtained with :meth:`score_keys()`.
+                - *"fname"(list(str)):* the filenames of the image read from the dataset.
+                - *"slice_id"(list(int)):* slice indices for each image within the volume.
+                - *"current_score"(dict(str,float):* A dictionary with the error measures
+                  for the reconstruction (e.g., "mse", "nmse", "ssim", "psnr"). The measures
+                  considered can be obtained with :meth:`score_keys()`.
         """
         self._did_reset = True
         try:
@@ -488,40 +494,40 @@ class ActiveMRIEnv(gym.Env):
     def step(
         self, action: Union[int, Sequence[int]]
     ) -> Tuple[Dict[str, Any], np.ndarray, List[bool], Dict]:
-        """ Performs a step of active MRI acquisition.
+        """Performs a step of active MRI acquisition.
 
-            Given a set of indices for k-space columns to acquire, updates the current batch
-            of masks with their corresponding indices, creates a new batch of reconstructions,
-            and returns the corresponding observations and rewards (for the observation format
-            see :meth:`reset()`). The reward is the improvement in score with
-            respect to the reconstruction before adding the indices. The specific score metric
-            used is determined by ``env.reward_metric``.
+        Given a set of indices for k-space columns to acquire, updates the current batch
+        of masks with their corresponding indices, creates a new batch of reconstructions,
+        and returns the corresponding observations and rewards (for the observation format
+        see :meth:`reset()`). The reward is the improvement in score with
+        respect to the reconstruction before adding the indices. The specific score metric
+        used is determined by ``env.reward_metric``.
 
-            The method also returns a list of booleans, indicating whether any episodes in the
-            batch have already concluded.
+        The method also returns a list of booleans, indicating whether any episodes in the
+        batch have already concluded.
 
-            The last return value is a metadata dictionary. It contains a single key
-            "current_score", which contains a dictionary with the error measures for the
-            reconstruction (e.g., ``"mse", "nmse", "ssim", "psnr"``). The measures
-            considered can be obtained with :meth:`score_keys()`.
+        The last return value is a metadata dictionary. It contains a single key
+        "current_score", which contains a dictionary with the error measures for the
+        reconstruction (e.g., ``"mse", "nmse", "ssim", "psnr"``). The measures
+        considered can be obtained with :meth:`score_keys()`.
 
-            Args:
-                action(union(int, sequence(int))): Indices for k-space columns to acquire. The
-                                                   length of the sequence must be equal to the
-                                                   current number of parallel episodes
-                                                   (i.e., ``obs["reconstruction"].shape[0]``).
-                                                   If only an ``int`` is passed, the index will
-                                                   be replicated for the whole batch of episodes.
+        Args:
+            action(union(int, sequence(int))): Indices for k-space columns to acquire. The
+                                               length of the sequence must be equal to the
+                                               current number of parallel episodes
+                                               (i.e., ``obs["reconstruction"].shape[0]``).
+                                               If only an ``int`` is passed, the index will
+                                               be replicated for the whole batch of episodes.
 
-            Returns:
-                tuple: The transition information in the order
-                ``(next_observation, reward, done, meta)``. The types and shapes are:
+        Returns:
+            tuple: The transition information in the order
+            ``(next_observation, reward, done, meta)``. The types and shapes are:
 
-                  - ``next_observation(dict):`` Dictionary format (see :meth:`reset()`).
-                  - ``reward(np.ndarray)``: length equal to current number of parallel
-                    episodes.
-                  - ``done(list(bool))``: same length as ``reward``.
-                  - ``meta(dict)``: see description above.
+              - ``next_observation(dict):`` Dictionary format (see :meth:`reset()`).
+              - ``reward(np.ndarray)``: length equal to current number of parallel
+                episodes.
+              - ``done(list(bool))``: same length as ``reward``.
+              - ``meta(dict)``: see description above.
 
         """
         if not self._did_reset:
@@ -552,29 +558,29 @@ class ActiveMRIEnv(gym.Env):
     def try_action(
         self, action: Union[int, Sequence[int]]
     ) -> Tuple[Dict[str, Any], Dict[str, np.ndarray]]:
-        """ Simulates the effects of actions without changing the environment's state.
+        """Simulates the effects of actions without changing the environment's state.
 
-            This method operates almost exactly as :meth:`step()`, with the exception that
-            the environment's state is not altered. The method returns the next observation
-            and the resulting reconstruction score after applying the give k-space columns to
-            each image in the current batch of episodes.
+        This method operates almost exactly as :meth:`step()`, with the exception that
+        the environment's state is not altered. The method returns the next observation
+        and the resulting reconstruction score after applying the give k-space columns to
+        each image in the current batch of episodes.
 
-            Args:
-                action(union(int, sequence(int))): Indices for k-space columns to acquire. The
-                                                   length of the sequence must be equal to the
-                                                   current number of parallel episodes
-                                                   (i.e., ``obs["reconstruction"].shape[0]``).
-                                                   If only an ``int`` is passed, the index will
-                                                   be replicated for the whole batch of episodes.
+        Args:
+            action(union(int, sequence(int))): Indices for k-space columns to acquire. The
+                                               length of the sequence must be equal to the
+                                               current number of parallel episodes
+                                               (i.e., ``obs["reconstruction"].shape[0]``).
+                                               If only an ``int`` is passed, the index will
+                                               be replicated for the whole batch of episodes.
 
-            Returns:
-                tuple: The reconstruction information in the order
-                ``(next_observation, current_score)``. The types and shapes are:
+        Returns:
+            tuple: The reconstruction information in the order
+            ``(next_observation, current_score)``. The types and shapes are:
 
-                  - ``next_observation(dict):`` Dictionary format (see :meth:`reset()`).
-                  - ``current_score(dict(str, float))``: A dictionary with the error measures
-                      for the reconstruction (e.g., "mse", "nmse", "ssim", "psnr"). The measures
-                      considered can be obtained with `ActiveMRIEnv.score_keys()`.
+              - ``next_observation(dict):`` Dictionary format (see :meth:`reset()`).
+              - ``current_score(dict(str, float))``: A dictionary with the error measures
+                  for the reconstruction (e.g., "mse", "nmse", "ssim", "psnr"). The measures
+                  considered can be obtained with `ActiveMRIEnv.score_keys()`.
 
         """
         if not self._did_reset:
@@ -591,23 +597,23 @@ class ActiveMRIEnv(gym.Env):
         return obs, new_score
 
     def render(self, mode="human"):
-        """ Renders information about the environment's current state.
+        """Renders information about the environment's current state.
 
-            Returns:
-                ``np.ndarray``: An image frame containing, from left to right: current
-                                acquisition mask, current ground image, current reconstruction,
-                                and current relative reconstruction error.
+        Returns:
+            ``np.ndarray``: An image frame containing, from left to right: current
+                            acquisition mask, current ground image, current reconstruction,
+                            and current relative reconstruction error.
         """
         pass
 
     def seed(self, seed: Optional[int] = None):
-        """ Sets the seed for the internal number generator.
+        """Sets the seed for the internal number generator.
 
-            This seeds affects the order of the data loader for all loop modalities (i.e.,
-            training, validation, test).
+        This seeds affects the order of the data loader for all loop modalities (i.e.,
+        training, validation, test).
 
-            Args:
-                seed(optional(int)): The seed for the environment's random number generator.
+        Args:
+            seed(optional(int)): The seed for the environment's random number generator.
         """
         self._seed = seed
         self._rng = np.random.RandomState(seed)
@@ -616,15 +622,15 @@ class ActiveMRIEnv(gym.Env):
         self._test_data_handler.seed(seed)
 
     def set_training(self, reset: bool = False):
-        """ Sets the environment to use the training data loader.
+        """Sets the environment to use the training data loader.
 
-            Args:
-                reset(bool): If ``True``, also resets the data loader so that it starts again
-                             from the first image in the loop order.
+        Args:
+            reset(bool): If ``True``, also resets the data loader so that it starts again
+                         from the first image in the loop order.
 
-            Warning:
-                After this method is called the ``env.reset()`` needs to be called again, otherwise
-                an exception will be thrown.
+        Warning:
+            After this method is called the ``env.reset()`` needs to be called again, otherwise
+            an exception will be thrown.
         """
         if reset:
             self._train_data_handler.reset()
@@ -632,15 +638,15 @@ class ActiveMRIEnv(gym.Env):
         self._clear_cache_and_unset_did_reset()
 
     def set_val(self, reset: bool = True):
-        """ Sets the environment to use the validation data loader.
+        """Sets the environment to use the validation data loader.
 
-            Args:
-                reset(bool): If ``True``, also resets the data loader so that it starts again
-                             from the first image in the loop order.
+        Args:
+            reset(bool): If ``True``, also resets the data loader so that it starts again
+                         from the first image in the loop order.
 
-            Warning:
-                After this method is called the ``env.reset()`` needs to be called again, otherwise
-                an exception will be thrown.
+        Warning:
+            After this method is called the ``env.reset()`` needs to be called again, otherwise
+            an exception will be thrown.
         """
         if reset:
             self._val_data_handler.reset()
@@ -648,15 +654,15 @@ class ActiveMRIEnv(gym.Env):
         self._clear_cache_and_unset_did_reset()
 
     def set_test(self, reset: bool = True):
-        """ Sets the environment to use the test data loader.
+        """Sets the environment to use the test data loader.
 
-            Args:
-                reset(bool): If ``True``, also resets the data loader so that it starts again
-                             from the first image in the loop order.
+        Args:
+            reset(bool): If ``True``, also resets the data loader so that it starts again
+                         from the first image in the loop order.
 
-            Warning:
-                After this method is called the ``env.reset()`` needs to be called again, otherwise
-                an exception will be thrown.
+        Warning:
+            After this method is called the ``env.reset()`` needs to be called again, otherwise
+            an exception will be thrown.
         """
         if reset:
             self._test_data_handler.reset()
@@ -673,31 +679,31 @@ class ActiveMRIEnv(gym.Env):
 #                             CUSTOM ENVIRONMENTS
 # -----------------------------------------------------------------------------
 class MICCAI2020Env(ActiveMRIEnv):
-    """ Implementation of environment used for *Pineda et al., MICCAI 2020*.
+    """Implementation of environment used for *Pineda et al., MICCAI 2020*.
 
-        This environment is provided to facilitate replication of the experiments performed
-        in *Luis Pineda, Sumana Basu, Adriana Romero, Roberto Calandra, Michal Drozdzal,
-        "Active MR k-space Sampling with Reinforcement Learning". MICCAI 2020.*
+    This environment is provided to facilitate replication of the experiments performed
+    in *Luis Pineda, Sumana Basu, Adriana Romero, Roberto Calandra, Michal Drozdzal,
+    "Active MR k-space Sampling with Reinforcement Learning". MICCAI 2020.*
 
-        The dataset is the same as that of :class:`SingleCoilKneeEnv`, except that we provide
-        a custom validation/test split of the original validation data. The environment's
-        configuration file is set to use the reconstruction model used in the paper
-        (see :class:`activemri.models.cvpr19_reconstructor.CVPR19Reconstructor`), as well
-        as the proper transform to generate inputs for this model.
+    The dataset is the same as that of :class:`SingleCoilKneeEnv`, except that we provide
+    a custom validation/test split of the original validation data. The environment's
+    configuration file is set to use the reconstruction model used in the paper
+    (see :class:`activemri.models.cvpr19_reconstructor.CVPR19Reconstructor`), as well
+    as the proper transform to generate inputs for this model.
 
-        The k-space shape of this environment is set to ``(640, 368)``.
+    The k-space shape of this environment is set to ``(640, 368)``.
 
-        Args:
-            num_parallel_episodes(int): Determines the number images that will be processed
-                                        simultaneously by :meth:`reset()` and :meth:`step()`.
-                                        Defaults to 1.
-            budget(optional(int)): The length of an acquisition episode. Defaults to ``None``,
-                                   which indicates that episode will continue until all k-space
-                                   columns have been acquired.
-            seed(optional(int)): The seed for the environment's random number generator, which is
-                                 an instance of ``numpy.random.RandomState``. Defaults to ``None``.
-            extreme(bool): ``True`` or ``False`` for running extreme acceleration or normal
-                           acceleration scenarios described in the paper, respectively.
+    Args:
+        num_parallel_episodes(int): Determines the number images that will be processed
+                                    simultaneously by :meth:`reset()` and :meth:`step()`.
+                                    Defaults to 1.
+        budget(optional(int)): The length of an acquisition episode. Defaults to ``None``,
+                               which indicates that episode will continue until all k-space
+                               columns have been acquired.
+        seed(optional(int)): The seed for the environment's random number generator, which is
+                             an instance of ``numpy.random.RandomState``. Defaults to ``None``.
+        extreme(bool): ``True`` or ``False`` for running extreme acceleration or normal
+                       acceleration scenarios described in the paper, respectively.
     """
 
     KSPACE_WIDTH = scknee_data.MICCAI2020Data.KSPACE_WIDTH
@@ -734,7 +740,9 @@ class MICCAI2020Env(ActiveMRIEnv):
         val_and_test_path = root_path / "knee_singlecoil_val"
 
         train_data = scknee_data.MICCAI2020Data(
-            train_path, ActiveMRIEnv._void_transform, num_cols=self.KSPACE_WIDTH,
+            train_path,
+            ActiveMRIEnv._void_transform,
+            num_cols=self.KSPACE_WIDTH,
         )
         val_data = scknee_data.MICCAI2020Data(
             val_and_test_path,
@@ -768,7 +776,9 @@ class MICCAI2020Env(ActiveMRIEnv):
     # -------------------------------------------------------------------------
     # Public methods
     # -------------------------------------------------------------------------
-    def reset(self,) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def reset(
+        self,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         obs, meta = super().reset()
         if not obs:
             return obs, meta
@@ -799,34 +809,34 @@ class MICCAI2020Env(ActiveMRIEnv):
 
 
 class FastMRIEnv(ActiveMRIEnv):
-    """ Base class for all fastMRI environments.
+    """Base class for all fastMRI environments.
 
-        This class can be used to instantiate active acquisition environments using fastMRI
-        data. However, for convenience we provided subclasses of ``FastMRIEnv`` with
-        default configuration options for each dataset:
+    This class can be used to instantiate active acquisition environments using fastMRI
+    data. However, for convenience we provided subclasses of ``FastMRIEnv`` with
+    default configuration options for each dataset:
 
-            - :class:`SingleCoilKneeEnv`
-            - :class:`MultiCoilKneeEnv`
-            - :class:`SingleCoilBrainEnv`
-            - :class:`MultiCoilKneeEnv`
+        - :class:`SingleCoilKneeEnv`
+        - :class:`MultiCoilKneeEnv`
+        - :class:`SingleCoilBrainEnv`
+        - :class:`MultiCoilKneeEnv`
 
-        The shape of the k-space is set to ``(640, max(num_cols))``.
+    The shape of the k-space is set to ``(640, max(num_cols))``.
 
-        Args:
-            config_path(str): The path to the JSON configuration file.
-            dataset_name(str): One of "knee_singlecoil", "multicoil" (for knee),
-                               "brain_multicoil". Primarily used to locate the fastMRI
-                               dataset in the user's fastMRI data root folder.
-            num_parallel_episodes(int): Determines the number images that will be processed
-                                        simultaneously by :meth:`reset()` and :meth:`step()`.
-                                        Defaults to 1.
-            budget(optional(int)): The length of an acquisition episode. Defaults to ``None``,
-                                   which indicates that episode will continue until all k-space
-                                   columns have been acquired.
-            seed(optional(int)): The seed for the environment's random number generator, which is
-                                 an instance of ``numpy.random.RandomState``. Defaults to ``None``.
-            num_cols(sequence(int)): Used to filter k-space data to only use images whose k-space
-                                     width is in this tuple. Defaults to ``(368, 372)``.
+    Args:
+        config_path(str): The path to the JSON configuration file.
+        dataset_name(str): One of "knee_singlecoil", "multicoil" (for knee),
+                           "brain_multicoil". Primarily used to locate the fastMRI
+                           dataset in the user's fastMRI data root folder.
+        num_parallel_episodes(int): Determines the number images that will be processed
+                                    simultaneously by :meth:`reset()` and :meth:`step()`.
+                                    Defaults to 1.
+        budget(optional(int)): The length of an acquisition episode. Defaults to ``None``,
+                               which indicates that episode will continue until all k-space
+                               columns have been acquired.
+        seed(optional(int)): The seed for the environment's random number generator, which is
+                             an instance of ``numpy.random.RandomState``. Defaults to ``None``.
+        num_cols(sequence(int)): Used to filter k-space data to only use images whose k-space
+                                 width is in this tuple. Defaults to ``(368, 372)``.
     """
 
     def __init__(
@@ -894,21 +904,21 @@ class FastMRIEnv(ActiveMRIEnv):
 
 
 class SingleCoilKneeEnv(FastMRIEnv):
-    """ Convenience class to access single-coil knee data.
+    """Convenience class to access single-coil knee data.
 
-        Loads the configuration from ``configs/single-coil-knee.json``.
+    Loads the configuration from ``configs/single-coil-knee.json``.
 
-        Args:
-            num_parallel_episodes(int): Determines the number images that will be processed
-                                        simultaneously by :meth:`reset()` and :meth:`step()`.
-                                        Defaults to 1.
-            budget(optional(int)): The length of an acquisition episode. Defaults to ``None``,
-                                   which indicates that episode will continue until all k-space
-                                   columns have been acquired.
-            seed(optional(int)): The seed for the environment's random number generator, which is
-                                 an instance of ``numpy.random.RandomState``. Defaults to ``None``.
-            num_cols(sequence(int)): Used to filter k-space data to only use images whose k-space
-                                     width is in this tuple. Defaults to ``(368, 372)``.
+    Args:
+        num_parallel_episodes(int): Determines the number images that will be processed
+                                    simultaneously by :meth:`reset()` and :meth:`step()`.
+                                    Defaults to 1.
+        budget(optional(int)): The length of an acquisition episode. Defaults to ``None``,
+                               which indicates that episode will continue until all k-space
+                               columns have been acquired.
+        seed(optional(int)): The seed for the environment's random number generator, which is
+                             an instance of ``numpy.random.RandomState``. Defaults to ``None``.
+        num_cols(sequence(int)): Used to filter k-space data to only use images whose k-space
+                                 width is in this tuple. Defaults to ``(368, 372)``.
     """
 
     def __init__(
@@ -929,21 +939,21 @@ class SingleCoilKneeEnv(FastMRIEnv):
 
 
 class MultiCoilKneeEnv(FastMRIEnv):
-    """ Convenience class to access multi-coil knee data.
+    """Convenience class to access multi-coil knee data.
 
-        Loads the configuration from ``configs/multi-coil-knee.json``.
+    Loads the configuration from ``configs/multi-coil-knee.json``.
 
-        Args:
-            num_parallel_episodes(int): Determines the number images that will be processed
-                                        simultaneously by :meth:`reset()` and :meth:`step()`.
-                                        Defaults to 1.
-            budget(optional(int)): The length of an acquisition episode. Defaults to ``None``,
-                                   which indicates that episode will continue until all k-space
-                                   columns have been acquired.
-            seed(optional(int)): The seed for the environment's random number generator, which is
-                                 an instance of ``numpy.random.RandomState``. Defaults to ``None``.
-            num_cols(sequence(int)): Used to filter k-space data to only use images whose k-space
-                                     width is in this tuple. Defaults to ``(368, 372)``.
+    Args:
+        num_parallel_episodes(int): Determines the number images that will be processed
+                                    simultaneously by :meth:`reset()` and :meth:`step()`.
+                                    Defaults to 1.
+        budget(optional(int)): The length of an acquisition episode. Defaults to ``None``,
+                               which indicates that episode will continue until all k-space
+                               columns have been acquired.
+        seed(optional(int)): The seed for the environment's random number generator, which is
+                             an instance of ``numpy.random.RandomState``. Defaults to ``None``.
+        num_cols(sequence(int)): Used to filter k-space data to only use images whose k-space
+                                 width is in this tuple. Defaults to ``(368, 372)``.
     """
 
     def __init__(

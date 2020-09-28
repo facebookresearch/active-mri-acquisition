@@ -105,7 +105,8 @@ class Trainer:
 
         if self.options.only_evaluator:
             self.options.checkpoints_dir = os.path.join(
-                self.options.checkpoints_dir, "evaluator",
+                self.options.checkpoints_dir,
+                "evaluator",
             )
         if not os.path.exists(self.options.checkpoints_dir):
             os.makedirs(self.options.checkpoints_dir)
@@ -525,7 +526,8 @@ class Trainer:
             )
 
             uncertainty_map = util.common.gray2heatmap(
-                util.common.create_grid_from_tensor(uncertainty_map.exp()), cmap="jet",
+                util.common.create_grid_from_tensor(uncertainty_map.exp()),
+                cmap="jet",
             )
             writer.add_image(
                 "validation_images/uncertainty_map",

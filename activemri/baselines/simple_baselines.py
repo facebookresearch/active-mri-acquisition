@@ -9,17 +9,18 @@ import numpy as np
 import torch
 
 import activemri.envs
+
 from . import Policy
 
 
 class RandomPolicy(Policy):
-    """ A policy representing random k-space selection.
+    """A policy representing random k-space selection.
 
-        Returns one of the valid actions uniformly at random.
+    Returns one of the valid actions uniformly at random.
 
-        Args:
-            seed(optional(int)): The seed to use for the random number generator, which is
-                based on ``torch.Generator()``.
+    Args:
+        seed(optional(int)): The seed to use for the random number generator, which is
+            based on ``torch.Generator()``.
     """
 
     def __init__(self, seed: Optional[int] = None):
@@ -29,15 +30,15 @@ class RandomPolicy(Policy):
             self.rng.manual_seed(seed)
 
     def get_action(self, obs: Dict[str, Any], **_kwargs) -> List[int]:
-        """ Returns a random action without replacement.
+        """Returns a random action without replacement.
 
-            Args:
-                obs(dict(str, any)): As returned by :class:`activemri.envs.ActiveMRIEnv`.
+        Args:
+            obs(dict(str, any)): As returned by :class:`activemri.envs.ActiveMRIEnv`.
 
-            Returns:
-                list(int): A list of random k-space column indices, one per batch element in
-                    the observation. The indices are sampled from the set of inactive (0) columns
-                    on each batch element.
+        Returns:
+            list(int): A list of random k-space column indices, one per batch element in
+                the observation. The indices are sampled from the set of inactive (0) columns
+                on each batch element.
         """
         return (
             (obs["mask"].logical_not().float() + 1e-6)
@@ -96,20 +97,22 @@ class RandomLowBiasPolicy(Policy):
 
 
 class LowestIndexPolicy(Policy):
-    """ A policy that represents low-to-high frequency k-space selection.
+    """A policy that represents low-to-high frequency k-space selection.
 
-        Args:
-            alternate_sides(bool): If ``True`` the indices of selected actions will alternate
-                between the sides of the mask. For example, for an image with 100
-                columns, and non-centered k-space, the order will be 0, 99, 1, 98, 2, 97, ..., etc.
-                For the same size and centered, the order will be 49, 50, 48, 51, 47, 52, ..., etc.
+    Args:
+        alternate_sides(bool): If ``True`` the indices of selected actions will alternate
+            between the sides of the mask. For example, for an image with 100
+            columns, and non-centered k-space, the order will be 0, 99, 1, 98, 2, 97, ..., etc.
+            For the same size and centered, the order will be 49, 50, 48, 51, 47, 52, ..., etc.
 
-            centered(bool): If ``True`` (default), low frequencies are in the center of the mask.
-                Otherwise, they are in the edges of the mask.
+        centered(bool): If ``True`` (default), low frequencies are in the center of the mask.
+            Otherwise, they are in the edges of the mask.
     """
 
     def __init__(
-        self, alternate_sides: bool, centered: bool = True,
+        self,
+        alternate_sides: bool,
+        centered: bool = True,
     ):
         super().__init__()
         self.alternate_sides = alternate_sides
@@ -117,15 +120,15 @@ class LowestIndexPolicy(Policy):
         self.bottom_side = True
 
     def get_action(self, obs: Dict[str, Any], **_kwargs) -> List[int]:
-        """ Returns a random action without replacement.
+        """Returns a random action without replacement.
 
-            Args:
-                obs(dict(str, any)): As returned by :class:`activemri.envs.ActiveMRIEnv`.
+        Args:
+            obs(dict(str, any)): As returned by :class:`activemri.envs.ActiveMRIEnv`.
 
-            Returns:
-                list(int): A list of k-space column indices, one per batch element in
-                    the observation, equal to the lowest non-active k-space column in their
-                    corresponding observation masks.
+        Returns:
+            list(int): A list of k-space column indices, one per batch element in
+                the observation, equal to the lowest non-active k-space column in their
+                corresponding observation masks.
         """
         mask = obs["mask"].squeeze().cpu().numpy()
         new_mask = self._get_new_mask(mask)
@@ -155,15 +158,15 @@ class LowestIndexPolicy(Policy):
 
 
 class OneStepGreedyOracle(Policy):
-    """ A policy that returns the k-space column leading to best reconstruction score.
+    """A policy that returns the k-space column leading to best reconstruction score.
 
-        Args:
-            env(``activemri.envs.ActiveMRIEnv``): The environment for which the policy is computed
-                for.
-            metric(str): The name of the score metric to use (must be in ``env.score_keys()``).
-            num_samples(optional(int)): If given, only ``num_samples`` random actions will be
-                tested. Defaults to ``None``, which means that method will consider all actions.
-            rng(``numpy.random.RandomState``): A random number generator to use for sampling.
+    Args:
+        env(``activemri.envs.ActiveMRIEnv``): The environment for which the policy is computed
+            for.
+        metric(str): The name of the score metric to use (must be in ``env.score_keys()``).
+        num_samples(optional(int)): If given, only ``num_samples`` random actions will be
+            tested. Defaults to ``None``, which means that method will consider all actions.
+        rng(``numpy.random.RandomState``): A random number generator to use for sampling.
     """
 
     def __init__(
@@ -181,15 +184,15 @@ class OneStepGreedyOracle(Policy):
         self.rng = rng if rng is not None else np.random.RandomState()
 
     def get_action(self, obs: Dict[str, Any], **_kwargs) -> List[int]:
-        """ Returns a one-step greedy action maximizing reconstruction score.
+        """Returns a one-step greedy action maximizing reconstruction score.
 
-            Args:
-                obs(dict(str, any)): As returned by :class:`activemri.envs.ActiveMRIEnv`.
+        Args:
+            obs(dict(str, any)): As returned by :class:`activemri.envs.ActiveMRIEnv`.
 
-            Returns:
-                list(int): A list of k-space column indices, one per batch element in
-                    the observation, equal to the action that maximizes reconstruction score
-                    (e.g, SSIM or negative MSE).
+        Returns:
+            list(int): A list of k-space column indices, one per batch element in
+                the observation, equal to the action that maximizes reconstruction score
+                (e.g, SSIM or negative MSE).
         """
         mask = obs["mask"]
         batch_size = mask.shape[0]

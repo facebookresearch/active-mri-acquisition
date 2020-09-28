@@ -1,7 +1,6 @@
 import functools
 
 import numpy as np
-
 import pytest  # noqa: F401
 import torch
 

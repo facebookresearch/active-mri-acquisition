@@ -2,9 +2,9 @@ from typing import Any, Dict, List
 
 import torch
 
-from . import Policy
-
 import activemri.experimental.cvpr19_models.models.evaluator as cvpr19_evaluator
+
+from . import Policy
 
 
 # This is just a wrapper for the model in cvpr19_models folder
@@ -12,7 +12,10 @@ import activemri.experimental.cvpr19_models.models.evaluator as cvpr19_evaluator
 # TODO fix evaluator height
 class CVPR19Evaluator(Policy):
     def __init__(
-        self, evaluator_path: str, device: torch.device, add_mask: bool = False,
+        self,
+        evaluator_path: str,
+        device: torch.device,
+        add_mask: bool = False,
     ):
         super().__init__()
         evaluator_checkpoint = torch.load(evaluator_path)

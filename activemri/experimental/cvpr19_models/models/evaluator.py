@@ -6,13 +6,12 @@ undersampled mri reconstruction with active acquisition." Proceedings of the IEE
 Computer Vision and Pattern Recognition. 2019.`
 """
 import functools
+from typing import Optional
+
 import torch
 import torch.nn as nn
 
-from . import fft_utils
-from . import reconstruction
-
-from typing import Optional
+from . import fft_utils, reconstruction
 
 
 class SimpleSequential(nn.Module):
@@ -77,20 +76,20 @@ class SpectralMapDecomposition(nn.Module):
 
 
 class EvaluatorNetwork(nn.Module):
-    """ Evaluator network used in Zhang et al., CVPR'19.
+    """Evaluator network used in Zhang et al., CVPR'19.
 
-        Args:
-            number_of_filters(int): Number of filters used in convolutions. Defaults to 256. \n
-            number_of_conv_layers(int): Depth of the model defined as a number of
-                    convolutional layers. Defaults to 4.
-            use_sigmoid(bool): Whether the sigmoid non-linearity is applied to the
-                    output of the network. Defaults to False.
-            width(int): The width of the image. Defaults to 128 (corresponds to DICOM).
-            height(Optional[int]): The height of the image. If ``None`` the value of ``width``.
-                is used. Defaults to ``None``.
-            mask_embed_dim(int): Dimensionality of the mask embedding.
-            num_output_channels(Optional[int]): The dimensionality of the output. If ``None``,
-                the value of ``width`` is used. Defaults to ``None``.
+    Args:
+        number_of_filters(int): Number of filters used in convolutions. Defaults to 256. \n
+        number_of_conv_layers(int): Depth of the model defined as a number of
+                convolutional layers. Defaults to 4.
+        use_sigmoid(bool): Whether the sigmoid non-linearity is applied to the
+                output of the network. Defaults to False.
+        width(int): The width of the image. Defaults to 128 (corresponds to DICOM).
+        height(Optional[int]): The height of the image. If ``None`` the value of ``width``.
+            is used. Defaults to ``None``.
+        mask_embed_dim(int): Dimensionality of the mask embedding.
+        num_output_channels(Optional[int]): The dimensionality of the output. If ``None``,
+            the value of ``width`` is used. Defaults to ``None``.
     """
 
     def __init__(
@@ -184,7 +183,7 @@ class EvaluatorNetwork(nn.Module):
         mask_embedding: Optional[torch.Tensor] = None,
         mask: Optional[torch.Tensor] = None,
     ):
-        """ Computes scores for each k-space column.
+        """Computes scores for each k-space column.
 
         Args:
             input_tensor(torch.Tensor): Batch of reconstructed images,

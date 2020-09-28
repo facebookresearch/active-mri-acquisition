@@ -13,7 +13,6 @@ import random
 import sys
 import time
 import types
-
 from typing import Any, Dict, List, Optional, Tuple
 
 import filelock
@@ -24,13 +23,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from . import evaluation
-from . import replay_buffer
-from . import Policy
-from . import RandomPolicy
 import activemri.envs.envs as mri_envs
-
 import activemri.experimental.cvpr19_models.models.evaluator as cvpr19_evaluator
+
+from . import Policy, RandomPolicy, evaluation, replay_buffer
 
 
 def _encode_obs_dict(obs: Dict[str, Any]) -> torch.Tensor:
@@ -105,7 +101,7 @@ class SimpleMLP(nn.Module):
         if ignored_cols is None:
             ignored_cols = []
         self.ignore_mask = ignore_mask
-        self.num_inputs = budget if self.ignore_mask else self.image_width
+        self.num_inputs = budget if self.ignore_mask else image_width
         num_actions = image_width
         if legacy_offset:
             num_actions -= 2 * legacy_offset
@@ -169,17 +165,17 @@ class EvaluatorBasedValueNetwork(nn.Module):
         self.mask_embed_dim = mask_embed_dim
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        """ Predicts action values.
+        """Predicts action values.
 
-            Args:
-                obs(torch.Tensor): The observation tensor.
+        Args:
+            obs(torch.Tensor): The observation tensor.
 
-            Returns:
-                torch.Tensor: Q-values for all actions at the given observation.
+        Returns:
+            torch.Tensor: Q-values for all actions at the given observation.
 
-            Note:
-                Values corresponding to active k-space columns in the observation are manually
-                set to ``1e-10``.
+        Note:
+            Values corresponding to active k-space columns in the observation are manually
+            set to ``1e-10``.
         """
         reconstruction, mask, mask_embedding = _decode_obs_tensor(
             obs, self.evaluator.mask_embed_dim
@@ -208,25 +204,25 @@ def _get_model(options):
 
 
 class DDQN(nn.Module, Policy):
-    """ Implementation of Double DQN value network.
+    """Implementation of Double DQN value network.
 
-        The configuration is given by the ``opts`` argument, which must contain the following
-        fields:
+    The configuration is given by the ``opts`` argument, which must contain the following
+    fields:
 
-            - mask_embedding_dim(int): See
-              :class:`cvpr19_models.models.evaluator.EvaluatorNetwork`.
-            - gamma(float): Discount factor for target updates.
-            - dqn_model_type(str): Describes the architecture of the neural net. Options
-                    are "simple_mlp" and "evaluator", to use :class:`SimpleMLP` and
-                    :class:`EvaluatorBasedValueNetwork`, respectively.
-            - budget(int): The environment's budget.
-            - image_width(int): The width of the input images.
+        - mask_embedding_dim(int): See
+          :class:`cvpr19_models.models.evaluator.EvaluatorNetwork`.
+        - gamma(float): Discount factor for target updates.
+        - dqn_model_type(str): Describes the architecture of the neural net. Options
+                are "simple_mlp" and "evaluator", to use :class:`SimpleMLP` and
+                :class:`EvaluatorBasedValueNetwork`, respectively.
+        - budget(int): The environment's budget.
+        - image_width(int): The width of the input images.
 
-        Args:
-            device(``torch.device``): Device to use.
-            memory(optional(``replay_buffer.ReplayMemory``)): Replay buffer to sample transitions
-                from. Can be ``None``, for example, if this is a target network.
-            opts(``types.SimpleNamespace``): Options for the algorithm as explained above.
+    Args:
+        device(``torch.device``): Device to use.
+        memory(optional(``replay_buffer.ReplayMemory``)): Replay buffer to sample transitions
+            from. Can be ``None``, for example, if this is a target network.
+        opts(``types.SimpleNamespace``): Options for the algorithm as explained above.
     """
 
     def __init__(
@@ -317,32 +313,32 @@ class DDQN(nn.Module, Policy):
         }
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """ Predicts action values.
+        """Predicts action values.
 
-            Args:
-                x(torch.Tensor): The observation tensor.
+        Args:
+            x(torch.Tensor): The observation tensor.
 
-            Returns:
-                Dictionary(torch.Tensor): The predicted Q-values.
+        Returns:
+            Dictionary(torch.Tensor): The predicted Q-values.
 
-            Note:
-                Values corresponding to active k-space columns in the observation are manually
-                set to ``1e-10``.
+        Note:
+            Values corresponding to active k-space columns in the observation are manually
+            set to ``1e-10``.
         """
         return self.model(x)
 
     def get_action(  # type: ignore
         self, obs: Dict[str, Any], eps_threshold: float = 0.0
     ) -> List[int]:
-        """ Returns an action sampled from an epsilon-greedy policy.
+        """Returns an action sampled from an epsilon-greedy policy.
 
-            With probability epsilon sample a random k-space column (ignoring active columns),
-            otherwise return the column with the highest estimated Q-value for the observation.
+        With probability epsilon sample a random k-space column (ignoring active columns),
+        otherwise return the column with the highest estimated Q-value for the observation.
 
-            Args:
-                obs(torch.Tensor): The observation for which an action is required.
-                eps_threshold(float): The probability of sampling a random action instead of using
-                    a greedy action.
+        Args:
+            obs(torch.Tensor): The observation for which an action is required.
+            eps_threshold(float): The probability of sampling a random action instead of using
+                a greedy action.
         """
         sample = random.random()
         if sample < eps_threshold:
@@ -518,37 +514,37 @@ class DDQNTester:
 
 
 class DDQNTrainer:
-    """ DDQN Trainer for active MRI acquisition.
+    """DDQN Trainer for active MRI acquisition.
 
-        Configuration for the trainer is provided by argument ``options``. Must contain the
-        following fields:
+    Configuration for the trainer is provided by argument ``options``. Must contain the
+    following fields:
 
-            - "checkpoints_dir"(str): The directory where the model will be saved to (or
-              loaded from).
-            - dqn_batch_size(int): The batch size to use for updates.
-            - dqn_burn_in(int): How many steps to do before starting updating parameters.
-            - dqn_normalize(bool): ``True`` if running mean/st. deviation should be maintained
-              for observations.
-            - dqn_only_test(bool): ``True`` if the model will not be trained, thus only will
-              attempt to read from checkpoint and load only weights of the network (ignoring
-              training related information).
-            - dqn_test_episode_freq(optional(int)): How frequently (in number of env steps)
-              to perform test episodes.
-            - freq_dqn_checkpoint_save(int): How often (in episodes) to save the model.
-            - num_train_steps(int): How many environment steps to train for.
-            - replay_buffer_size(int): The capacity of the replay buffer.
-            - resume(bool): If true, will try to load weights from the checkpoints dir.
-            - num_test_episodes(int): How many test episodes to periodically evaluate for.
-            - seed(int): Sets the seed for the environment when running evaluation episodes.
-            - reward_metric(str): Which of the ``env.scores_keys()`` is used as reward. Mainly
-              used for logging purposes.
-            - target_net_update_freq(int): How often (in env's steps) to update the target
-              network.
+        - "checkpoints_dir"(str): The directory where the model will be saved to (or
+          loaded from).
+        - dqn_batch_size(int): The batch size to use for updates.
+        - dqn_burn_in(int): How many steps to do before starting updating parameters.
+        - dqn_normalize(bool): ``True`` if running mean/st. deviation should be maintained
+          for observations.
+        - dqn_only_test(bool): ``True`` if the model will not be trained, thus only will
+          attempt to read from checkpoint and load only weights of the network (ignoring
+          training related information).
+        - dqn_test_episode_freq(optional(int)): How frequently (in number of env steps)
+          to perform test episodes.
+        - freq_dqn_checkpoint_save(int): How often (in episodes) to save the model.
+        - num_train_steps(int): How many environment steps to train for.
+        - replay_buffer_size(int): The capacity of the replay buffer.
+        - resume(bool): If true, will try to load weights from the checkpoints dir.
+        - num_test_episodes(int): How many test episodes to periodically evaluate for.
+        - seed(int): Sets the seed for the environment when running evaluation episodes.
+        - reward_metric(str): Which of the ``env.scores_keys()`` is used as reward. Mainly
+          used for logging purposes.
+        - target_net_update_freq(int): How often (in env's steps) to update the target
+          network.
 
-        Args:
-            options(``types.SimpleNamespace``): Options for the trainer.
-            env(``activemri.envs.ActiveMRIEnv``): Env for which the policy is trained.
-            device(``torch.device``): Device to use.
+    Args:
+        options(``types.SimpleNamespace``): Options for the trainer.
+        env(``activemri.envs.ActiveMRIEnv``): Env for which the policy is trained.
+        device(``torch.device``): Device to use.
     """
 
     def __init__(

@@ -1,7 +1,7 @@
 import json
 import os
 import pathlib
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Tuple
 
 import fastmri
 import h5py
@@ -31,7 +31,7 @@ class MICCAI2020Data(torch.utils.data.Dataset):
         custom_split: Optional[str] = None,
     ):
         self.transform = transform
-        self.examples = []
+        self.examples: List[Tuple[pathlib.PurePath, int]] = []
 
         self.num_rand_slices = num_rand_slices
         self.rng = np.random.RandomState(1234)

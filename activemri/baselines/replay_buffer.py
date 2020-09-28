@@ -1,25 +1,24 @@
 import os
 import tempfile
+from typing import Dict, Optional
 
 import numpy as np
 import torch
 
-from typing import Dict, Optional
-
 
 class ReplayMemory:
-    """ Replay memory of transitions (ot, at, o_t+1, r_t+1).
+    """Replay memory of transitions (ot, at, o_t+1, r_t+1).
 
-        Args:
-            capacity(int): How many transitions can be stored. After capacity is reached early
-                    transitions are overwritten in FIFO fashion.
-            obs_shape(np.array): The shape of the numpy arrays representing observations.
-            batch_size(int): The size of batches returned by the replay buffer.
-            burn_in(int): While the replay buffer has lesser entries than this number,
-                    :meth:`sample()` will return ``None``. Indicates a burn-in period before
-                    training.
-            use_normalization(bool): If ``True``, the replay buffer will keep running mean
-                    and standard deviation for the observations. Defaults to ``False``.
+    Args:
+        capacity(int): How many transitions can be stored. After capacity is reached early
+                transitions are overwritten in FIFO fashion.
+        obs_shape(np.array): The shape of the numpy arrays representing observations.
+        batch_size(int): The size of batches returned by the replay buffer.
+        burn_in(int): While the replay buffer has lesser entries than this number,
+                :meth:`sample()` will return ``None``. Indicates a burn-in period before
+                training.
+        use_normalization(bool): If ``True``, the replay buffer will keep running mean
+                and standard deviation for the observations. Defaults to ``False``.
     """
 
     def __init__(
@@ -86,13 +85,13 @@ class ReplayMemory:
         self.position = (self.position + 1) % len(self)
 
     def sample(self) -> Optional[Dict[str, Optional[torch.Tensor]]]:
-        """ Samples a batch of transitions from the replay buffer.
+        """Samples a batch of transitions from the replay buffer.
 
 
-            Returns:
-                Dictionary(str, torch.Tensor): Contains keys for "observations",
-                "next_observations", "actions", "rewards", "dones". If the number of entries
-                in the buffer is less than ``self.burn_in``, then returns ``None`` instead.
+        Returns:
+            Dictionary(str, torch.Tensor): Contains keys for "observations",
+            "next_observations", "actions", "rewards", "dones". If the number of entries
+            in the buffer is less than ``self.burn_in``, then returns ``None`` instead.
         """
         if self.count_seen - 1 < self.burn_in:
             return None
@@ -134,12 +133,12 @@ class ReplayMemory:
             return full_path
 
     def load(self, path: str, capacity: Optional[int] = None):
-        """ Loads the replay buffer from the specified path.
+        """Loads the replay buffer from the specified path.
 
-            Args:
-                path(str): The path from where the memory will be loaded from.
-                capacity(int): If provided, the buffer is created with this much capacity. This
-                        value must be larger than the length of the stored tensors.
+        Args:
+            path(str): The path from where the memory will be loaded from.
+            capacity(int): If provided, the buffer is created with this much capacity. This
+                    value must be larger than the length of the stored tensors.
         """
         data = torch.load(path)
         self.position = data["position"]

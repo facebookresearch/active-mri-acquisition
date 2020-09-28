@@ -2,8 +2,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-import activemri.envs as envs
 import activemri.baselines as baselines
+import activemri.envs as envs
 
 
 def evaluate(

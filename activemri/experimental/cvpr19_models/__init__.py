@@ -1,6 +1,3 @@
-from . import data
-from . import models
-from . import util
-from . import options
+from . import data, models, options, util
 
 __all__ = ["data", "models", "options", "util"]

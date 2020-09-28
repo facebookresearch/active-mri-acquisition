@@ -6,6 +6,7 @@ undersampled mri reconstruction with active acquisition." Proceedings of the IEE
 Computer Vision and Pattern Recognition. 2019.`
 """
 import functools
+
 import torch
 import torch.nn as nn
 
@@ -104,25 +105,25 @@ class ResnetBlock(nn.Module):
 
 
 class ReconstructorNetwork(nn.Module):
-    """ Reconstructor network used in Zhang et al., CVPR'19.
+    """Reconstructor network used in Zhang et al., CVPR'19.
 
-        Args:
-            number_of_encoder_input_channels(int): Number of input channels to the
-                    reconstruction model.
-            number_of_decoder_output_channels(int): Number of output channels
-                    of the reconstruction model.
-            number_of_filters(int): Number of convolutional filters.\n
-            dropout_probability(float): Dropout probability.
-            number_of_layers_residual_bottleneck (int): Number of residual
-                    blocks in each model between two consecutive down-
-                    or up-sampling operations.
-            number_of_cascade_blocks (int): Number of times the entire architecture is
-                    replicated.
-            mask_embed_dim(int): Dimensionality of the mask embedding.
-            padding_type(str): Convolution operation padding type.
-            n_downsampling(int): Number of down-sampling operations.
-            img_width(int): The width of the image.
-            use_deconv(binary): Whether to use deconvolution in the up-sampling.
+    Args:
+        number_of_encoder_input_channels(int): Number of input channels to the
+                reconstruction model.
+        number_of_decoder_output_channels(int): Number of output channels
+                of the reconstruction model.
+        number_of_filters(int): Number of convolutional filters.\n
+        dropout_probability(float): Dropout probability.
+        number_of_layers_residual_bottleneck (int): Number of residual
+                blocks in each model between two consecutive down-
+                or up-sampling operations.
+        number_of_cascade_blocks (int): Number of times the entire architecture is
+                replicated.
+        mask_embed_dim(int): Dimensionality of the mask embedding.
+        padding_type(str): Convolution operation padding type.
+        n_downsampling(int): Number of down-sampling operations.
+        img_width(int): The width of the image.
+        use_deconv(binary): Whether to use deconvolution in the up-sampling.
     """
 
     def __init__(
@@ -286,19 +287,19 @@ class ReconstructorNetwork(nn.Module):
 
     # noinspection PyUnboundLocalVariable
     def forward(self, zero_filled_input, mask):
-        """ Generates reconstructions given images with partial k-space info.
+        """Generates reconstructions given images with partial k-space info.
 
-            Args:
-                zero_filled_input(torch.Tensor): Image obtained from zero-filled reconstruction
-                    of partial k-space scans.
-                mask(torch.Tensor): Mask used in creating the zero filled image from ground truth
-                    image.
+        Args:
+            zero_filled_input(torch.Tensor): Image obtained from zero-filled reconstruction
+                of partial k-space scans.
+            mask(torch.Tensor): Mask used in creating the zero filled image from ground truth
+                image.
 
-            Returns:
-                tuple(torch.Tensor, torch.Tensor, torch.Tensor): Contains:\n
-                    * Reconstructed high resolution image.
-                    * Uncertainty map.
-                    * Mask_embedding.
+        Returns:
+            tuple(torch.Tensor, torch.Tensor, torch.Tensor): Contains:\n
+                * Reconstructed high resolution image.
+                * Uncertainty map.
+                * Mask_embedding.
         """
         if self.use_mask_embedding:
             mask_embedding = self.embed_mask(mask)

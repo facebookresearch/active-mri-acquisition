@@ -1,5 +1,4 @@
 import numpy as np
-
 import pytest  # noqa: F401
 
 import activemri.envs.envs as envs
@@ -17,7 +16,11 @@ class TestMICCAIEnv:
                 assert len(batch[j]) == self.env.num_parallel_episodes
             for batch_idx in range(self.env.num_parallel_episodes):
                 assert isinstance(batch[0][batch_idx], np.ndarray)
-                assert batch[0][batch_idx].shape == (640, 368, 2,)  # k-space
+                assert batch[0][batch_idx].shape == (
+                    640,
+                    368,
+                    2,
+                )  # k-space
                 assert isinstance(batch[2][batch_idx], np.ndarray)
                 assert batch[2][batch_idx].shape == (640, 368, 2)  # ground truth image
 

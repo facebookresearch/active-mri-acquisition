@@ -1,13 +1,11 @@
-import pathlib
 import os
+import pathlib
 
 import numpy as np
 import torch
 import torch.utils.data
 
-from . import dicom_data_loader
-from . import raw_data_loader
-from . import masking_utils
+from . import dicom_data_loader, masking_utils, raw_data_loader
 
 
 def get_train_valid_loader(

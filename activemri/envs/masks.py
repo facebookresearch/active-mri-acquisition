@@ -35,65 +35,65 @@ def sample_low_frequency_mask(
     rng: np.random.RandomState,
     attrs: Optional[List[Dict[str, Any]]] = None,
 ) -> torch.Tensor:
-    """ Samples low frequency masks.
+    """Samples low frequency masks.
 
-        Returns masks that contain some number of the lowest k-space frequencies active.
-        The number of frequencies doesn't have to be the same for all masks in the batch, and
-        it can also be a random number, depending on the given ``mask_args``. Active columns
-        will be represented as 1s in the mask, and inactive columns as 0s.
+    Returns masks that contain some number of the lowest k-space frequencies active.
+    The number of frequencies doesn't have to be the same for all masks in the batch, and
+    it can also be a random number, depending on the given ``mask_args``. Active columns
+    will be represented as 1s in the mask, and inactive columns as 0s.
 
-        The distribution and shape of the masks can be controlled by ``mask_args``. This is a
-        dictionary with the following keys:
+    The distribution and shape of the masks can be controlled by ``mask_args``. This is a
+    dictionary with the following keys:
 
-            - *"max_width"(int)*: The maximum width of the masks.
-            - *"min_cols"(int)*: The minimum number of low frequencies columns to activate.
-            - *"max_cols"(int)*: The maximum number of low frequencies columns to activate
-              (inclusive).
-            - *"width_dim"(int)*: Indicates which of the dimensions in ``kspace_shapes``
-              corresponds to the k-space width.
-            - *"centered"(bool)*: Specifies if the low frequencies are in the center of the
-              k-space (``True``) or on the edges (``False``).
-            - *"apply_attrs_padding"(optional(bool))*: If ``True``, the function will read
-              keys ``"padding_left"`` and ``"padding_right"`` from ``attrs`` and set all
-              corresponding high-frequency columns to 1.
+        - *"max_width"(int)*: The maximum width of the masks.
+        - *"min_cols"(int)*: The minimum number of low frequencies columns to activate.
+        - *"max_cols"(int)*: The maximum number of low frequencies columns to activate
+          (inclusive).
+        - *"width_dim"(int)*: Indicates which of the dimensions in ``kspace_shapes``
+          corresponds to the k-space width.
+        - *"centered"(bool)*: Specifies if the low frequencies are in the center of the
+          k-space (``True``) or on the edges (``False``).
+        - *"apply_attrs_padding"(optional(bool))*: If ``True``, the function will read
+          keys ``"padding_left"`` and ``"padding_right"`` from ``attrs`` and set all
+          corresponding high-frequency columns to 1.
 
-        The number of 1s in the effective region of the mask (see next paragraph) is sampled
-        between ``mask_args["min_cols"]`` and ``mask_args["max_cols"]`` (inclusive).
-        The number of dimensions for the mask tensor will be ``mask_args["width_dim"] + 2``.
-        The size will be ``[batch_size, 1, ..., 1, mask_args["max_width"]]``. For example, with
-        ``mask_args["width_dim"] = 1`` and ``mask_args["max_width"] = 368``, output tensor
-        has shape ``[batch_size, 1, 368]``.
+    The number of 1s in the effective region of the mask (see next paragraph) is sampled
+    between ``mask_args["min_cols"]`` and ``mask_args["max_cols"]`` (inclusive).
+    The number of dimensions for the mask tensor will be ``mask_args["width_dim"] + 2``.
+    The size will be ``[batch_size, 1, ..., 1, mask_args["max_width"]]``. For example, with
+    ``mask_args["width_dim"] = 1`` and ``mask_args["max_width"] = 368``, output tensor
+    has shape ``[batch_size, 1, 368]``.
 
-        This function supports simultaneously sampling masks for k-space of different number of
-        columns. This is controlled by argument ``kspace_shapes``. From this list, the function will
-        obtain 1) ``batch_size = len(kspace_shapes``), and 2) the width of the k-spaces for
-        each element in the batch. The i-th mask will have
-        ``kspace_shapes[item][mask_args["width_dim"]]``
-        *effective* columns.
+    This function supports simultaneously sampling masks for k-space of different number of
+    columns. This is controlled by argument ``kspace_shapes``. From this list, the function will
+    obtain 1) ``batch_size = len(kspace_shapes``), and 2) the width of the k-spaces for
+    each element in the batch. The i-th mask will have
+    ``kspace_shapes[item][mask_args["width_dim"]]``
+    *effective* columns.
 
 
-        Note:
-            The mask tensor returned will always have
-            ``mask_args["max_width"]`` columns. However, for any element ``i``
-            s.t.  ``kspace_shapes[i][mask_args["width_dim"]] < mask_args["max_width"]``, the
-            function will then pad the extra k-space columns with 1s. The rest of the columns
-            will be filled out as if the mask has the same width as that indicated by
-            ``kspace_shape[i]``.
+    Note:
+        The mask tensor returned will always have
+        ``mask_args["max_width"]`` columns. However, for any element ``i``
+        s.t.  ``kspace_shapes[i][mask_args["width_dim"]] < mask_args["max_width"]``, the
+        function will then pad the extra k-space columns with 1s. The rest of the columns
+        will be filled out as if the mask has the same width as that indicated by
+        ``kspace_shape[i]``.
 
-        Args:
-            mask_args(dict(str,any)): Specifies configuration options for the masks, as explained
-                above.
+    Args:
+        mask_args(dict(str,any)): Specifies configuration options for the masks, as explained
+            above.
 
-            kspace_shapes(list(tuple(int,...))): Specifies the shapes of the k-space data on
-                which this mask will be applied, as explained above.
+        kspace_shapes(list(tuple(int,...))): Specifies the shapes of the k-space data on
+            which this mask will be applied, as explained above.
 
-            rng(``np.random.RandomState``): A random number generator to sample the masks.
+        rng(``np.random.RandomState``): A random number generator to sample the masks.
 
-            attrs(dict(str,int)): Used to determine any high-frequency padding. It must contain
-                keys ``"padding_left"`` and ``"padding_right"``.
+        attrs(dict(str,int)): Used to determine any high-frequency padding. It must contain
+            keys ``"padding_left"`` and ``"padding_right"``.
 
-        Returns:
-            ``torch.Tensor``: The generated low frequency masks.
+    Returns:
+        ``torch.Tensor``: The generated low frequency masks.
 
     """
     batch_size = len(kspace_shapes)

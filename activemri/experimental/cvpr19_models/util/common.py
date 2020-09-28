@@ -1,13 +1,12 @@
 import logging
 import os
+from typing import Dict, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import skimage.measure
 import torch
 import torchvision.utils as tvutil
-
-from typing import Dict, Optional
 
 
 def load_checkpoint(checkpoint_path: str) -> Optional[Dict]:
