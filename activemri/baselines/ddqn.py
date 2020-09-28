@@ -89,66 +89,75 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
-# class SimpleMLP(nn.Module):
-#     def __init__(
-#         self,
-#         budget: int,
-#         image_width: int,
-#         initial_num_lines_per_side: int,
-#         num_hidden_layers: int = 2,
-#         hidden_size: int = 32,
-#         ignore_mask: bool = True,
-#         symmetric: bool = True,
-#     ):
-#         super(SimpleMLP, self).__init__()
-#         self.initial_num_lines_per_side = initial_num_lines_per_side
-#         self.ignore_mask = ignore_mask
-#         self.symmetric = symmetric
-#         self.num_inputs = budget if self.ignore_mask else self.image_width
-#         num_actions = image_width - 2 * initial_num_lines_per_side
-#         self.linear1 = nn.Sequential(nn.Linear(self.num_inputs, hidden_size), nn.ReLU())
-#         hidden_layers = []
-#         for i in range(num_hidden_layers):
-#             hidden_layers.append(
-#                 nn.Sequential(nn.Linear(hidden_size, hidden_size), nn.ReLU())
-#             )
-#         self.hidden = nn.Sequential(*hidden_layers)
-#         self.output = nn.Linear(hidden_size, num_actions)
-#         self.model = nn.Sequential(self.linear1, self.hidden, self.output)
-#
-#     def forward(self, x: torch.Tensor) -> torch.Tensor:
-#         raise NotImplementedError
-#         # previous_actions = x[
-#         #     :, self.initial_num_lines_per_side : -self.initial_num_lines_per_side
-#         # ]
-#         # if self.ignore_mask:
-#         #     input_tensor = torch.zeros(x.shape[0], self.num_inputs).to(x.device)
-#         #     time_steps = previous_actions.sum(1).unsqueeze(1)
-#         #     if self.symmetric:
-#         #         time_steps //= 2
-#         #     # We allow the model to receive observations that are over budget during test
-#         #     # Code below randomizes the input to the model for these observations
-#         #     index_over_budget = (time_steps >= self.num_inputs).squeeze()
-#         #     time_steps = time_steps.clamp(0, self.num_inputs - 1)
-#         #     input_tensor.scatter_(1, time_steps.long(), 1)
-#         #     input_tensor[index_over_budget] = torch.randn_like(
-#         #         input_tensor[index_over_budget]
-#         #     )
-#         # else:
-#         #     input_tensor = x
-#         # value = self.model(input_tensor)
-#         # return value - 1e10 * previous_actions
+# TODO remove legacy offset if after test it looks like it's no longer necessary
+class SimpleMLP(nn.Module):
+    def __init__(
+        self,
+        budget: int,
+        image_width: int,
+        num_hidden_layers: int = 2,
+        hidden_size: int = 32,
+        ignore_mask: bool = True,
+        legacy_offset: Optional[int] = None,
+        ignored_cols: Optional[List[int]] = None,
+    ):
+        super(SimpleMLP, self).__init__()
+        if ignored_cols is None:
+            ignored_cols = []
+        self.ignore_mask = ignore_mask
+        self.num_inputs = budget if self.ignore_mask else self.image_width
+        num_actions = image_width
+        if legacy_offset:
+            num_actions -= 2 * legacy_offset
+        self.legacy_offset = legacy_offset
+        self.ignored_cols = ignored_cols
+        self.linear1 = nn.Sequential(nn.Linear(self.num_inputs, hidden_size), nn.ReLU())
+        hidden_layers = []
+        for i in range(num_hidden_layers):
+            hidden_layers.append(
+                nn.Sequential(nn.Linear(hidden_size, hidden_size), nn.ReLU())
+            )
+        self.hidden = nn.Sequential(*hidden_layers)
+        self.output = nn.Linear(hidden_size, num_actions)
+        self.model = nn.Sequential(self.linear1, self.hidden, self.output)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        _, mask, _ = _decode_obs_tensor(x, 0)
+        previous_actions = mask.squeeze()
+        if self.ignored_cols:
+            previous_actions[..., self.ignored_cols] = 0
+        if self.ignore_mask:
+            input_tensor = torch.zeros(x.shape[0], self.num_inputs).to(x.device)
+            time_steps = previous_actions.sum(1).unsqueeze(1)
+            # We allow the model to receive observations that are over budget during test
+            # Code below randomizes the input to the model for these observations
+            index_over_budget = (time_steps >= self.num_inputs).squeeze()
+            time_steps = time_steps.clamp(0, self.num_inputs - 1)
+            input_tensor.scatter_(1, time_steps.long(), 1)
+            input_tensor[index_over_budget] = torch.randn_like(
+                input_tensor[index_over_budget]
+            )
+        else:
+            input_tensor = mask
+        value = self.model(input_tensor)
+        if self.legacy_offset:
+            previous_actions = previous_actions[
+                ..., self.legacy_offset : -self.legacy_offset
+            ]
+        return value - 1e10 * previous_actions
 
 
 class EvaluatorBasedValueNetwork(nn.Module):
     """ Value network based on Zhang et al., CVPR'19 evaluator architecture. """
 
-    def __init__(self, image_width, mask_embed_dim, legacy_offset=None):
+    def __init__(
+        self, image_width: int, mask_embed_dim: int, legacy_offset: Optional[int] = None
+    ):
         super().__init__()
         num_actions = image_width
-        self.legacy_offset = legacy_offset
         if legacy_offset:
             num_actions -= 2 * legacy_offset
+        self.legacy_offset = legacy_offset
         self.evaluator = cvpr19_evaluator.EvaluatorNetwork(
             number_of_filters=128,
             number_of_conv_layers=4,
@@ -182,15 +191,18 @@ class EvaluatorBasedValueNetwork(nn.Module):
 
 
 def _get_model(options):
-    # if options.dqn_model_type == "simple_mlp":
-    #     return SimpleMLP(
-    #         options.budget, options.image_width, options.initial_num_lines_per_side
-    #     )
+    if options.dqn_model_type == "simple_mlp":
+        return SimpleMLP(
+            options.budget,
+            options.image_width,
+            legacy_offset=getattr(options, "legacy_offset", None),
+            ignored_cols=getattr(options, "ignored_cols", None),
+        )
     if options.dqn_model_type == "evaluator":
         return EvaluatorBasedValueNetwork(
             options.image_width,
             options.mask_embedding_dim,
-            getattr(options, "legacy_offset", None),
+            legacy_offset=getattr(options, "legacy_offset", None),
         )
     raise ValueError("Unknown model specified for DQN.")
 
@@ -356,6 +368,7 @@ class DDQNTester:
 
         self.training_dir = training_dir
         self.evaluation_dir = os.path.join(training_dir, "evaluation")
+        os.makedirs(self.evaluation_dir, exist_ok=True)
 
         self.folder_lock_path = DDQNTrainer.get_lock_filename(training_dir)
 
@@ -693,8 +706,8 @@ class DDQNTrainer:
             )
             self.logger.info(f"Episode started with images {msg}.")
             all_done = False
-            total_reward = 0
-            auc_score = 0
+            total_reward = np.zeros(1)
+            auc_score = np.zeros(1)
             while not all_done:
                 epsilon = _get_epsilon(steps_epsilon, self.options)
                 action = self.policy.get_action(obs, eps_threshold=epsilon)

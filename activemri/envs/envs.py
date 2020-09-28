@@ -711,6 +711,7 @@ class MICCAI2020Env(ActiveMRIEnv):
         budget: Optional[int] = None,
         seed: Optional[int] = None,
         extreme: bool = False,
+        obs_includes_padding: bool = True,
     ):
         super().__init__(
             (640, self.KSPACE_WIDTH),
@@ -722,6 +723,7 @@ class MICCAI2020Env(ActiveMRIEnv):
             self._setup("configs/miccai-2020-extreme-acc.json", self._create_dataset)
         else:
             self._setup("configs/miccai-2020-normal-acc.json", self._create_dataset)
+        self.obs_includes_padding = obs_includes_padding
 
     # -------------------------------------------------------------------------
     # Protected methods
@@ -770,8 +772,17 @@ class MICCAI2020Env(ActiveMRIEnv):
         obs, meta = super().reset()
         if not obs:
             return obs, meta
-        obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
+        if self.obs_includes_padding:
+            obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
         return obs, meta
+
+    def step(
+        self, action: Union[int, Sequence[int]]
+    ) -> Tuple[Dict[str, Any], np.ndarray, List[bool], Dict]:
+        obs, reward, done, meta = super().step(action)
+        if self.obs_includes_padding:
+            obs["mask"][:, self.START_PADDING : self.END_PADDING] = 1
+        return obs, reward, done, meta
 
     def render(self, mode="human"):
         gt = self._current_ground_truth.cpu().numpy()
