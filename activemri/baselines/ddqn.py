@@ -692,6 +692,10 @@ class DDQNTrainer:
                         f"Saved DQN model with score {self.best_test_score} to {policy_path}."
                     )
 
+            # Save model periodically
+            if self.episode % self.options.freq_dqn_checkpoint_save == 0:
+                self.checkpoint(save_memory=False)
+
             # Run an episode and update model
             obs, meta = self.env.reset()
             msg = ", ".join(
@@ -767,9 +771,6 @@ class DDQNTrainer:
             )
 
             self.episode += 1
-
-            if self.episode % self.options.freq_dqn_checkpoint_save == 0:
-                self.checkpoint(save_memory=False)
 
         self.checkpoint()
 
