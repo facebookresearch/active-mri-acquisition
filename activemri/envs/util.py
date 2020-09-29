@@ -1,8 +1,26 @@
 import importlib
+import json
+import pathlib
+
+from typing import Dict, Tuple
 
 import numpy as np
 import skimage.metrics
 import torch
+
+
+def get_defaults_json() -> Tuple[Dict[str, str], str]:
+    defaults_path = pathlib.Path.home() / ".activemri" / "defaults.json"
+    if not pathlib.Path.exists(defaults_path):
+        parent = defaults_path.parents[0]
+        parent.mkdir(exist_ok=True)
+        content = {"data_location": "", "saved_models_dir": ""}
+        with defaults_path.open("w", encoding="utf-8") as f:
+            json.dump(content, f)
+    else:
+        with defaults_path.open("r", encoding="utf-8") as f:
+            content = json.load(f)
+    return content, str(defaults_path)
 
 
 def import_object_from_str(classname: str):

@@ -1,5 +1,5 @@
 {
-  "data_location": "fastmri_data",
+  "data_location": "",
   "reconstructor": {
     "cls": "activemri.models.cvpr19_reconstructor.CVPR19Reconstructor",
     "options": {
@@ -12,7 +12,7 @@
       "img_width": 368,
       "use_deconv": true
     },
-    "checkpoint_path": "saved_models/miccai2020_reconstructor_raw_normal.pth",
+    "checkpoint_fname": "miccai2020_reconstructor_raw_normal.pth",
     "transform": "activemri.data.transforms.raw_transform_miccai2020"
   },
   "mask": {

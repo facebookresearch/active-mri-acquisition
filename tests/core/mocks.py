@@ -17,7 +17,7 @@ cfg_json_str = """
             "option3": "dummy",
             "option4": true
         },
-        "checkpoint_path": "null",
+        "checkpoint_fname": "null",
         "transform": "tests.core.mocks.transform"
     },
     "mask": {
@@ -127,7 +127,10 @@ class MRIEnv(envs.ActiveMRIEnv):
         seed=None,
     ):
         super().__init__(
-            (32, 64), num_parallel_episodes=num_parallel_episodes, seed=seed
+            (32, 64),
+            num_parallel_episodes=num_parallel_episodes,
+            seed=seed,
+            no_checkpoint=True,
         )
         self._num_loops_train_data = loops_train
         self._init_from_config_dict(config_dict)

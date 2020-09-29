@@ -1,5 +1,5 @@
 {
-  "data_location": "fastmri_data",
+  "data_location": "",
   "reconstructor": {
     "cls": "activemri.models.fastmri_unet_wrapper.Unet",
     "options": {
@@ -9,7 +9,7 @@
       "num_pool_layers": 4,
       "drop_prob": 0.0
     },
-    "checkpoint_path": "saved_models/singlecoil_knee_unet.pth",
+    "checkpoint_fname": "singlecoil_knee_unet.pth",
     "transform": "activemri.data.transforms.fastmri_unet_transform_singlecoil"
   },
   "mask": {

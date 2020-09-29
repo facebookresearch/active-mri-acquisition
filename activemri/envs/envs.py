@@ -5,6 +5,7 @@ Gym-like environment for active MRI acquisition.
 """
 import functools
 import json
+import os
 import pathlib
 import warnings
 from typing import (
@@ -158,6 +159,8 @@ class ActiveMRIEnv(gym.Env):
                                columns have been acquired.
         seed(optional(int)): The seed for the environment's random number generator, which is
                              an instance of ``numpy.random.RandomState``. Defaults to ``None``.
+        no_checkpoint(optional(bool)): Set to ``True`` if you want to run your reconstructor
+                                       model without loading anything from a checkpoint.
 
     """
 
@@ -171,10 +174,12 @@ class ActiveMRIEnv(gym.Env):
         num_parallel_episodes: int = 1,
         budget: Optional[int] = None,
         seed: Optional[int] = None,
+        no_checkpoint: Optional[bool] = False,
     ):
         # Default initialization
         self._cfg: Mapping[str, Any] = None
-        self._data_location = None
+        self._needs_checkpoint = not no_checkpoint
+        self._data_location: str = None
         self._reconstructor: activemri.models.Reconstructor = None
         self._transform: Callable = None
         self._train_data_handler: DataHandler = None
@@ -252,6 +257,15 @@ class ActiveMRIEnv(gym.Env):
     def _init_from_config_dict(self, cfg: Mapping[str, Any]):
         self._cfg = cfg
         self._data_location = cfg["data_location"]
+        if not os.path.isdir(self._data_location):
+            default_cfg, defaults_fname = activemri.envs.util.get_defaults_json()
+            self._data_location = default_cfg["data_location"]
+            if not os.path.isdir(self._data_location):
+                raise RuntimeError(
+                    f"No 'data_location' key found in the given config. Please "
+                    f"write dataset location in your JSON config, or in file {defaults_fname} "
+                    f"(to use as a default)."
+                )
         self._device = torch.device(cfg["device"])
         self.reward_metric = cfg["reward_metric"]
         if self.reward_metric not in ["mse", "ssim", "psnr", "nmse"]:
@@ -264,7 +278,18 @@ class ActiveMRIEnv(gym.Env):
         reconstructor_cls = activemri.envs.util.import_object_from_str(
             reconstructor_cfg["cls"]
         )
-        checkpoint_path = pathlib.Path(reconstructor_cfg["checkpoint_path"])
+
+        checkpoint_fname = pathlib.Path(reconstructor_cfg["checkpoint_fname"])
+        default_cfg, defaults_fname = activemri.envs.util.get_defaults_json()
+        saved_models_dir = default_cfg["saved_models_dir"]
+        checkpoint_path = pathlib.Path(saved_models_dir) / checkpoint_fname
+        if self._needs_checkpoint and not checkpoint_path.is_file():
+            raise RuntimeError(
+                f"No checkpoint was found at {str(checkpoint_path)}. "
+                f"Please make sure that both 'checkpoint_fname' (in your JSON config) "
+                f"and 'saved_models_dir' (in {defaults_fname}) are configured correctly."
+            )
+
         checkpoint = (
             torch.load(str(checkpoint_path)) if checkpoint_path.is_file() else None
         )

@@ -31,7 +31,7 @@ def test_all_configs():
                 print(f"Reconstructor class in config file {fname} was not found.")
                 assert False
             assert "options" in reconstructor_cfg
-            assert "checkpoint_path" in reconstructor_cfg
+            assert "checkpoint_fname" in reconstructor_cfg
             assert "transform" in reconstructor_cfg
             try:
                 _ = activemri.envs.util.import_object_from_str(

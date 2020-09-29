@@ -702,8 +702,8 @@ class DDQNTrainer:
             )
             self.logger.info(f"Episode started with images {msg}.")
             all_done = False
-            total_reward = np.zeros(1)
-            auc_score = np.zeros(1)
+            total_reward = 0
+            auc_score = 0
             while not all_done:
                 epsilon = _get_epsilon(steps_epsilon, self.options)
                 action = self.policy.get_action(obs, eps_threshold=epsilon)

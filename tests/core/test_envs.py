@@ -55,7 +55,7 @@ def test_data_handler():
 # noinspection PyProtectedMember,PyClassHasNoInit
 class TestActiveMRIEnv:
     def test_init_from_config_dict(self):
-        env = envs.ActiveMRIEnv((32, 64))
+        env = envs.ActiveMRIEnv((32, 64), no_checkpoint=True)
         env._init_from_config_dict(mocks.config_dict)
         assert env.reward_metric == "ssim"
         assert type(env._reconstructor) == mocks.Reconstructor
@@ -74,7 +74,7 @@ class TestActiveMRIEnv:
         assert mask.shape == (batch_size, env._cfg["mask"]["args"]["size"])
 
     def test_init_sets_action_space(self):
-        env = envs.ActiveMRIEnv((32, 64))
+        env = envs.ActiveMRIEnv((32, 64), no_checkpoint=True)
         for i in range(64):
             assert env.action_space.contains(i)
         assert env.action_space.n == 64
@@ -134,7 +134,7 @@ class TestActiveMRIEnv:
         assert done == [True, True]
 
     def test_training_loop_ends(self):
-        env = envs.ActiveMRIEnv((32, 64), num_parallel_episodes=3)
+        env = envs.ActiveMRIEnv((32, 64), num_parallel_episodes=3, no_checkpoint=True)
         env._num_loops_train_data = 3
         env._init_from_config_dict(mocks.config_dict)
 
