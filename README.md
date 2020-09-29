@@ -11,12 +11,17 @@ The goal of `active-mri-acquisition` is to provide a convenient gym-like interfa
 the use of reinforcement learning and planning algorithms for subject-specific acquisition 
 sequences of MRI scans. 
 
-This repository also contains scripts to replicate the experiments performed in
+This repository also contains scripts to replicate the experiments performed in:
 
  
-*Luis Pineda, Sumana Basu, Adriana Romero, Roberto Calandra, Michal Drozdzal, 
-"Active MR k-space Sampling with Reinforcement Learning". MICCAI 2020.*
+[Luis Pineda, Sumana Basu, Adriana Romero, Roberto Calandra, Michal Drozdzal, 
+"Active MR k-space Sampling with Reinforcement Learning". MICCAI 2020.](https://arxiv.org/pdf/2007.10469.pdf)
 
+### See also
+
+[fastMRI repository](https://github.com/facebookresearch/fastMRI)
+
+[fastMRI dataset](http://fastmri.med.nyu.edu/)
 # Getting started
 
 ## Installation
@@ -53,6 +58,18 @@ the root folder in which you will store the fastMRI dataset (for instructions on
 the dataset, please visit https://fastmri.med.nyu.edu/). Entry `"saved_models_dir"` indicates the 
 folder where the environment will look for the checkpoints of reconstruction models.
 
+# Citing
+```bibtex
+@inproceedings{active_mri_acquisition_2020,
+    author = {Luis Pineda and Sumana Basu and Adriana Romero and Roberto Calandra and Michal Drozdzal},
+    title = {{Active MR k-space Sampling with Reinforcement Learning}},
+    booktitle = {{International Conference on Medical Image Computing and Computer-Assisted
+Intervention}},
+    year = {2020},
+    publisher="Springer International Publishing",
+    address="Cham",
+}
+```
 
 # License
 
