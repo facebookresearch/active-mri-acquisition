@@ -1,5 +1,8 @@
 Configuring the environment
 ===========================
+
+Instantiating an environment
+----------------------------
 As an entry point for active acquisition with fastMRI data, we provide class
 :class:`~activemri.envs.envs.FastMRIEnv`. The information about what reconstructor model to use,
 and how to use it, is passed via a small JSON configuration file.
@@ -24,96 +27,73 @@ operate on a batch of 2 images (``num_parallel_episodes``), episodes will last f
 steps (``budget=70``), and the fastMRI dataset will return images with k-space having both 368
 and 372 columns.
 
-Configuring the RL environment to use your own reconstruction model involves three steps:
+.. _JSON_config:
 
-    1. Create a transform function to convert data loader outputs into an batched input for your
-       reconstructor model.
-    2. Refactor your reconstructor model to follow our Reconstructor interface.
-    3. Modify the environment's JSON configuration file accordingly.
+Environment's JSON configuration
+--------------------------------
+The RL environment uses a small JSON file to figure out the following configuration. The template
+for all configuration files is the following:
 
-We explain these steps below.
+.. code-block:: json
 
-Transform function
-------------------
-Communication between the fastMRI data loader and your reconstructor is done via a
-transform function, which should follow the signature of :meth:`~activemri.data.transform_template`.
-The environment will first load data from the fastMRI dataset, and collate to meet the input
-format indicated in the documentation of :meth:`~activemri.data.transform_template`.
-The environment will then pass this input to your provided transform function (as separate
-keyword arguments), and subsequently pass the output of the transform to the reconstructor model.
-The complete sequence will roughly conform to the following pseudocode.
+    {
+        "data_location": "",
+        "reconstructor": {
+            "cls": "",
+            "options": {
+            },
+            "checkpoint_fname": "",
+            "transform": ""
+        },
+        "mask": {
+            "function": "",
+                "args": {
+                }
+        },
+        "reward_metric": "",
+        "device": ""
+    }
 
-.. code-block:: python
+The meaning of the attributes is the following:
 
-    kspace, _, ground_truth, attrs, fname, slice_id = data_handler[item]
-    mask = get_current_active_mask()
-    reconstructor_input = transform(
-        kspace=kspace,
-        mask=mask,
-        ground_truth=ground_truth,
-        attrs=attrs,
-        fname=fname,
-        slice_id=slice_id
-    )
-    reconstructor_output = reconstructor(*reconstructor_input)
+    * ``"data_location"``: A string describing the location of the fastMRI dataset root folder.
+      The environment will look for each specific dataset under this location
+      (e.g., `data_location/knee_singlecoil_train`, `data_location/brain_multicoil_train`).
+    * ``"reconstructor"``: Reconstructor configuration.
+      It's a dictionary with the following entries:
 
-Some examples of transform functions are available:
+        * ``"cls"``: The class name of the reconstructor (e.g., ``parent.module.Reconstructor``).
+        * ``"options"``: A dictionary with the arguments and values to be passed to the
+          reconstructor's ``__init__()`` method, as keyword arguments.
+        * ``"checkpoint_fname"``: The name of the file that stores the reconstructor's checkpoint
+          (e.g., to load weights). As explained in :ref:`configuring-activemri`, the environment
+          code will look for the model under folder ``saved_model_dirs``, specifically in path
+          ``saved_models_dirs/checkpoint_fname``. However, if no checkpoint is found there, the
+          environment will try to interpret ``checkpoint_fname`` as an absolute path.
+        * ``"transform"``: The function name of the transform to use to convert fastMRI data into
+          and input to the reconstructor model. For details see :ref:`transform_fn`.
 
-    * `Transform <https://github.com/facebookresearch/active-mri-acquisition/blob/master/activemri/data/transforms.py#L66>`_
-      used in our `MICCAI 2020 paper <https://arxiv.org/pdf/2007.10469.pdf>`_.
-    * `Example transform <https://github.com/facebookresearch/active-mri-acquisition/blob/master/activemri/data/transforms.py#L164>`_
-      for using fastMRI's `Unet model <https://github.com/facebookresearch/fastMRI/blob/master/experimental/unet/unet_module.py>`_
-      on single coil data. This example shows how to handle k-space of variable width (in the
-      case where the environment is created with ``num_cols`` equal to a tuple of values.
+    * ``"mask"``: Configuration for the initial masks, indicating the active k-space
+      columns at the beginning of the episodes. It should be a dictionary with the following
+      entries:
 
-Reconstructor interface
------------------------
-A reconstructor model is essentially a ``torch.nn.Module`` that must follow a few additional
-conventions. In terms of the class interface, besides the usual ``torch.nn.Module`` method,
-the reconstructor must also include a method ``init_from_checkpoint``, which receives a model
-checkpoint as dictionary and initializes the model from this data.
+        * ``"function"``: The name of the mask function (e.g., ``parent.module.my_mask_fn``).
+        * ``"args"``: A dictionary with configurations options for the mask function.
 
-.. literalinclude:: ../activemri/models/__init__.py
-    :lines: 12-21
+      To see available masks, please see :ref:`our API<mask_api>`. You can also use your
+      custom initial masks if needed.
+    * ``"reward_metric"``: Which error metric the environment will use as a reward. Valid option
+      are ``"mse", "ssim", "nmse", "psnr"``.
+    * ``"device"``: ``torch`` device to use for the reconstructor model.
 
-The other conventions concern the model intialization and the output format of the forward method.
-We explain these below.
+We provide some sample configuration files under the repository's
+`configs folder <https://github.com/facebookresearch/active-mri-acquisition/tree/master/configs>`_.
 
-Initializing reconstructor
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-The environment expects the reconstructor to be passed  initialization arguments as keywords.
-The set of keywords and their values will be read from the environment's configuration file.
-However if your checkpoint dictionary contains a key called ``"options"``, then this will take
-precedence, and the environment will emit a warning.
-The sequence will roughly conform to the following pseudocode:
-
-.. code-block:: python
-
-    reconstructor_cls, reconstructor_cfg_dict, checkpoint_path = read_from_env_config()
-    checkpoint_dict = torch.load(checkpoint_path)
-    reconstructor_cfg = override_if_options_key_present(checkpoint_dict)
-    reconstructor = reconstructor_cls(**reconstructor_cfg_dict)
-    reconstructor.init_from_checkpoint(checkpoint_dict)  # load weights, additional bookkeeping
-
-Forward signature
-^^^^^^^^^^^^^^^^^
-
-The other important convention we adopt is that ``forward()`` will return a
-dictionary with the output of the model. This dictionary **must** contain key ``"reconstruction"``,
-whose value is the reconstructed image tensor. Note that the model can also return additional
-outputs, which will also included in the observation returned by the environment, as explained in
-`the basic example <notebooks/miccai_example.ipynb>`_.
-
-Examples
-^^^^^^^^
-
-Some examples are available at the
-`models directory <https://github.com/facebookresearch/active-mri-acquisition/tree/new_master/activemri/models>`_,
-in the repository. Note that no changes to the reconstructor model are required, and the coupling
-between environment and reconstructor can be done via short wrapper classes.
-
-Configuration file
-------------------
-
-Finally, you must tell the environment where to look for you reconstructor model via a JSON
-configuration file.
+.. warning::
+    You need to make sure that ``reconstructor_cls`` and ``mask.function`` (if using a custom mask)
+    are importable, for example by installing them in your virtualenv, or by adding them to
+    ``PYTHONPATH`` before calling the environment. For convenience, our ``git`` setup ignores
+    files named as ``activemri/models/custom_*`` and ``activemri/masks/custom_*``, so an easy
+    option, available if you have installed using ``pip install -e .``, is to add them to these
+    folders using the above naming convention. Then they can be addressed as, for example,
+    ``activemri.modules.custom_reconstructor.MyReconstructor``.
