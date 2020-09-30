@@ -1,5 +1,5 @@
-Welcome to active-mri-acquisition's documentation!
-==================================================
+Documentation for active-mri-acquisition
+========================================
 ``active-mri-acquisition`` is a package that facilitates the application of reinforcement learning
 to the problem active MRI acquisition. In particular, ``active-mri-acquisition`` provides a gym-like
 environment for simulating the execution of policies for k-space sampling, allowing users to
@@ -53,9 +53,9 @@ folder where the environment will look for the checkpoints of reconstruction mod
    :maxdepth: 3
    :caption: Contents
 
-   envs_intro.rst
-   notebooks/miccai_example.ipynb
-   custom_reconstructor.rst
+   ../notebooks/miccai_example.ipynb
+   create_env.rst
+   api.rst
 
 Indices and tables
 ==================

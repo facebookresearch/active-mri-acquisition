@@ -22,6 +22,7 @@ This repository also contains scripts to replicate the experiments performed in:
 [fastMRI repository](https://github.com/facebookresearch/fastMRI)
 
 [fastMRI dataset](http://fastmri.med.nyu.edu/)
+
 # Getting started
 
 ## Installation
@@ -58,6 +59,10 @@ the root folder in which you will store the fastMRI dataset (for instructions on
 the dataset, please visit https://fastmri.med.nyu.edu/). Entry `"saved_models_dir"` indicates the 
 folder where the environment will look for the checkpoints of reconstruction models.
 
+# Documentation
+For instructions on how to run the environment, evaluating baselines, and adding your own 
+reconstruction models, please see our [documentation](broken_link_to_docs).
+
 # Citing
 ```bibtex
 @inproceedings{active_mri_acquisition_2020,
@@ -67,10 +72,10 @@ folder where the environment will look for the checkpoints of reconstruction mod
 Intervention}},
     year = {2020},
     publisher="Springer International Publishing",
-    address="Cham",
 }
 ```
 
 # License
 
-`active-mri-acquisition` is MIT licensed, as found in the [LICENSE file](https://github.com/facebookresearch/active-mri-acquisition/blob/master/LICENSE).
+`active-mri-acquisition` is MIT licensed, as found in the 
+[LICENSE file](https://github.com/facebookresearch/active-mri-acquisition/blob/master/LICENSE).

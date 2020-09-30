@@ -20,5 +20,7 @@ def mypy(session):
 def pytest(session) -> None:
     session.install("--upgrade", "setuptools", "pip")
     session.install("pyxb==1.2.6")
+    session.install("torch")
+    session.install("torchvision")
     session.install("-e", ".")
     session.run("pytest", "tests/core")

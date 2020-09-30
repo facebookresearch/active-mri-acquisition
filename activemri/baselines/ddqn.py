@@ -218,8 +218,8 @@ class DDQN(nn.Module, Policy):
           :class:`cvpr19_models.models.evaluator.EvaluatorNetwork`.
         - gamma(float): Discount factor for target updates.
         - dqn_model_type(str): Describes the architecture of the neural net. Options
-                are "simple_mlp" and "evaluator", to use :class:`SimpleMLP` and
-                :class:`EvaluatorBasedValueNetwork`, respectively.
+          are "simple_mlp" and "evaluator", to use :class:`SimpleMLP` and
+          :class:`EvaluatorBasedValueNetwork`, respectively.
         - budget(int): The environment's budget.
         - image_width(int): The width of the input images.
 

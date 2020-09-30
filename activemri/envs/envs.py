@@ -468,7 +468,6 @@ class ActiveMRIEnv(gym.Env):
             4. Calls the reconstructor model on this input and returns its output
                as an observation.
 
-
         The observation returned is a dictionary with the following keys:
             - *"reconstruction"(torch.Tensor):* The reconstruction produced by the
               environment's reconstructor model, using the current
@@ -477,18 +476,16 @@ class ActiveMRIEnv(gym.Env):
               outputs produced by the reconstructor  (e.g., uncertainty maps).
             - *"mask"(torch.Tensor):* The current acquisition mask.
 
-        |
-
         Returns:
             tuple: tuple containing:
-            - obs(dict(str,any): Observation dictionary.
-            - metadata(dict(str,any): Metadata information containing the following keys:
+                   - obs(dict(str,any): Observation dictionary.
+                   - metadata(dict(str,any): Metadata information containing the following keys:
 
-                - *"fname"(list(str)):* the filenames of the image read from the dataset.
-                - *"slice_id"(list(int)):* slice indices for each image within the volume.
-                - *"current_score"(dict(str,float):* A dictionary with the error measures
-                  for the reconstruction (e.g., "mse", "nmse", "ssim", "psnr"). The measures
-                  considered can be obtained with :meth:`score_keys()`.
+                        - *"fname"(list(str)):* the filenames of the image read from the dataset.
+                        - *"slice_id"(list(int)):* slice indices for each image within the volume.
+                        - *"current_score"(dict(str,float):* A dictionary with the error measures
+                          for the reconstruction (e.g., "mse", "nmse", "ssim", "psnr"). The measures
+                          considered can be obtained with :meth:`score_keys()`.
         """
         self._did_reset = True
         try:
@@ -842,15 +839,13 @@ class FastMRIEnv(ActiveMRIEnv):
     """Base class for all fastMRI environments.
 
     This class can be used to instantiate active acquisition environments using fastMRI
-    data. However, for convenience we provided subclasses of ``FastMRIEnv`` with
+    data. However, for convenience we provide subclasses of ``FastMRIEnv`` with
     default configuration options for each dataset:
 
         - :class:`SingleCoilKneeEnv`
         - :class:`MultiCoilKneeEnv`
         - :class:`SingleCoilBrainEnv`
         - :class:`MultiCoilKneeEnv`
-
-    The shape of the k-space is set to ``(640, max(num_cols))``.
 
     Args:
         config_path(str): The path to the JSON configuration file.
