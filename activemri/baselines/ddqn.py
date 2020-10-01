@@ -811,6 +811,7 @@ class DDQNTrainer:
                 {
                     "dqn_weights": self.policy.state_dict(),
                     "target_weights": self.target_net.state_dict(),
+                    "options": self.options,
                     "episode": self.episode,
                     "steps": self.steps,
                     "best_test_score": self.best_test_score,
