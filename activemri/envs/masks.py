@@ -32,8 +32,7 @@ def check_masks_complete(masks: torch.Tensor) -> List[bool]:
     return done
 
 
-# TODO remove width dim arg, and just have the mask determine width from last kspace dimension
-#   Then make the return shape be equal to [len(kspace_shape) + 1] dims.
+# TODO remove width dim arg, just have an argument for singlecoil vs multicoil
 def sample_low_frequency_mask(
     mask_args: Dict[str, Any],
     kspace_shapes: List[Tuple[int, ...]],

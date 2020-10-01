@@ -69,7 +69,7 @@ def ifft_permute_maybe_shift(
 
 
 def raw_transform_miccai2020(kspace=None, mask=None, **_kwargs):
-    """Transform to produce input for reconstructor used in Pineda et al. MICCAI'20.
+    """Transform to produce input for reconstructor used in `Pineda et al. MICCAI'20 <https://arxiv.org/pdf/2007.10469.pdf>`_.
 
     Produces a zero-filled reconstruction and a mask that serve as a input to models of type
     :class:`activemri.models.cvpr10_reconstructor.CVPR19Reconstructor`. The mask is almost

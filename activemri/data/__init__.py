@@ -9,8 +9,9 @@ import numpy as np
 import torch
 
 from . import singlecoil_knee_data
+from . import transforms
 
-__all__ = ["singlecoil_knee_data"]
+__all__ = ["singlecoil_knee_data", "transforms"]
 
 
 def transform_template(
@@ -30,8 +31,9 @@ def transform_template(
           denotes k-space width, and ``C`` is the number of coils. Note that the width can differ
           between batch elements, if ``num_cols`` is set to a tuple when creating the environment.
         - mask(torch.Tensor): A tensor of binary column masks, where 1s indicate that the
-          corresponding k-space column should be selected. The shape is ``batch_size x maxW``,
-          where maxW is the maximum k-space width returned by the environment.
+          corresponding k-space column should be selected. The shape is ``batch_size x 1 x maxW``,
+          for single coil data, and `batch_size x 1 x 1 x maxW`` for multicoil data. Here ``maxW``
+          is the maximum k-space width returned by the environment.
         - ground_truth(torch.Tensor): A tensor of ground truth 2D images. The shape is
          ``batch_size x 320 x 320``.
         - attrs(list(dict)): A list of dictionaries with the attributes read from the fastMRI for
