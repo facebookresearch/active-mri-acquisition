@@ -14,8 +14,19 @@ import skimage.metrics
 import torch
 
 
+def get_user_dir() -> pathlib.Path:
+    return pathlib.Path.home() / ".activemri"
+
+
+def maybe_create_datacache_dir() -> pathlib.Path:
+    datacache_dir = get_user_dir() / "__datacache__"
+    if not datacache_dir.is_dir():
+        datacache_dir.mkdir()
+    return datacache_dir
+
+
 def get_defaults_json() -> Tuple[Dict[str, str], str]:
-    defaults_path = pathlib.Path.home() / ".activemri" / "defaults.json"
+    defaults_path = get_user_dir() / "defaults.json"
     if not pathlib.Path.exists(defaults_path):
         parent = defaults_path.parents[0]
         parent.mkdir(exist_ok=True)

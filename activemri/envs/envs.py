@@ -891,32 +891,28 @@ class FastMRIEnv(ActiveMRIEnv):
         train_path = root_path / f"{self.dataset_name}_train"
         val_path = root_path / f"{self.dataset_name}_val"
 
+        datacache_dir = activemri.envs.util.maybe_create_datacache_dir()
+
         train_data = fastmri.data.SliceDataset(
             train_path,
             ActiveMRIEnv._void_transform,
             challenge=self.challenge,
             num_cols=self.num_cols,
-            dataset_cache_file=pathlib.Path(
-                f"__datacache__/train_{self.dataset_name}_cache.pkl"
-            ),
+            dataset_cache_file=datacache_dir / f"train_{self.dataset_name}_cache.pkl",
         )
         val_data = fastmri.data.SliceDataset(
             val_path,
             ActiveMRIEnv._void_transform,
             challenge=self.challenge,
             num_cols=self.num_cols,
-            dataset_cache_file=pathlib.Path(
-                f"__datacache__/val_{self.dataset_name}_cache.pkl"
-            ),
+            dataset_cache_file=datacache_dir / f"val_{self.dataset_name}_cache.pkl",
         )
         test_data = fastmri.data.SliceDataset(
             val_path,
             ActiveMRIEnv._void_transform,
             challenge=self.challenge,
             num_cols=self.num_cols,
-            dataset_cache_file=pathlib.Path(
-                f"__datacache__/val_{self.dataset_name}_cache.pkl"
-            ),
+            dataset_cache_file=datacache_dir / f"val_{self.dataset_name}_cache.pkl",
         )
         return train_data, val_data, test_data
 
