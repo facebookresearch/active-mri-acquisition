@@ -67,9 +67,10 @@ The meaning of the attributes is the following:
           reconstructor's ``__init__()`` method, as keyword arguments.
         * ``"checkpoint_fname"``: The name of the file that stores the reconstructor's checkpoint
           (e.g., to load weights). As explained in :ref:`configuring-activemri`, the environment
-          code will look for the model under folder ``saved_model_dirs``, specifically in path
-          ``saved_models_dirs/checkpoint_fname``. However, if no checkpoint is found there, the
-          environment will try to interpret ``checkpoint_fname`` as an absolute path.
+          code will look for the model under folder ``saved_model_dir``, specifically in path
+          ``saved_models_dir/checkpoint_fname``. However, if ``checkpoint_fname`` is an absolute
+          path, the environment will ignore the path in ``saved_models_dir`` and just use
+          ``checkpoint_fname``.
         * ``"transform"``: The function name of the transform to use to convert fastMRI data into
           and input to the reconstructor model. For details see :ref:`transform_fn`.
 
