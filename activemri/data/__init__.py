@@ -32,7 +32,7 @@ def transform_template(
           between batch elements, if ``num_cols`` is set to a tuple when creating the environment.
         - mask(torch.Tensor): A tensor of binary column masks, where 1s indicate that the
           corresponding k-space column should be selected. The shape is ``batch_size x 1 x maxW``,
-          for single coil data, and `batch_size x 1 x 1 x maxW`` for multicoil data. Here ``maxW``
+          for single coil data, and ``batch_size x 1 x 1 x maxW`` for multicoil data. Here ``maxW``
           is the maximum k-space width returned by the environment.
         - ground_truth(torch.Tensor): A tensor of ground truth 2D images. The shape is
          ``batch_size x 320 x 320``.

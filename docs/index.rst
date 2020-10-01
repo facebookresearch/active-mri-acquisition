@@ -66,6 +66,7 @@ required to use our example environments. For more details see :ref:`JSON_config
    create_env.rst
    custom_reconstructor.rst
    api.rst
+   misc.rst
 
 Indices and tables
 ==================
