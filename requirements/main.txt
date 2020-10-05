@@ -6,4 +6,9 @@ gym>=0.17.2
 tensorboardX>=2.1
 imageio-ffmpeg>=0.4.2
 jupyter
+nbsphinx>=0.7.1
+sphinx>=3.2.1
+sphinxcontrib-napoleon>=0.7
+sphinxcontrib-osexample>=0.1.1
+sphinx-rtd-theme>=0.5.0
 fastmri@git+https://github.com/luisenp/fastMRI.git
