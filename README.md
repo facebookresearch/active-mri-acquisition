@@ -41,7 +41,6 @@ Then, to install `active-mri-acquisition`, clone this repository, then run
 
 ```bash
     cd active-mri-acquisition
-    pip install pyxb==1.2.6
     pip install -e .
 ```
 

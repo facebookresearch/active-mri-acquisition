@@ -4,7 +4,12 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import pip
 import setuptools
+
+# Cannot be added to requirements, because ismrmrd (required by fastMRI)
+# won't install without this
+pip.main(["install", "pyxb==1.2.6"])
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
