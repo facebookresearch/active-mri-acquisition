@@ -1,0 +1,858 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Environments module &mdash; active-mri-acquisition  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Baselines module" href="baselines.html" />
+    <link rel="prev" title="API Reference" href="api.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> active-mri-acquisition
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="notebooks/miccai_example.html">Basic Environment Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="create_env.html">Configuring the environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="custom_reconstructor.html">Adding your own reconstructor model</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="api.html">API Reference</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Environments module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#module-activemri.envs.envs">Environments</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#activemri-envs-envs-py">activemri.envs.envs.py</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#module-activemri.envs.masks">Mask utilities</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#activemri-envs-masks-py">activemri.envs.masks.py</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="baselines.html">Baselines module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">Data module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="misc.html">Miscellanea</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">active-mri-acquisition</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="api.html">API Reference</a> &raquo;</li>
+        
+      <li>Environments module</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/envs.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="environments-module">
+<h1>Environments module<a class="headerlink" href="#environments-module" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-activemri.envs.envs">
+<span id="environments"></span><h2>Environments<a class="headerlink" href="#module-activemri.envs.envs" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="activemri-envs-envs-py">
+<h3>activemri.envs.envs.py<a class="headerlink" href="#activemri-envs-envs-py" title="Permalink to this headline">¶</a></h3>
+<p>Gym-like environment for active MRI acquisition.</p>
+<dl class="py class">
+<dt id="activemri.envs.envs.ActiveMRIEnv">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.envs.envs.</code><code class="sig-name descname">ActiveMRIEnv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">kspace_shape</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>int<span class="p">, </span>int<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">num_parallel_episodes</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em>, <em class="sig-param"><span class="n">budget</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">seed</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">gym.core.Env</span></code></p>
+<p>Base class for all active MRI acquisition environments.</p>
+<p>This class provides the core logic implementation of the k-space acquisition process.
+The class is not to be used directly, but rather one of its subclasses should be
+instantiated. Subclasses of <cite>ActiveMRIEnv</cite> are responsible for data initialization
+and specifying configuration options for the environment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>kspace_shape</strong> (<em>tuple</em><em>(</em><em>int</em><em>,</em><em>int</em><em>)</em>) – Shape of the k-space slices for the dataset.</p></li>
+<li><p><strong>num_parallel_episodes</strong> (<em>int</em>) – Determines the number images that will be processed
+simultaneously by <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv.reset" title="activemri.envs.envs.ActiveMRIEnv.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a> and <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv.step" title="activemri.envs.envs.ActiveMRIEnv.step"><code class="xref py py-meth docutils literal notranslate"><span class="pre">step()</span></code></a>.
+Defaults to 1.</p></li>
+<li><p><strong>budget</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The length of an acquisition episode. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+which indicates that episode will continue until all k-space
+columns have been acquired.</p></li>
+<li><p><strong>seed</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The seed for the environment’s random number generator, which is
+an instance of <code class="docutils literal notranslate"><span class="pre">numpy.random.RandomState</span></code>. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>no_checkpoint</strong> (<em>optional</em><em>(</em><em>bool</em><em>)</em>) – Set to <code class="docutils literal notranslate"><span class="pre">True</span></code> if you want to run your reconstructor
+model without loading anything from a checkpoint.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="activemri.envs.envs.ActiveMRIEnv.render">
+<code class="sig-name descname">render</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">mode</span><span class="o">=</span><span class="default_value">'human'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv.render" title="Permalink to this definition">¶</a></dt>
+<dd><p>Renders information about the environment’s current state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>An image frame containing, from left to right: current</dt><dd><p>acquisition mask, current ground image, current reconstruction,
+and current relative reconstruction error.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">np.ndarray</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.ActiveMRIEnv.reset">
+<code class="sig-name descname">reset</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">, </span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Starts a new acquisition episode with a batch of images.</p>
+<p>This methods performs the following steps:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>Reads a batch of images from the environment’s dataset.</p></li>
+<li><p>Creates an initial acquisition mask for each image.</p></li>
+<li><p>Passes the loaded data and the initial masks to the transform function,
+producing a batch of inputs for the environment’s reconstructor model.</p></li>
+<li><p>Calls the reconstructor model on this input and returns its output
+as an observation.</p></li>
+</ol>
+</div></blockquote>
+<dl class="simple">
+<dt>The observation returned is a dictionary with the following keys:</dt><dd><ul class="simple">
+<li><p><em>“reconstruction”(torch.Tensor):</em> The reconstruction produced by the
+environment’s reconstructor model, using the current
+acquisition mask.</p></li>
+<li><p><em>“extra_outputs”(dict(str,Any)):</em> A dictionary with any additional
+outputs produced by the reconstructor  (e.g., uncertainty maps).</p></li>
+<li><p><em>“mask”(torch.Tensor):</em> The current acquisition mask.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><dl>
+<dt>tuple containing:</dt><dd><ul>
+<li><p>obs(dict(str,any): Observation dictionary.</p></li>
+<li><p>metadata(dict(str,any): Metadata information containing the following keys:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><em>”fname”(list(str)):</em> the filenames of the image read from the dataset.</p></li>
+<li><p><em>”slice_id”(list(int)):</em> slice indices for each image within the volume.</p></li>
+<li><p><em>”current_score”(dict(str,float):</em> A dictionary with the error measures
+for the reconstruction (e.g., “mse”, “nmse”, “ssim”, “psnr”). The measures
+considered can be obtained with <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv.score_keys" title="activemri.envs.envs.ActiveMRIEnv.score_keys"><code class="xref py py-meth docutils literal notranslate"><span class="pre">score_keys()</span></code></a>.</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.ActiveMRIEnv.score_keys">
+<em class="property">static </em><code class="sig-name descname">score_keys</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>str<span class="p">]</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv.score_keys" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the list of score metric names used by this environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.ActiveMRIEnv.seed">
+<code class="sig-name descname">seed</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seed</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv.seed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sets the seed for the internal number generator.</p>
+<p>This seeds affects the order of the data loader for all loop modalities (i.e.,
+training, validation, test).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seed</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The seed for the environment’s random number generator.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.ActiveMRIEnv.set_test">
+<code class="sig-name descname">set_test</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">reset</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv.set_test" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sets the environment to use the test data loader.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>reset</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, also resets the data loader so that it starts again
+from the first image in the loop order.</p>
+</dd>
+</dl>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>After this method is called the <code class="docutils literal notranslate"><span class="pre">env.reset()</span></code> needs to be called again, otherwise
+an exception will be thrown.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.ActiveMRIEnv.set_training">
+<code class="sig-name descname">set_training</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">reset</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv.set_training" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sets the environment to use the training data loader.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>reset</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, also resets the data loader so that it starts again
+from the first image in the loop order.</p>
+</dd>
+</dl>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>After this method is called the <code class="docutils literal notranslate"><span class="pre">env.reset()</span></code> needs to be called again, otherwise
+an exception will be thrown.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.ActiveMRIEnv.set_val">
+<code class="sig-name descname">set_val</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">reset</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv.set_val" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sets the environment to use the validation data loader.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>reset</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, also resets the data loader so that it starts again
+from the first image in the loop order.</p>
+</dd>
+</dl>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>After this method is called the <code class="docutils literal notranslate"><span class="pre">env.reset()</span></code> needs to be called again, otherwise
+an exception will be thrown.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.ActiveMRIEnv.step">
+<code class="sig-name descname">step</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action</span><span class="p">:</span> <span class="n">Union<span class="p">[</span>int<span class="p">, </span>Sequence<span class="p">[</span>int<span class="p">]</span><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">, </span>numpy.ndarray<span class="p">, </span>List<span class="p">[</span>bool<span class="p">]</span><span class="p">, </span>Dict<span class="p">]</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv.step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs a step of active MRI acquisition.</p>
+<p>Given a set of indices for k-space columns to acquire, updates the current batch
+of masks with their corresponding indices, creates a new batch of reconstructions,
+and returns the corresponding observations and rewards (for the observation format
+see <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv.reset" title="activemri.envs.envs.ActiveMRIEnv.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a>). The reward is the improvement in score with
+respect to the reconstruction before adding the indices. The specific score metric
+used is determined by <code class="docutils literal notranslate"><span class="pre">env.reward_metric</span></code>.</p>
+<p>The method also returns a list of booleans, indicating whether any episodes in the
+batch have already concluded.</p>
+<p>The last return value is a metadata dictionary. It contains a single key
+“current_score”, which contains a dictionary with the error measures for the
+reconstruction (e.g., <code class="docutils literal notranslate"><span class="pre">&quot;mse&quot;,</span> <span class="pre">&quot;nmse&quot;,</span> <span class="pre">&quot;ssim&quot;,</span> <span class="pre">&quot;psnr&quot;</span></code>). The measures
+considered can be obtained with <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv.score_keys" title="activemri.envs.envs.ActiveMRIEnv.score_keys"><code class="xref py py-meth docutils literal notranslate"><span class="pre">score_keys()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>action</strong> (<em>union</em><em>(</em><em>int</em><em>, </em><em>sequence</em><em>(</em><em>int</em><em>)</em><em>)</em>) – Indices for k-space columns to acquire. The
+length of the sequence must be equal to the
+current number of parallel episodes
+(i.e., <code class="docutils literal notranslate"><span class="pre">obs[&quot;reconstruction&quot;].shape[0]</span></code>).
+If only an <code class="docutils literal notranslate"><span class="pre">int</span></code> is passed, the index will
+be replicated for the whole batch of episodes.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>The transition information in the order
+<code class="docutils literal notranslate"><span class="pre">(next_observation,</span> <span class="pre">reward,</span> <span class="pre">done,</span> <span class="pre">meta)</span></code>. The types and shapes are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">next_observation(dict):</span></code> Dictionary format (see <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv.reset" title="activemri.envs.envs.ActiveMRIEnv.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reward(np.ndarray)</span></code>: length equal to current number of parallel
+episodes.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">done(list(bool))</span></code>: same length as <code class="docutils literal notranslate"><span class="pre">reward</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">meta(dict)</span></code>: see description above.</p></li>
+</ul>
+</div></blockquote>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.ActiveMRIEnv.try_action">
+<code class="sig-name descname">try_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action</span><span class="p">:</span> <span class="n">Union<span class="p">[</span>int<span class="p">, </span>Sequence<span class="p">[</span>int<span class="p">]</span><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">, </span>Dict<span class="p">[</span>str<span class="p">, </span>numpy.ndarray<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#activemri.envs.envs.ActiveMRIEnv.try_action" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simulates the effects of actions without changing the environment’s state.</p>
+<p>This method operates almost exactly as <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv.step" title="activemri.envs.envs.ActiveMRIEnv.step"><code class="xref py py-meth docutils literal notranslate"><span class="pre">step()</span></code></a>, with the exception that
+the environment’s state is not altered. The method returns the next observation
+and the resulting reconstruction score after applying the give k-space columns to
+each image in the current batch of episodes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>action</strong> (<em>union</em><em>(</em><em>int</em><em>, </em><em>sequence</em><em>(</em><em>int</em><em>)</em><em>)</em>) – Indices for k-space columns to acquire. The
+length of the sequence must be equal to the
+current number of parallel episodes
+(i.e., <code class="docutils literal notranslate"><span class="pre">obs[&quot;reconstruction&quot;].shape[0]</span></code>).
+If only an <code class="docutils literal notranslate"><span class="pre">int</span></code> is passed, the index will
+be replicated for the whole batch of episodes.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>The reconstruction information in the order
+<code class="docutils literal notranslate"><span class="pre">(next_observation,</span> <span class="pre">current_score)</span></code>. The types and shapes are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">next_observation(dict):</span></code> Dictionary format (see <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv.reset" title="activemri.envs.envs.ActiveMRIEnv.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a>).</p></li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">current_score(dict(str,</span> <span class="pre">float))</span></code>: A dictionary with the error measures</dt><dd><p>for the reconstruction (e.g., “mse”, “nmse”, “ssim”, “psnr”). The measures
+considered can be obtained with <cite>ActiveMRIEnv.score_keys()</cite>.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</div></blockquote>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.envs.envs.CyclicSampler">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.envs.envs.</code><code class="sig-name descname">CyclicSampler</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_source</span><span class="p">:</span> <span class="n">Sized</span></em>, <em class="sig-param"><span class="n">order</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>Sized<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">loops</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.CyclicSampler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.utils.data.sampler.Sampler</span></code></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.envs.envs.FastMRIEnv">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.envs.envs.</code><code class="sig-name descname">FastMRIEnv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">config_path</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">dataset_name</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">num_parallel_episodes</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em>, <em class="sig-param"><span class="n">budget</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">seed</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">num_cols</span><span class="p">:</span> <span class="n">Sequence<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">368, 372</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.FastMRIEnv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv" title="activemri.envs.envs.ActiveMRIEnv"><code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.envs.envs.ActiveMRIEnv</span></code></a></p>
+<p>Base class for all fastMRI environments.</p>
+<p>This class can be used to instantiate active acquisition environments using fastMRI
+data. However, for convenience we provide subclasses of <code class="docutils literal notranslate"><span class="pre">FastMRIEnv</span></code> with
+default configuration options for each dataset:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><a class="reference internal" href="#activemri.envs.envs.SingleCoilKneeEnv" title="activemri.envs.envs.SingleCoilKneeEnv"><code class="xref py py-class docutils literal notranslate"><span class="pre">SingleCoilKneeEnv</span></code></a></p></li>
+<li><p><a class="reference internal" href="#activemri.envs.envs.MultiCoilKneeEnv" title="activemri.envs.envs.MultiCoilKneeEnv"><code class="xref py py-class docutils literal notranslate"><span class="pre">MultiCoilKneeEnv</span></code></a></p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">SingleCoilBrainEnv</span></code></p></li>
+<li><p><a class="reference internal" href="#activemri.envs.envs.MultiCoilKneeEnv" title="activemri.envs.envs.MultiCoilKneeEnv"><code class="xref py py-class docutils literal notranslate"><span class="pre">MultiCoilKneeEnv</span></code></a></p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>config_path</strong> (<em>str</em>) – The path to the JSON configuration file.</p></li>
+<li><p><strong>dataset_name</strong> (<em>str</em>) – One of “knee_singlecoil”, “multicoil” (for knee),
+“brain_multicoil”. Primarily used to locate the fastMRI
+dataset in the user’s fastMRI data root folder.</p></li>
+<li><p><strong>num_parallel_episodes</strong> (<em>int</em>) – Determines the number images that will be processed
+simultaneously by <code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code> and <code class="xref py py-meth docutils literal notranslate"><span class="pre">step()</span></code>.
+Defaults to 1.</p></li>
+<li><p><strong>budget</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The length of an acquisition episode. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+which indicates that episode will continue until all k-space
+columns have been acquired.</p></li>
+<li><p><strong>seed</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The seed for the environment’s random number generator, which is
+an instance of <code class="docutils literal notranslate"><span class="pre">numpy.random.RandomState</span></code>. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>num_cols</strong> (<em>sequence</em><em>(</em><em>int</em><em>)</em>) – Used to filter k-space data to only use images whose k-space
+width is in this tuple. Defaults to <code class="docutils literal notranslate"><span class="pre">(368,</span> <span class="pre">372)</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="activemri.envs.envs.FastMRIEnv.render">
+<code class="sig-name descname">render</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">mode</span><span class="o">=</span><span class="default_value">'human'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.FastMRIEnv.render" title="Permalink to this definition">¶</a></dt>
+<dd><p>Renders information about the environment’s current state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>An image frame containing, from left to right: current</dt><dd><p>acquisition mask, current ground image, current reconstruction,
+and current relative reconstruction error.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">np.ndarray</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.envs.envs.MICCAI2020Env">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.envs.envs.</code><code class="sig-name descname">MICCAI2020Env</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_parallel_episodes</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em>, <em class="sig-param"><span class="n">budget</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">seed</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">extreme</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">obs_includes_padding</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.MICCAI2020Env" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#activemri.envs.envs.ActiveMRIEnv" title="activemri.envs.envs.ActiveMRIEnv"><code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.envs.envs.ActiveMRIEnv</span></code></a></p>
+<p>Implementation of environment used for <em>Pineda et al., MICCAI 2020</em>.</p>
+<p>This environment is provided to facilitate replication of the experiments performed
+in <em>Luis Pineda, Sumana Basu, Adriana Romero, Roberto Calandra, Michal Drozdzal,
+“Active MR k-space Sampling with Reinforcement Learning”. MICCAI 2020.</em></p>
+<p>The dataset is the same as that of <a class="reference internal" href="#activemri.envs.envs.SingleCoilKneeEnv" title="activemri.envs.envs.SingleCoilKneeEnv"><code class="xref py py-class docutils literal notranslate"><span class="pre">SingleCoilKneeEnv</span></code></a>, except that we provide
+a custom validation/test split of the original validation data. The environment’s
+configuration file is set to use the reconstruction model used in the paper
+(see <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.models.cvpr19_reconstructor.CVPR19Reconstructor</span></code>), as well
+as the proper transform to generate inputs for this model.</p>
+<p>The k-space shape of this environment is set to <code class="docutils literal notranslate"><span class="pre">(640,</span> <span class="pre">368)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_parallel_episodes</strong> (<em>int</em>) – Determines the number images that will be processed
+simultaneously by <a class="reference internal" href="#activemri.envs.envs.MICCAI2020Env.reset" title="activemri.envs.envs.MICCAI2020Env.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a> and <a class="reference internal" href="#activemri.envs.envs.MICCAI2020Env.step" title="activemri.envs.envs.MICCAI2020Env.step"><code class="xref py py-meth docutils literal notranslate"><span class="pre">step()</span></code></a>.
+Defaults to 1.</p></li>
+<li><p><strong>budget</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The length of an acquisition episode. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+which indicates that episode will continue until all k-space
+columns have been acquired.</p></li>
+<li><p><strong>seed</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The seed for the environment’s random number generator, which is
+an instance of <code class="docutils literal notranslate"><span class="pre">numpy.random.RandomState</span></code>. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>extreme</strong> (<em>bool</em>) – <code class="docutils literal notranslate"><span class="pre">True</span></code> or <code class="docutils literal notranslate"><span class="pre">False</span></code> for running extreme acceleration or normal
+acceleration scenarios described in the paper, respectively.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="activemri.envs.envs.MICCAI2020Env.render">
+<code class="sig-name descname">render</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">mode</span><span class="o">=</span><span class="default_value">'human'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.MICCAI2020Env.render" title="Permalink to this definition">¶</a></dt>
+<dd><p>Renders information about the environment’s current state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>An image frame containing, from left to right: current</dt><dd><p>acquisition mask, current ground image, current reconstruction,
+and current relative reconstruction error.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">np.ndarray</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.MICCAI2020Env.reset">
+<code class="sig-name descname">reset</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">, </span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">]</span><a class="headerlink" href="#activemri.envs.envs.MICCAI2020Env.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Starts a new acquisition episode with a batch of images.</p>
+<p>This methods performs the following steps:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>Reads a batch of images from the environment’s dataset.</p></li>
+<li><p>Creates an initial acquisition mask for each image.</p></li>
+<li><p>Passes the loaded data and the initial masks to the transform function,
+producing a batch of inputs for the environment’s reconstructor model.</p></li>
+<li><p>Calls the reconstructor model on this input and returns its output
+as an observation.</p></li>
+</ol>
+</div></blockquote>
+<dl class="simple">
+<dt>The observation returned is a dictionary with the following keys:</dt><dd><ul class="simple">
+<li><p><em>“reconstruction”(torch.Tensor):</em> The reconstruction produced by the
+environment’s reconstructor model, using the current
+acquisition mask.</p></li>
+<li><p><em>“extra_outputs”(dict(str,Any)):</em> A dictionary with any additional
+outputs produced by the reconstructor  (e.g., uncertainty maps).</p></li>
+<li><p><em>“mask”(torch.Tensor):</em> The current acquisition mask.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><dl>
+<dt>tuple containing:</dt><dd><ul>
+<li><p>obs(dict(str,any): Observation dictionary.</p></li>
+<li><p>metadata(dict(str,any): Metadata information containing the following keys:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><em>”fname”(list(str)):</em> the filenames of the image read from the dataset.</p></li>
+<li><p><em>”slice_id”(list(int)):</em> slice indices for each image within the volume.</p></li>
+<li><p><em>”current_score”(dict(str,float):</em> A dictionary with the error measures
+for the reconstruction (e.g., “mse”, “nmse”, “ssim”, “psnr”). The measures
+considered can be obtained with <code class="xref py py-meth docutils literal notranslate"><span class="pre">score_keys()</span></code>.</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.envs.envs.MICCAI2020Env.step">
+<code class="sig-name descname">step</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">action</span><span class="p">:</span> <span class="n">Union<span class="p">[</span>int<span class="p">, </span>Sequence<span class="p">[</span>int<span class="p">]</span><span class="p">]</span></span></em><span class="sig-paren">)</span> &#x2192; Tuple<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">, </span>numpy.ndarray<span class="p">, </span>List<span class="p">[</span>bool<span class="p">]</span><span class="p">, </span>Dict<span class="p">]</span><a class="headerlink" href="#activemri.envs.envs.MICCAI2020Env.step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs a step of active MRI acquisition.</p>
+<p>Given a set of indices for k-space columns to acquire, updates the current batch
+of masks with their corresponding indices, creates a new batch of reconstructions,
+and returns the corresponding observations and rewards (for the observation format
+see <a class="reference internal" href="#activemri.envs.envs.MICCAI2020Env.reset" title="activemri.envs.envs.MICCAI2020Env.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a>). The reward is the improvement in score with
+respect to the reconstruction before adding the indices. The specific score metric
+used is determined by <code class="docutils literal notranslate"><span class="pre">env.reward_metric</span></code>.</p>
+<p>The method also returns a list of booleans, indicating whether any episodes in the
+batch have already concluded.</p>
+<p>The last return value is a metadata dictionary. It contains a single key
+“current_score”, which contains a dictionary with the error measures for the
+reconstruction (e.g., <code class="docutils literal notranslate"><span class="pre">&quot;mse&quot;,</span> <span class="pre">&quot;nmse&quot;,</span> <span class="pre">&quot;ssim&quot;,</span> <span class="pre">&quot;psnr&quot;</span></code>). The measures
+considered can be obtained with <code class="xref py py-meth docutils literal notranslate"><span class="pre">score_keys()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>action</strong> (<em>union</em><em>(</em><em>int</em><em>, </em><em>sequence</em><em>(</em><em>int</em><em>)</em><em>)</em>) – Indices for k-space columns to acquire. The
+length of the sequence must be equal to the
+current number of parallel episodes
+(i.e., <code class="docutils literal notranslate"><span class="pre">obs[&quot;reconstruction&quot;].shape[0]</span></code>).
+If only an <code class="docutils literal notranslate"><span class="pre">int</span></code> is passed, the index will
+be replicated for the whole batch of episodes.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>The transition information in the order
+<code class="docutils literal notranslate"><span class="pre">(next_observation,</span> <span class="pre">reward,</span> <span class="pre">done,</span> <span class="pre">meta)</span></code>. The types and shapes are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">next_observation(dict):</span></code> Dictionary format (see <a class="reference internal" href="#activemri.envs.envs.MICCAI2020Env.reset" title="activemri.envs.envs.MICCAI2020Env.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reward(np.ndarray)</span></code>: length equal to current number of parallel
+episodes.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">done(list(bool))</span></code>: same length as <code class="docutils literal notranslate"><span class="pre">reward</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">meta(dict)</span></code>: see description above.</p></li>
+</ul>
+</div></blockquote>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.envs.envs.MultiCoilKneeEnv">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.envs.envs.</code><code class="sig-name descname">MultiCoilKneeEnv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_parallel_episodes</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em>, <em class="sig-param"><span class="n">budget</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">seed</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">num_cols</span><span class="p">:</span> <span class="n">Sequence<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">368, 372</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.MultiCoilKneeEnv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#activemri.envs.envs.FastMRIEnv" title="activemri.envs.envs.FastMRIEnv"><code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.envs.envs.FastMRIEnv</span></code></a></p>
+<p>Convenience class to access multi-coil knee data.</p>
+<p>Loads the configuration from <code class="docutils literal notranslate"><span class="pre">configs/multi-coil-knee.json</span></code>.
+Looks for datasets named “multicoil_{train/val/test}” under default <code class="docutils literal notranslate"><span class="pre">data_location</span></code> dir.
+If “test” is not found, it uses “val” folder for test mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_parallel_episodes</strong> (<em>int</em>) – Determines the number images that will be processed
+simultaneously by <code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code> and <code class="xref py py-meth docutils literal notranslate"><span class="pre">step()</span></code>.
+Defaults to 1.</p></li>
+<li><p><strong>budget</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The length of an acquisition episode. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+which indicates that episode will continue until all k-space
+columns have been acquired.</p></li>
+<li><p><strong>seed</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The seed for the environment’s random number generator, which is
+an instance of <code class="docutils literal notranslate"><span class="pre">numpy.random.RandomState</span></code>. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>num_cols</strong> (<em>sequence</em><em>(</em><em>int</em><em>)</em>) – Used to filter k-space data to only use images whose k-space
+width is in this tuple. Defaults to <code class="docutils literal notranslate"><span class="pre">(368,</span> <span class="pre">372)</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.envs.envs.SingleCoilKneeEnv">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.envs.envs.</code><code class="sig-name descname">SingleCoilKneeEnv</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_parallel_episodes</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em>, <em class="sig-param"><span class="n">budget</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">seed</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">num_cols</span><span class="p">:</span> <span class="n">Sequence<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">368, 372</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.envs.envs.SingleCoilKneeEnv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#activemri.envs.envs.FastMRIEnv" title="activemri.envs.envs.FastMRIEnv"><code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.envs.envs.FastMRIEnv</span></code></a></p>
+<p>Convenience class to access single-coil knee data.</p>
+<p>Loads the configuration from <code class="docutils literal notranslate"><span class="pre">configs/single-coil-knee.json</span></code>.
+Looks for datasets named “knee_singlecoil_{train/val/test}” under the <code class="docutils literal notranslate"><span class="pre">data_location</span></code> dir.
+If “test” is not found, it uses “val” folder for test mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_parallel_episodes</strong> (<em>int</em>) – Determines the number images that will be processed
+simultaneously by <code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code> and <code class="xref py py-meth docutils literal notranslate"><span class="pre">step()</span></code>.
+Defaults to 1.</p></li>
+<li><p><strong>budget</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The length of an acquisition episode. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+which indicates that episode will continue until all k-space
+columns have been acquired.</p></li>
+<li><p><strong>seed</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The seed for the environment’s random number generator, which is
+an instance of <code class="docutils literal notranslate"><span class="pre">numpy.random.RandomState</span></code>. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>num_cols</strong> (<em>sequence</em><em>(</em><em>int</em><em>)</em>) – Used to filter k-space data to only use images whose k-space
+width is in this tuple. Defaults to <code class="docutils literal notranslate"><span class="pre">(368,</span> <span class="pre">372)</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+</div>
+<div class="section" id="module-activemri.envs.masks">
+<span id="mask-utilities"></span><span id="mask-api"></span><h2>Mask utilities<a class="headerlink" href="#module-activemri.envs.masks" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="activemri-envs-masks-py">
+<h3>activemri.envs.masks.py<a class="headerlink" href="#activemri-envs-masks-py" title="Permalink to this headline">¶</a></h3>
+<p>Utilities to generate and manipulate active acquisition masks.</p>
+<dl class="py function">
+<dt id="activemri.envs.masks.sample_low_frequency_mask">
+<code class="sig-prename descclassname">activemri.envs.masks.</code><code class="sig-name descname">sample_low_frequency_mask</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">mask_args</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">kspace_shapes</span><span class="p">:</span> <span class="n">List<span class="p">[</span>Tuple<span class="p">[</span>int<span class="p">, </span><span class="p">…</span><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">rng</span><span class="p">:</span> <span class="n">numpy.random.mtrand.RandomState</span></em>, <em class="sig-param"><span class="n">attrs</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>List<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">]</span><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; torch.Tensor<a class="headerlink" href="#activemri.envs.masks.sample_low_frequency_mask" title="Permalink to this definition">¶</a></dt>
+<dd><p>Samples low frequency masks.</p>
+<p>Returns masks that contain some number of the lowest k-space frequencies active.
+The number of frequencies doesn’t have to be the same for all masks in the batch, and
+it can also be a random number, depending on the given <code class="docutils literal notranslate"><span class="pre">mask_args</span></code>. Active columns
+will be represented as 1s in the mask, and inactive columns as 0s.</p>
+<p>The distribution and shape of the masks can be controlled by <code class="docutils literal notranslate"><span class="pre">mask_args</span></code>. This is a
+dictionary with the following keys:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><em>“max_width”(int)</em>: The maximum width of the masks.</p></li>
+<li><p><em>“min_cols”(int)</em>: The minimum number of low frequencies columns to activate per side.</p></li>
+<li><p><em>“max_cols”(int)</em>: The maximum number of low frequencies columns to activate
+per side (inclusive).</p></li>
+<li><p><em>“width_dim”(int)</em>: Indicates which of the dimensions in <code class="docutils literal notranslate"><span class="pre">kspace_shapes</span></code>
+corresponds to the k-space width.</p></li>
+<li><p><em>“centered”(bool)</em>: Specifies if the low frequencies are in the center of the
+k-space (<code class="docutils literal notranslate"><span class="pre">True</span></code>) or on the edges (<code class="docutils literal notranslate"><span class="pre">False</span></code>).</p></li>
+<li><p><em>“apply_attrs_padding”(optional(bool))</em>: If <code class="docutils literal notranslate"><span class="pre">True</span></code>, the function will read
+keys <code class="docutils literal notranslate"><span class="pre">&quot;padding_left&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;padding_right&quot;</span></code> from <code class="docutils literal notranslate"><span class="pre">attrs</span></code> and set all
+corresponding high-frequency columns to 1.</p></li>
+</ul>
+</div></blockquote>
+<p>The number of 1s in the effective region of the mask (see next paragraph) is sampled
+between <code class="docutils literal notranslate"><span class="pre">mask_args[&quot;min_cols&quot;]</span></code> and <code class="docutils literal notranslate"><span class="pre">mask_args[&quot;max_cols&quot;]</span></code> (inclusive).
+The number of dimensions for the mask tensor will be <code class="docutils literal notranslate"><span class="pre">mask_args[&quot;width_dim&quot;]</span> <span class="pre">+</span> <span class="pre">2</span></code>.
+The size will be <code class="docutils literal notranslate"><span class="pre">[batch_size,</span> <span class="pre">1,</span> <span class="pre">...,</span> <span class="pre">1,</span> <span class="pre">mask_args[&quot;max_width&quot;]]</span></code>. For example, with
+<code class="docutils literal notranslate"><span class="pre">mask_args[&quot;width_dim&quot;]</span> <span class="pre">=</span> <span class="pre">1</span></code> and <code class="docutils literal notranslate"><span class="pre">mask_args[&quot;max_width&quot;]</span> <span class="pre">=</span> <span class="pre">368</span></code>, output tensor
+has shape <code class="docutils literal notranslate"><span class="pre">[batch_size,</span> <span class="pre">1,</span> <span class="pre">368]</span></code>.</p>
+<p>This function supports simultaneously sampling masks for k-space of different number of
+columns. This is controlled by argument <code class="docutils literal notranslate"><span class="pre">kspace_shapes</span></code>. From this list, the function will
+obtain 1) <code class="docutils literal notranslate"><span class="pre">batch_size</span> <span class="pre">=</span> <span class="pre">len(kspace_shapes</span></code>), and 2) the width of the k-spaces for
+each element in the batch. The i-th mask will have
+<code class="docutils literal notranslate"><span class="pre">kspace_shapes[item][mask_args[&quot;width_dim&quot;]]</span></code>
+<em>effective</em> columns.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The mask tensor returned will always have
+<code class="docutils literal notranslate"><span class="pre">mask_args[&quot;max_width&quot;]</span></code> columns. However, for any element <code class="docutils literal notranslate"><span class="pre">i</span></code>
+s.t.  <code class="docutils literal notranslate"><span class="pre">kspace_shapes[i][mask_args[&quot;width_dim&quot;]]</span> <span class="pre">&lt;</span> <span class="pre">mask_args[&quot;max_width&quot;]</span></code>, the
+function will then pad the extra k-space columns with 1s. The rest of the columns
+will be filled out as if the mask has the same width as that indicated by
+<code class="docutils literal notranslate"><span class="pre">kspace_shape[i]</span></code>.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mask_args</strong> (<em>dict</em><em>(</em><em>str</em><em>,</em><em>any</em><em>)</em>) – Specifies configuration options for the masks, as explained
+above.</p></li>
+<li><p><strong>kspace_shapes</strong> (<em>list</em><em>(</em><em>tuple</em><em>(</em><em>int</em><em>,</em><em>..</em><em>)</em><em>)</em>) – Specifies the shapes of the k-space data on
+which this mask will be applied, as explained above.</p></li>
+<li><p><strong>rng</strong> (<code class="docutils literal notranslate"><span class="pre">np.random.RandomState</span></code>) – A random number generator to sample the masks.</p></li>
+<li><p><strong>attrs</strong> (<em>dict</em><em>(</em><em>str</em><em>,</em><em>int</em><em>)</em>) – Used to determine any high-frequency padding. It must contain
+keys <code class="docutils literal notranslate"><span class="pre">&quot;padding_left&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;padding_right&quot;</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The generated low frequency masks.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="baselines.html" class="btn btn-neutral float-right" title="Baselines module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="api.html" class="btn btn-neutral float-left" title="API Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Facebook AI Research
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

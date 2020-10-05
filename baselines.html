@@ -1,0 +1,504 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Baselines module &mdash; active-mri-acquisition  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Data module" href="data.html" />
+    <link rel="prev" title="Environments module" href="envs.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> active-mri-acquisition
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="notebooks/miccai_example.html">Basic Environment Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="create_env.html">Configuring the environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="custom_reconstructor.html">Adding your own reconstructor model</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="api.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="envs.html">Environments module</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Baselines module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">Data module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="misc.html">Miscellanea</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">active-mri-acquisition</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="api.html">API Reference</a> &raquo;</li>
+        
+      <li>Baselines module</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/baselines.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="module-activemri.baselines">
+<span id="baselines-module"></span><h1>Baselines module<a class="headerlink" href="#module-activemri.baselines" title="Permalink to this headline">¶</a></h1>
+<dl class="py class">
+<dt id="activemri.baselines.CVPR19Evaluator">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.baselines.</code><code class="sig-name descname">CVPR19Evaluator</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">evaluator_path</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">device</span><span class="p">:</span> <span class="n">torch.device</span></em>, <em class="sig-param"><span class="n">add_mask</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.baselines.CVPR19Evaluator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.baselines.Policy</span></code></p>
+<dl class="py method">
+<dt id="activemri.baselines.CVPR19Evaluator.get_action">
+<code class="sig-name descname">get_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obs</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="o">**</span><span class="n">_kwargs</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#activemri.baselines.CVPR19Evaluator.get_action" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a list of actions for a batch of observations.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.baselines.DDQN">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.baselines.</code><code class="sig-name descname">DDQN</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">device</span><span class="p">:</span> <span class="n">torch.device</span></em>, <em class="sig-param"><span class="n">memory</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>activemri.baselines.replay_buffer.ReplayMemory<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">opts</span><span class="p">:</span> <span class="n">argparse.Namespace</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.baselines.DDQN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.baselines.Policy</span></code></p>
+<p>Implementation of Double DQN value network.</p>
+<p>The configuration is given by the <code class="docutils literal notranslate"><span class="pre">opts</span></code> argument, which must contain the following
+fields:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>mask_embedding_dim(int): See
+<code class="xref py py-class docutils literal notranslate"><span class="pre">cvpr19_models.models.evaluator.EvaluatorNetwork</span></code>.</p></li>
+<li><p>gamma(float): Discount factor for target updates.</p></li>
+<li><p>dqn_model_type(str): Describes the architecture of the neural net. Options
+are “simple_mlp” and “evaluator”, to use <code class="xref py py-class docutils literal notranslate"><span class="pre">SimpleMLP</span></code> and
+<code class="xref py py-class docutils literal notranslate"><span class="pre">EvaluatorBasedValueNetwork</span></code>, respectively.</p></li>
+<li><p>budget(int): The environment’s budget.</p></li>
+<li><p>image_width(int): The width of the input images.</p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<code class="docutils literal notranslate"><span class="pre">torch.device</span></code>) – Device to use.</p></li>
+<li><p><strong>memory</strong> (optional(<code class="docutils literal notranslate"><span class="pre">replay_buffer.ReplayMemory</span></code>)) – Replay buffer to sample transitions
+from. Can be <code class="docutils literal notranslate"><span class="pre">None</span></code>, for example, if this is a target network.</p></li>
+<li><p><strong>opts</strong> (<code class="docutils literal notranslate"><span class="pre">argparse.Namespace</span></code>) – Options for the algorithm as explained above.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="activemri.baselines.DDQN.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span><span class="p">:</span> <span class="n">torch.Tensor</span></em><span class="sig-paren">)</span> &#x2192; torch.Tensor<a class="headerlink" href="#activemri.baselines.DDQN.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Predicts action values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>x</strong> (<em>torch.Tensor</em>) – The observation tensor.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The predicted Q-values.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Dictionary(torch.Tensor)</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Values corresponding to active k-space columns in the observation are manually
+set to <code class="docutils literal notranslate"><span class="pre">1e-10</span></code>.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="activemri.baselines.DDQN.get_action">
+<code class="sig-name descname">get_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obs</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">eps_threshold</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0.0</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#activemri.baselines.DDQN.get_action" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns an action sampled from an epsilon-greedy policy.</p>
+<p>With probability epsilon sample a random k-space column (ignoring active columns),
+otherwise return the column with the highest estimated Q-value for the observation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>torch.Tensor</em>) – The observation for which an action is required.</p></li>
+<li><p><strong>eps_threshold</strong> (<em>float</em>) – The probability of sampling a random action instead of using
+a greedy action.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.baselines.DDQNTrainer">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.baselines.</code><code class="sig-name descname">DDQNTrainer</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">options</span><span class="p">:</span> <span class="n">argparse.Namespace</span></em>, <em class="sig-param"><span class="n">env</span><span class="p">:</span> <span class="n"><a class="reference internal" href="envs.html#activemri.envs.envs.ActiveMRIEnv" title="activemri.envs.envs.ActiveMRIEnv">activemri.envs.envs.ActiveMRIEnv</a></span></em>, <em class="sig-param"><span class="n">device</span><span class="p">:</span> <span class="n">torch.device</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.baselines.DDQNTrainer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>DDQN Trainer for active MRI acquisition.</p>
+<p>Configuration for the trainer is provided by argument <code class="docutils literal notranslate"><span class="pre">options</span></code>. Must contain the
+following fields:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>“checkpoints_dir”(str): The directory where the model will be saved to (or
+loaded from).</p></li>
+<li><p>dqn_batch_size(int): The batch size to use for updates.</p></li>
+<li><p>dqn_burn_in(int): How many steps to do before starting updating parameters.</p></li>
+<li><p>dqn_normalize(bool): <code class="docutils literal notranslate"><span class="pre">True</span></code> if running mean/st. deviation should be maintained
+for observations.</p></li>
+<li><p>dqn_only_test(bool): <code class="docutils literal notranslate"><span class="pre">True</span></code> if the model will not be trained, thus only will
+attempt to read from checkpoint and load only weights of the network (ignoring
+training related information).</p></li>
+<li><p>dqn_test_episode_freq(optional(int)): How frequently (in number of env steps)
+to perform test episodes.</p></li>
+<li><p>freq_dqn_checkpoint_save(int): How often (in episodes) to save the model.</p></li>
+<li><p>num_train_steps(int): How many environment steps to train for.</p></li>
+<li><p>replay_buffer_size(int): The capacity of the replay buffer.</p></li>
+<li><p>resume(bool): If true, will try to load weights from the checkpoints dir.</p></li>
+<li><p>num_test_episodes(int): How many test episodes to periodically evaluate for.</p></li>
+<li><p>seed(int): Sets the seed for the environment when running evaluation episodes.</p></li>
+<li><p>reward_metric(str): Which of the <code class="docutils literal notranslate"><span class="pre">env.scores_keys()</span></code> is used as reward. Mainly
+used for logging purposes.</p></li>
+<li><p>target_net_update_freq(int): How often (in env’s steps) to update the target
+network.</p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>options</strong> (<code class="docutils literal notranslate"><span class="pre">argparse.Namespace</span></code>) – Options for the trainer.</p></li>
+<li><p><strong>env</strong> (<code class="docutils literal notranslate"><span class="pre">activemri.envs.ActiveMRIEnv</span></code>) – Env for which the policy is trained.</p></li>
+<li><p><strong>device</strong> (<code class="docutils literal notranslate"><span class="pre">torch.device</span></code>) – Device to use.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.baselines.LowestIndexPolicy">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.baselines.</code><code class="sig-name descname">LowestIndexPolicy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">alternate_sides</span><span class="p">:</span> <span class="n">bool</span></em>, <em class="sig-param"><span class="n">centered</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.baselines.LowestIndexPolicy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.baselines.Policy</span></code></p>
+<p>A policy that represents low-to-high frequency k-space selection.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>alternate_sides</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> the indices of selected actions will alternate
+between the sides of the mask. For example, for an image with 100
+columns, and non-centered k-space, the order will be 0, 99, 1, 98, 2, 97, …, etc.
+For the same size and centered, the order will be 49, 50, 48, 51, 47, 52, …, etc.</p></li>
+<li><p><strong>centered</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), low frequencies are in the center of the mask.
+Otherwise, they are in the edges of the mask.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="activemri.baselines.LowestIndexPolicy.get_action">
+<code class="sig-name descname">get_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obs</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="o">**</span><span class="n">_kwargs</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#activemri.baselines.LowestIndexPolicy.get_action" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a random action without replacement.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>obs</strong> (<em>dict</em><em>(</em><em>str</em><em>, </em><em>any</em><em>)</em>) – As returned by <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.envs.ActiveMRIEnv</span></code>.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>A list of k-space column indices, one per batch element in</dt><dd><p>the observation, equal to the lowest non-active k-space column in their
+corresponding observation masks.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list(int)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.baselines.OneStepGreedyOracle">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.baselines.</code><code class="sig-name descname">OneStepGreedyOracle</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">env</span><span class="p">:</span> <span class="n"><a class="reference internal" href="envs.html#activemri.envs.envs.ActiveMRIEnv" title="activemri.envs.envs.ActiveMRIEnv">activemri.envs.envs.ActiveMRIEnv</a></span></em>, <em class="sig-param"><span class="n">metric</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">num_samples</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">rng</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>numpy.random.mtrand.RandomState<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.baselines.OneStepGreedyOracle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.baselines.Policy</span></code></p>
+<p>A policy that returns the k-space column leading to best reconstruction score.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env</strong> (<code class="docutils literal notranslate"><span class="pre">activemri.envs.ActiveMRIEnv</span></code>) – The environment for which the policy is computed
+for.</p></li>
+<li><p><strong>metric</strong> (<em>str</em>) – The name of the score metric to use (must be in <code class="docutils literal notranslate"><span class="pre">env.score_keys()</span></code>).</p></li>
+<li><p><strong>num_samples</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – If given, only <code class="docutils literal notranslate"><span class="pre">num_samples</span></code> random actions will be
+tested. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>, which means that method will consider all actions.</p></li>
+<li><p><strong>rng</strong> (<code class="docutils literal notranslate"><span class="pre">numpy.random.RandomState</span></code>) – A random number generator to use for sampling.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="activemri.baselines.OneStepGreedyOracle.get_action">
+<code class="sig-name descname">get_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obs</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="o">**</span><span class="n">_kwargs</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#activemri.baselines.OneStepGreedyOracle.get_action" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a one-step greedy action maximizing reconstruction score.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>obs</strong> (<em>dict</em><em>(</em><em>str</em><em>, </em><em>any</em><em>)</em>) – As returned by <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.envs.ActiveMRIEnv</span></code>.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>A list of k-space column indices, one per batch element in</dt><dd><p>the observation, equal to the action that maximizes reconstruction score
+(e.g, SSIM or negative MSE).</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list(int)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.baselines.RandomLowBiasPolicy">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.baselines.</code><code class="sig-name descname">RandomLowBiasPolicy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">acceleration</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">centered</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em>, <em class="sig-param"><span class="n">seed</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.baselines.RandomLowBiasPolicy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.baselines.Policy</span></code></p>
+<dl class="py method">
+<dt id="activemri.baselines.RandomLowBiasPolicy.get_action">
+<code class="sig-name descname">get_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obs</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="o">**</span><span class="n">_kwargs</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#activemri.baselines.RandomLowBiasPolicy.get_action" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a list of actions for a batch of observations.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="activemri.baselines.RandomPolicy">
+<em class="property">class </em><code class="sig-prename descclassname">activemri.baselines.</code><code class="sig-name descname">RandomPolicy</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">seed</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.baselines.RandomPolicy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.baselines.Policy</span></code></p>
+<p>A policy representing random k-space selection.</p>
+<p>Returns one of the valid actions uniformly at random.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seed</strong> (<em>optional</em><em>(</em><em>int</em><em>)</em>) – The seed to use for the random number generator, which is
+based on <code class="docutils literal notranslate"><span class="pre">torch.Generator()</span></code>.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="activemri.baselines.RandomPolicy.get_action">
+<code class="sig-name descname">get_action</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obs</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="o">**</span><span class="n">_kwargs</span></em><span class="sig-paren">)</span> &#x2192; List<span class="p">[</span>int<span class="p">]</span><a class="headerlink" href="#activemri.baselines.RandomPolicy.get_action" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a random action without replacement.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>obs</strong> (<em>dict</em><em>(</em><em>str</em><em>, </em><em>any</em><em>)</em>) – As returned by <code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.envs.ActiveMRIEnv</span></code>.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>A list of random k-space column indices, one per batch element in</dt><dd><p>the observation. The indices are sampled from the set of inactive (0) columns
+on each batch element.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list(int)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="data.html" class="btn btn-neutral float-right" title="Data module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="envs.html" class="btn btn-neutral float-left" title="Environments module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Facebook AI Research
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

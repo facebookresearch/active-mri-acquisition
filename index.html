@@ -1,0 +1,354 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Documentation for active-mri-acquisition &mdash; active-mri-acquisition  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Basic Environment Usage" href="notebooks/miccai_example.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="#" class="icon icon-home" alt="Documentation Home"> active-mri-acquisition
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/miccai_example.html">Basic Environment Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="create_env.html">Configuring the environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="custom_reconstructor.html">Adding your own reconstructor model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="misc.html">Miscellanea</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">active-mri-acquisition</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="#" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Documentation for active-mri-acquisition</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="documentation-for-active-mri-acquisition">
+<h1>Documentation for active-mri-acquisition<a class="headerlink" href="#documentation-for-active-mri-acquisition" title="Permalink to this headline">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">active-mri-acquisition</span></code> is a package that facilitates the application of reinforcement learning
+to the problem active MRI acquisition. In particular, <code class="docutils literal notranslate"><span class="pre">active-mri-acquisition</span></code> provides a gym-like
+environment for simulating the execution of policies for k-space sampling, allowing users to
+experiment with their own reconstruction models and RL algorithms, without worrying about
+implementing the core k-space acquisition logic.</p>
+</div>
+<div class="section" id="getting-started">
+<h1>Getting started<a class="headerlink" href="#getting-started" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">active-mri-acquisition</span></code> is a Python 3.7+ library. To install it, clone the repository,</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git clone https://github.com/facebookresearch/active-mri-acquisition.git
+</pre></div>
+</div>
+<p>then run</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip install <span class="nv">pyxb</span><span class="o">==</span><span class="m">1</span>.2.6
+<span class="nb">cd</span> active-mri-acquisition
+pip install -e .
+</pre></div>
+</div>
+<p>If you also want the developer tools for contributing, run</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip install -e <span class="s2">&quot;.[dev]&quot;</span>
+</pre></div>
+</div>
+<p>Finally, make sure your Python environment has
+<a class="reference external" href="https://pytorch.org/">PyTorch (&gt;= 1.6)</a> installed with the appropriate CUDA configuration
+for your system.</p>
+<p>To test your installation, run</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python -m pytest tests/core
+</pre></div>
+</div>
+</div>
+<div class="section" id="global-configuration">
+<span id="configuring-activemri"></span><h2>Global configuration<a class="headerlink" href="#global-configuration" title="Permalink to this headline">¶</a></h2>
+<p>The first time you try to run any of our RL environments (for example, see our <a class="reference external" href="https://github.com/facebookresearch/active-mri-acquisition/blob/master/notebooks/miccai_example.ipynb">intro notebook</a>),
+you will see a message asking you to add some entries to the <cite>defaults.json</cite> file. This file will
+be created automatically the first time you run an environemnt, and it will be located at
+<cite>$HOME/.activemri/defaults.json</cite>. It will look like this:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+  <span class="nt">&quot;data_location&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+  <span class="nt">&quot;saved_models_dir&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>To run the RL environments, you need to fill these two entries. Entry <code class="docutils literal notranslate"><span class="pre">data_location</span></code> must point
+to the root folder in which you will store the fastMRI dataset (for instructions on how to download
+the dataset, please visit <a class="reference external" href="https://fastmri.med.nyu.edu/">https://fastmri.med.nyu.edu/</a>). Entry <code class="docutils literal notranslate"><span class="pre">saved_models_dir</span></code> indicates the
+folder where the environment will look for the checkpoints of reconstruction models.  Note that
+<code class="docutils literal notranslate"><span class="pre">saved_models_dir</span></code> does not need to be set to use your own reconstruction model, but it is
+required to use our example environments. For more details see <a class="reference internal" href="create_env.html#json-config"><span class="std std-ref">Environment’s JSON configuration</span></a>.</p>
+<div class="toctree-wrapper compound">
+<p class="caption"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/miccai_example.html">Basic Environment Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/miccai_example.html#Initial-setup">Initial setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/miccai_example.html#Code">Code</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="notebooks/miccai_example.html#Create-the-environment">Create the environment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="notebooks/miccai_example.html#Starting-an-episode">Starting an episode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="notebooks/miccai_example.html#Running-a-baseline-policy">Running a baseline policy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="notebooks/miccai_example.html#Visualizing-the-episode">Visualizing the episode</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/miccai_example.html#Comparing-two-policies">Comparing two policies</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="create_env.html">Configuring the environment</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="create_env.html#instantiating-an-environment">Instantiating an environment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="create_env.html#environment-s-json-configuration">Environment’s JSON configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="create_env.html#pre-configured-environments">Pre-configured environments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="custom_reconstructor.html">Adding your own reconstructor model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="custom_reconstructor.html#transform-function">Transform function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="custom_reconstructor.html#reconstructor-interface">Reconstructor interface</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="custom_reconstructor.html#initializing-reconstructor">Initializing reconstructor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="custom_reconstructor.html#forward-signature">Forward signature</a></li>
+<li class="toctree-l3"><a class="reference internal" href="custom_reconstructor.html#examples">Examples</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="envs.html">Environments module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="envs.html#module-activemri.envs.envs">Environments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs.html#module-activemri.envs.masks">Mask utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="baselines.html">Baselines module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="data.html">Data module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="data.html#module-activemri.data">Transform function template</a></li>
+<li class="toctree-l3"><a class="reference internal" href="data.html#module-activemri.data.transforms">Custom transforms</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="misc.html">Miscellanea</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="misc.html#available-checkpoints">Available checkpoints</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="misc.html#reconstructor-checkpoints">Reconstructor checkpoints</a></li>
+<li class="toctree-l3"><a class="reference internal" href="misc.html#evaluator-checkpoints">Evaluator checkpoints</a></li>
+<li class="toctree-l3"><a class="reference internal" href="misc.html#ss-ddqn-checkpoints-subject-specific-variant">SS-DDQN checkpoints (subject-specific variant)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="notebooks/miccai_example.html" class="btn btn-neutral float-right" title="Basic Environment Usage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Facebook AI Research
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

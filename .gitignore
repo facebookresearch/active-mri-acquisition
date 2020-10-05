@@ -1,0 +1,4 @@
+.idea
+active_mri_acquisition.egg-info
+*personal*
+*.ipynb_checkpoints

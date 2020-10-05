@@ -1,0 +1,355 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Adding your own reconstructor model &mdash; active-mri-acquisition  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API Reference" href="api.html" />
+    <link rel="prev" title="Configuring the environment" href="create_env.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> active-mri-acquisition
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="notebooks/miccai_example.html">Basic Environment Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="create_env.html">Configuring the environment</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Adding your own reconstructor model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#transform-function">Transform function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reconstructor-interface">Reconstructor interface</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#initializing-reconstructor">Initializing reconstructor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#forward-signature">Forward signature</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#examples">Examples</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="misc.html">Miscellanea</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">active-mri-acquisition</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Adding your own reconstructor model</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/custom_reconstructor.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="adding-your-own-reconstructor-model">
+<h1>Adding your own reconstructor model<a class="headerlink" href="#adding-your-own-reconstructor-model" title="Permalink to this headline">¶</a></h1>
+<p>Configuring the RL environment to use your own reconstruction model involves three steps:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>Create a transform function to convert data loader outputs into an batched input for your
+reconstructor model.</p></li>
+<li><p>Refactor your reconstructor model to follow our Reconstructor interface.</p></li>
+<li><p>Modify the environment’s JSON configuration file accordingly.</p></li>
+</ol>
+</div></blockquote>
+<p>We explain the first two steps below. The third step is explained in <a class="reference internal" href="create_env.html#json-config"><span class="std std-ref">Environment’s JSON configuration</span></a>.</p>
+<div class="section" id="transform-function">
+<span id="transform-fn"></span><h2>Transform function<a class="headerlink" href="#transform-function" title="Permalink to this headline">¶</a></h2>
+<p>Communication between the fastMRI data loader and your reconstructor is done via a
+transform function, which should follow the signature of <a class="reference internal" href="data.html#activemri.data.transform_template" title="activemri.data.transform_template"><code class="xref py py-meth docutils literal notranslate"><span class="pre">transform_template()</span></code></a>.
+The environment will first load data from the fastMRI dataset, and collate it to meet the input
+format indicated in the documentation of <a class="reference internal" href="data.html#activemri.data.transform_template" title="activemri.data.transform_template"><code class="xref py py-meth docutils literal notranslate"><span class="pre">transform_template()</span></code></a>.
+The environment will then pass this input to your provided transform function (as separate
+keyword arguments), and subsequently pass the output of the transform to the reconstructor model.
+The complete sequence will roughly conform to the following pseudocode.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">kspace</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">ground_truth</span><span class="p">,</span> <span class="n">attrs</span><span class="p">,</span> <span class="n">fname</span><span class="p">,</span> <span class="n">slice_id</span> <span class="o">=</span> <span class="n">data_handler</span><span class="p">[</span><span class="n">item</span><span class="p">]</span>
+<span class="n">mask</span> <span class="o">=</span> <span class="n">get_current_active_mask</span><span class="p">()</span>
+<span class="n">reconstructor_input</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span>
+    <span class="n">kspace</span><span class="o">=</span><span class="n">kspace</span><span class="p">,</span>
+    <span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">,</span>
+    <span class="n">ground_truth</span><span class="o">=</span><span class="n">ground_truth</span><span class="p">,</span>
+    <span class="n">attrs</span><span class="o">=</span><span class="n">attrs</span><span class="p">,</span>
+    <span class="n">fname</span><span class="o">=</span><span class="n">fname</span><span class="p">,</span>
+    <span class="n">slice_id</span><span class="o">=</span><span class="n">slice_id</span>
+<span class="p">)</span>
+<span class="n">reconstructor_output</span> <span class="o">=</span> <span class="n">reconstructor</span><span class="p">(</span><span class="o">*</span><span class="n">reconstructor_input</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Some examples of transform functions are available:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><a class="reference external" href="https://github.com/facebookresearch/active-mri-acquisition/blob/master/activemri/data/transforms.py#L66">Transform</a>
+used in our <a class="reference external" href="https://arxiv.org/pdf/2007.10469.pdf">MICCAI 2020 paper</a>.</p></li>
+<li><p><a class="reference external" href="https://github.com/facebookresearch/active-mri-acquisition/blob/master/activemri/data/transforms.py#L164">Example transform</a>
+for using fastMRI’s <a class="reference external" href="https://github.com/facebookresearch/fastMRI/blob/master/experimental/unet/unet_module.py">Unet model</a>
+on single coil data. This example shows how to handle k-space of variable width (in the
+case where the environment is created with multiple <code class="docutils literal notranslate"><span class="pre">num_cols</span></code> values).</p></li>
+</ul>
+</div></blockquote>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If your reconstructor only needs as input a zero-filled reconstruction (i.e, inverse Fourier
+transform for non-zero k-space columns), and perhaps mean and standard deviation to use
+for normalization, then
+<a class="reference internal" href="data.html#activemri.data.transforms.fastmri_unet_transform_singlecoil" title="activemri.data.transforms.fastmri_unet_transform_singlecoil"><code class="xref py py-func docutils literal notranslate"><span class="pre">fastmri_unet_transform_singlecoil()</span></code></a> and
+<a class="reference internal" href="data.html#activemri.data.transforms.fastmri_unet_transform_multicoil" title="activemri.data.transforms.fastmri_unet_transform_multicoil"><code class="xref py py-func docutils literal notranslate"><span class="pre">fastmri_unet_transform_multicoil()</span></code></a> should be a good place
+to start for your own transform.</p>
+</div>
+</div>
+<div class="section" id="reconstructor-interface">
+<h2>Reconstructor interface<a class="headerlink" href="#reconstructor-interface" title="Permalink to this headline">¶</a></h2>
+<p>A reconstructor model is essentially a <code class="docutils literal notranslate"><span class="pre">torch.nn.Module</span></code> that must follow a few additional
+conventions. In terms of the class interface, besides the usual <code class="docutils literal notranslate"><span class="pre">torch.nn.Module</span></code> method,
+the reconstructor must also include a method <code class="docutils literal notranslate"><span class="pre">init_from_checkpoint</span></code>, which receives a model
+checkpoint as dictionary and initializes the model from this data.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Reconstructor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">init_from_checkpoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">checkpoint</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+        <span class="k">pass</span>
+</pre></div>
+</div>
+<p>The other conventions concern the model intialization and the output format of the forward method.
+We explain these below.</p>
+<div class="section" id="initializing-reconstructor">
+<h3>Initializing reconstructor<a class="headerlink" href="#initializing-reconstructor" title="Permalink to this headline">¶</a></h3>
+<p>The environment expects the reconstructor to be passed  initialization arguments as keywords.
+The set of keywords and their values will be read from the environment’s configuration file.
+However if your checkpoint dictionary contains a key called <code class="docutils literal notranslate"><span class="pre">&quot;options&quot;</span></code>, then this will take
+precedence, and the environment will emit a warning.
+The sequence will roughly conform to the following pseudocode:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">reconstructor_cls</span><span class="p">,</span> <span class="n">reconstructor_cfg_dict</span><span class="p">,</span> <span class="n">checkpoint_path</span> <span class="o">=</span> <span class="n">read_from_env_config</span><span class="p">()</span>
+<span class="n">checkpoint_dict</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">checkpoint_path</span><span class="p">)</span>
+<span class="n">reconstructor_cfg</span> <span class="o">=</span> <span class="n">override_if_options_key_present</span><span class="p">(</span><span class="n">checkpoint_dict</span><span class="p">)</span>
+<span class="n">reconstructor</span> <span class="o">=</span> <span class="n">reconstructor_cls</span><span class="p">(</span><span class="o">**</span><span class="n">reconstructor_cfg_dict</span><span class="p">)</span>
+<span class="n">reconstructor</span><span class="o">.</span><span class="n">init_from_checkpoint</span><span class="p">(</span><span class="n">checkpoint_dict</span><span class="p">)</span>  <span class="c1"># load weights, additional bookkeeping</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="forward-signature">
+<h3>Forward signature<a class="headerlink" href="#forward-signature" title="Permalink to this headline">¶</a></h3>
+<p>The other important convention we adopt is that <code class="docutils literal notranslate"><span class="pre">forward()</span></code> will return a
+dictionary with the output of the model. This dictionary <strong>must</strong> contain key <code class="docutils literal notranslate"><span class="pre">&quot;reconstruction&quot;</span></code>,
+whose value is the reconstructed image tensor. Note that the model can also return additional
+outputs, which will also included in the observation returned by the environment, as explained in
+<a class="reference internal" href="notebooks/miccai_example.html"><span class="doc">the basic example</span></a>.</p>
+</div>
+<div class="section" id="examples">
+<h3>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h3>
+<p>Some examples are available at the
+<a class="reference external" href="https://github.com/facebookresearch/active-mri-acquisition/tree/new_master/activemri/models">models directory</a>,
+in the repository. Note that no changes to the reconstructor model are required, and the coupling
+between environment and reconstructor can be done via short wrapper classes.</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="api.html" class="btn btn-neutral float-right" title="API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="create_env.html" class="btn btn-neutral float-left" title="Configuring the environment" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Facebook AI Research
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

@@ -1,0 +1,348 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Data module &mdash; active-mri-acquisition  documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Miscellanea" href="misc.html" />
+    <link rel="prev" title="Baselines module" href="baselines.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> active-mri-acquisition
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="notebooks/miccai_example.html">Basic Environment Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="create_env.html">Configuring the environment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="custom_reconstructor.html">Adding your own reconstructor model</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="api.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="envs.html">Environments module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="baselines.html">Baselines module</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Data module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#module-activemri.data">Transform function template</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-activemri.data.transforms">Custom transforms</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#activemri-data-transforms-py">activemri.data.transforms.py</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="misc.html">Miscellanea</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">active-mri-acquisition</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="api.html">API Reference</a> &raquo;</li>
+        
+      <li>Data module</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/data.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="data-module">
+<h1>Data module<a class="headerlink" href="#data-module" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-activemri.data">
+<span id="transform-function-template"></span><h2>Transform function template<a class="headerlink" href="#module-activemri.data" title="Permalink to this headline">¶</a></h2>
+<dl class="py function">
+<dt id="activemri.data.transform_template">
+<code class="sig-prename descclassname">activemri.data.</code><code class="sig-name descname">transform_template</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">kspace</span><span class="p">:</span> <span class="n">List<span class="p">[</span>numpy.ndarray<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask</span><span class="p">:</span> <span class="n">torch.Tensor</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">ground_truth</span><span class="p">:</span> <span class="n">torch.Tensor</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">attrs</span><span class="p">:</span> <span class="n">List<span class="p">[</span>Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fname</span><span class="p">:</span> <span class="n">List<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">slice_id</span><span class="p">:</span> <span class="n">List<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.data.transform_template" title="Permalink to this definition">¶</a></dt>
+<dd><p>Template for transform functions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>kspace</strong> (<em>-</em>) – A list of complex numpy arrays, one per k-space in the batch.
+The length is the <code class="docutils literal notranslate"><span class="pre">batch_size</span></code>, and array shapes are <code class="docutils literal notranslate"><span class="pre">H</span> <span class="pre">x</span> <span class="pre">W</span> <span class="pre">x</span> <span class="pre">2</span></code> for single coil data,
+and <code class="docutils literal notranslate"><span class="pre">C</span> <span class="pre">x</span> <span class="pre">H</span> <span class="pre">x</span> <span class="pre">W</span> <span class="pre">x</span> <span class="pre">2</span></code> for multicoil data, where <code class="docutils literal notranslate"><span class="pre">H</span></code> denotes k-space height, <code class="docutils literal notranslate"><span class="pre">W</span></code>
+denotes k-space width, and <code class="docutils literal notranslate"><span class="pre">C</span></code> is the number of coils. Note that the width can differ
+between batch elements, if <code class="docutils literal notranslate"><span class="pre">num_cols</span></code> is set to a tuple when creating the environment.</p></li>
+<li><p><strong>mask</strong> (<em>-</em>) – A tensor of binary column masks, where 1s indicate that the
+corresponding k-space column should be selected. The shape is <code class="docutils literal notranslate"><span class="pre">batch_size</span> <span class="pre">x</span> <span class="pre">1</span> <span class="pre">x</span> <span class="pre">maxW</span></code>,
+for single coil data, and <code class="docutils literal notranslate"><span class="pre">batch_size</span> <span class="pre">x</span> <span class="pre">1</span> <span class="pre">x</span> <span class="pre">1</span> <span class="pre">x</span> <span class="pre">maxW</span></code> for multicoil data. Here <code class="docutils literal notranslate"><span class="pre">maxW</span></code>
+is the maximum k-space width returned by the environment.</p></li>
+<li><p><strong>ground_truth</strong> (<em>-</em>) – A tensor of ground truth 2D images. The shape is
+<code class="docutils literal notranslate"><span class="pre">batch_size</span> <span class="pre">x</span> <span class="pre">320</span> <span class="pre">x</span> <span class="pre">320</span></code>.</p></li>
+<li><p><strong>attrs</strong> (<em>-</em>) – A list of dictionaries with the attributes read from the fastMRI for
+each image.</p></li>
+<li><p><strong>fname</strong> (<em>-</em>) – A list of the filenames where the images where read from.</p></li>
+<li><p><strong>slice_id</strong> (<em>-</em>) – A list with the slice ids in the files where each image was read
+from.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A tuple with any number of inputs required by the reconstructor model.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple(Any…)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-activemri.data.transforms">
+<span id="custom-transforms"></span><h2>Custom transforms<a class="headerlink" href="#module-activemri.data.transforms" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="activemri-data-transforms-py">
+<h3>activemri.data.transforms.py<a class="headerlink" href="#activemri-data-transforms-py" title="Permalink to this headline">¶</a></h3>
+<p>Transform functions to process fastMRI data for reconstruction models.</p>
+<dl class="py function">
+<dt id="activemri.data.transforms.fastmri_unet_transform_multicoil">
+<code class="sig-prename descclassname">activemri.data.transforms.</code><code class="sig-name descname">fastmri_unet_transform_multicoil</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">kspace</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">ground_truth</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">attrs</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fname</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">slice_id</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.data.transforms.fastmri_unet_transform_multicoil" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform to use as input to fastMRI’s Unet model for multicoil data.</p>
+<p>This is an adapted version of the code found in
+<a class="reference external" href="https://github.com/facebookresearch/fastMRI/blob/master/experimental/unet/unet_module.py#L190">fastMRI</a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="activemri.data.transforms.fastmri_unet_transform_singlecoil">
+<code class="sig-prename descclassname">activemri.data.transforms.</code><code class="sig-name descname">fastmri_unet_transform_singlecoil</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">kspace</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">ground_truth</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">attrs</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fname</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">slice_id</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.data.transforms.fastmri_unet_transform_singlecoil" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform to use as input to fastMRI’s Unet model for singlecoil data.</p>
+<p>This is an adapted version of the code found in
+<a class="reference external" href="https://github.com/facebookresearch/fastMRI/blob/master/experimental/unet/unet_module.py#L190">fastMRI</a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="activemri.data.transforms.raw_transform_miccai2020">
+<code class="sig-prename descclassname">activemri.data.transforms.</code><code class="sig-name descname">raw_transform_miccai2020</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">kspace</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">mask</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">_kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#activemri.data.transforms.raw_transform_miccai2020" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform to produce input for reconstructor used in <a class="reference external" href="https://arxiv.org/pdf/2007.10469.pdf">Pineda et al. MICCAI’20</a>.</p>
+<p>Produces a zero-filled reconstruction and a mask that serve as a input to models of type
+<code class="xref py py-class docutils literal notranslate"><span class="pre">activemri.models.cvpr10_reconstructor.CVPR19Reconstructor</span></code>. The mask is almost
+equal to the mask passed as argument, except that high-frequency padding columns are set
+to 1, and the mask is reshaped to be compatible with the reconstructor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>kspace</strong> (<code class="docutils literal notranslate"><span class="pre">np.ndarray</span></code>) – The array containing the k-space data returned by the dataset.</p></li>
+<li><p><strong>mask</strong> (<code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code>) – The masks to apply to the k-space.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>A tuple containing:</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code>: The zero-filled reconstructor that will be passed to the
+reconstructor.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code>: The mask to use as input to the reconstructor.</p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="misc.html" class="btn btn-neutral float-right" title="Miscellanea" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="baselines.html" class="btn btn-neutral float-left" title="Baselines module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2020, Facebook AI Research
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
