@@ -10,8 +10,8 @@
 #       ./examples/run_evaluation.sh <args>
 #
 # To run the "evaluator" and "*ddqn" baselines, you need to download our trained checkpoints,
-# as explained in the Documentation. The pass the directory as the first argument in the commands
-# below.
+# as explained in the Documentation (https://facebookresearch.github.io/active-mri-acquisition/misc.html).
+# Then pass the directory where you saved the model as the first argument in the commands below.
 #
 # For Scenario30L, run as
 #     ./examples/run_evaluation.sh <saved_models_dir> <outputs_root> <baseline> miccai <num_parallel_episodes> 1851 70
@@ -22,7 +22,7 @@
 # Baseline options are: random, random-lb, lowtohigh, evaluator, ss-ddqn, oracle.
 #
 # The script will produce a file <output_dir>/<baseline>/scores.npy with the scores
-# (mse, ssim, nmse, psnr) of all episodes and all timesteps.
+# (mse, ssim, nmse, psnr) of all episodes and all time steps.
 #
 # Note1: The open sourced version of the oracle baseline does not used parallelization
 # and is thus very slow to run.

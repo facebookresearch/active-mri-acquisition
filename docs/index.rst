@@ -22,7 +22,6 @@ then run
 
 .. code-block:: bash
 
-    pip install pyxb==1.2.6
     cd active-mri-acquisition
     pip install -e .
 

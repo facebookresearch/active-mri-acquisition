@@ -75,7 +75,7 @@ folder where the environment will look for the checkpoints of reconstruction mod
 
 # Documentation
 For instructions on how to run the environment, evaluating baselines, and adding your own 
-reconstruction models, please see our [documentation](coming-very-soon).
+reconstruction models, please see our [documentation](https://facebookresearch.github.io/active-mri-acquisition/index.html).
 
 # Running baselines from MICCAI'20 paper
 To run evaluation of the algorithms considered in the paper, please take a look at the [example
