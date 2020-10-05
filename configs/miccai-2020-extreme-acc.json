@@ -1,0 +1,30 @@
+{
+  "data_location": "",
+  "reconstructor": {
+    "cls": "activemri.models.cvpr19_reconstructor.CVPR19Reconstructor",
+    "options": {
+      "number_of_filters": 256,
+      "dropout_probability": 0.2,
+      "number_of_layers_residual_bottleneck": 3,
+      "number_of_cascade_blocks": 4,
+      "mask_embed_dim": 0,
+      "n_downsampling": 3,
+      "img_width": 368,
+      "use_deconv": true
+    },
+    "checkpoint_fname": "miccai2020_reconstructor_raw_extreme.pth",
+    "transform": "activemri.data.transforms.raw_transform_miccai2020"
+  },
+  "mask": {
+    "function": "activemri.envs.masks.sample_low_frequency_mask",
+    "args": {
+      "width_dim": 1,
+      "max_width": 368,
+      "min_cols": 1,
+      "max_cols": 1,
+      "centered": false
+    }
+  },
+  "reward_metric": "ssim",
+  "device": "cuda:0"
+}

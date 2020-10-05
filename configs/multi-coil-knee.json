@@ -1,0 +1,28 @@
+{
+  "data_location": "",
+  "reconstructor": {
+    "cls": "activemri.models.fastmri_unet_wrapper.Unet",
+    "options": {
+      "in_chans": 1,
+      "out_chans": 1,
+      "chans": 256,
+      "num_pool_layers": 4,
+      "drop_prob": 0.0
+    },
+    "checkpoint_fname": "multicoil_knee_unet.pth",
+    "transform": "activemri.data.transforms.fastmri_unet_transform_multicoil"
+  },
+  "mask": {
+    "function": "activemri.envs.masks.sample_low_frequency_mask",
+    "args": {
+      "width_dim": 2,
+      "max_width": 372,
+      "min_cols": 15,
+      "max_cols": 15,
+      "apply_attrs_padding": true,
+      "centered": true
+    }
+  },
+  "reward_metric": "ssim",
+  "device": "cuda:0"
+}

@@ -1,0 +1,15 @@
+.vscode
+misc
+*__pycache__*
+.ipynb_checkpoints
+.DS_Store
+.idea
+personal_scripts*
+notebooks
+*.orig
+docs/_build
+docs/build*
+*.mp4
+*egg-info*
+activemri/models/custom_*
+activemri/envs/custom_*
