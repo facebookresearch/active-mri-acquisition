@@ -58,7 +58,7 @@ To test your installation, run
 
 ## Configuring the environment
 To run the fastMRI environments, you need to configure a couple of things. If you try to run any of the
-default environments for the first time (for example, see our [intro notebook](https://github.com/facebookresearch/active-mri-acquisition/blob/master/notebooks/miccai_example.ipynb)), 
+default environments for the first time (for example, see our [intro notebook](https://github.com/facebookresearch/active-mri-acquisition/blob/master/docs/notebooks/miccai_example.ipynb)), 
 you will see a message asking you to add some entries to the `defaults.json` file. This file will
 be created automatically the first time you run it, located at `$USER_HOME/.activemri/defaults.json`.
 It will look like this:
