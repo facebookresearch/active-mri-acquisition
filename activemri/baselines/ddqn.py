@@ -726,7 +726,7 @@ class DDQNTrainer:
                 self.steps += 1
                 obs_tensor = _encode_obs_dict(obs)
                 next_obs_tensor = _encode_obs_dict(next_obs)
-                batch_size = len(obs)
+                batch_size = len(obs_tensor)
                 for i in range(batch_size):
                     self.policy.add_experience(
                         obs_tensor[i], action[i], next_obs_tensor[i], reward[i], done[i]
