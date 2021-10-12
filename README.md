@@ -17,6 +17,8 @@ This repository also contains scripts to replicate the experiments performed in:
 [Luis Pineda, Sumana Basu, Adriana Romero, Roberto Calandra, Michal Drozdzal, 
 "Active MR k-space Sampling with Reinforcement Learning". MICCAI 2020.](https://arxiv.org/pdf/2007.10469.pdf)
 
+The data to produce the plot in Figure 4 can also be found at this [link](https://dl.fbaipublicfiles.com/active-mri-acquisition/tmp/miccai20_data.tar.gz). Once extracted, the folder structure should be easy to understand, corresponding to acceleration case, policy, and metric, and one file per folder. The file has a dictionary on which doing `loaded_dict[time_step]["all"][image_idx]` gives you the results for the policy at the time step and image index indicated.
+
 ### See also
 
 [fastMRI repository](https://github.com/facebookresearch/fastMRI)
